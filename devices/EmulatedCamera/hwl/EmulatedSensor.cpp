@@ -16,6 +16,7 @@
 
 //#define LOG_NDEBUG 0
 //#define LOG_NNDEBUG 0
+#include "system/graphics-base-v1.1.h"
 #define LOG_TAG "EmulatedSensor"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 
@@ -25,8 +26,7 @@
 #define ALOGVV(...) ((void)0)
 #endif
 
-#include "EmulatedSensor.h"
-
+#include <android/hardware/graphics/common/1.2/types.h>
 #include <cutils/properties.h>
 #include <inttypes.h>
 #include <libyuv.h>
@@ -37,6 +37,7 @@
 #include <cmath>
 #include <cstdlib>
 
+#include "EmulatedSensor.h"
 #include "utils/ExifUtils.h"
 #include "utils/HWLUtils.h"
 
@@ -45,6 +46,8 @@ namespace android {
 using google_camera_hal::HalCameraMetadata;
 using google_camera_hal::MessageType;
 using google_camera_hal::NotifyMessage;
+
+using android::hardware::graphics::common::V1_2::Dataspace;
 
 const uint32_t EmulatedSensor::kRegularSceneHandshake = 1; // Scene handshake divider
 const uint32_t EmulatedSensor::kReducedSceneHandshake = 2; // Scene handshake divider
@@ -159,6 +162,17 @@ bool EmulatedSensor::AreCharacteristicsSupported(
     ALOGE("%s: Invalid sensor full res size %zux%zu", __FUNCTION__,
           characteristics.full_res_width, characteristics.full_res_height);
     return false;
+  }
+
+  if (characteristics.is_10bit_dynamic_range_capable) {
+    // We support only HLG10 at the moment
+    const auto& hlg10_entry = characteristics.dynamic_range_profiles.find(
+        ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_HLG10);
+    if ((characteristics.dynamic_range_profiles.size() != 1) ||
+        (hlg10_entry == characteristics.dynamic_range_profiles.end())) {
+      ALOGE("%s: Only support for HLG10 is available!", __FUNCTION__);
+      return false;
+    }
   }
 
   if ((characteristics.exposure_time_range[0] >=
@@ -361,6 +375,45 @@ bool EmulatedSensor::IsStreamCombinationSupported(
         }
       }
 
+      if (stream.dynamic_profile !=
+          ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD) {
+        const SensorCharacteristics& sensor_char =
+            stream.is_physical_camera_stream
+                ? sensor_chars.at(stream.physical_camera_id)
+                : sensor_chars.at(logical_id);
+        if (!sensor_char.is_10bit_dynamic_range_capable) {
+          ALOGE("%s: 10-bit dynamic range output not supported on this device!",
+                __FUNCTION__);
+          return false;
+        }
+
+        if ((stream.format != HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) &&
+            (static_cast<android_pixel_format_v1_1_t>(stream.format) !=
+             HAL_PIXEL_FORMAT_YCBCR_P010)) {
+          ALOGE(
+              "%s: 10-bit dynamic range profile 0x%x not supported on a non "
+              "10-bit output stream"
+              " pixel format 0x%x",
+              __FUNCTION__, stream.dynamic_profile, stream.format);
+          return false;
+        }
+
+        if ((static_cast<android_pixel_format_v1_1_t>(stream.format) ==
+             HAL_PIXEL_FORMAT_YCBCR_P010) &&
+            ((stream.data_space !=
+              static_cast<android_dataspace_t>(Dataspace::BT2020_ITU_HLG)) &&
+             (stream.data_space !=
+              static_cast<android_dataspace_t>(Dataspace::BT2020_HLG)) &&
+             (stream.data_space !=
+              static_cast<android_dataspace_t>(Dataspace::UNKNOWN)))) {
+          ALOGE(
+              "%s: Unsupported stream data space 0x%x for 10-bit YUV "
+              "output",
+              __FUNCTION__, stream.data_space);
+          return false;
+        }
+      }
+
       switch (stream.format) {
         case HAL_PIXEL_FORMAT_BLOB:
           if ((stream.data_space != HAL_DATASPACE_V0_JFIF) &&
@@ -426,6 +479,35 @@ bool EmulatedSensor::IsStreamCombinationSupported(
       if (output_sizes.find(stream_size) == output_sizes.end()) {
         ALOGE("%s: Stream with size %dx%d and format 0x%x is not supported!",
               __FUNCTION__, stream.width, stream.height, stream.format);
+        return false;
+      }
+    }
+
+    if (!sensor_chars.at(logical_id).support_stream_use_case) {
+      if (stream.use_case != ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT) {
+        ALOGE("%s: Camera device doesn't support non-default stream use case!",
+              __FUNCTION__);
+        return false;
+      }
+    } else if (stream.use_case >
+               ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_VIDEO_CALL) {
+      ALOGE("%s: Stream with use case %d is not supported!", __FUNCTION__,
+            stream.use_case);
+      return false;
+    } else if (stream.use_case !=
+               ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT) {
+      if (stream.use_case ==
+              ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_STILL_CAPTURE) {
+        if (stream.format != HAL_PIXEL_FORMAT_YCBCR_420_888 &&
+            stream.format != HAL_PIXEL_FORMAT_BLOB) {
+          ALOGE("%s: Stream with use case %d isn't compatible with format %d",
+              __FUNCTION__, stream.use_case, stream.format);
+          return false;
+        }
+      } else if (stream.format != HAL_PIXEL_FORMAT_YCBCR_420_888 &&
+                 stream.format != HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
+        ALOGE("%s: Stream with use case %d isn't compatible with format %d",
+              __FUNCTION__, stream.use_case, stream.format);
         return false;
       }
     }
@@ -733,8 +815,12 @@ bool EmulatedSensor::threadLoop() {
       scene_->SetTestPatternData(device_settings->second.test_pattern_data);
 
       uint32_t handshake_divider =
-        (device_settings->second.video_stab == ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_ON) ?
-        kReducedSceneHandshake : kRegularSceneHandshake;
+          (device_settings->second.video_stab ==
+           ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_ON) ||
+                  (device_settings->second.video_stab ==
+                   ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_PREVIEW_STABILIZATION)
+              ? kReducedSceneHandshake
+              : kRegularSceneHandshake;
       scene_->CalculateScene(next_capture_time_, handshake_divider);
 
       (*b)->stream_buffer.status = BufferStatus::kOk;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,27 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-cc_library_headers {
-    name: "lib_depth_generator_headers",
-    vendor: true,
-    export_include_dirs: [
-        ".",
-    ],
+prebuilt_defaults {
+    name: "emu_camera_config_defaults",
+    relative_install_path: "config",
+    soc_specific: true,
+    installable: false,
+}
+
+prebuilt_etc {
+    name: "emu_camera_back.json",
+    src: "emu_camera_back.json",
+    defaults: ["emu_camera_config_defaults"],
+}
+
+prebuilt_etc {
+    name: "emu_camera_depth.json",
+    src: "emu_camera_depth.json",
+    defaults: ["emu_camera_config_defaults"],
+}
+
+prebuilt_etc {
+    name: "emu_camera_front.json",
+    src: "emu_camera_front.json",
+    defaults: ["emu_camera_config_defaults"],
 }

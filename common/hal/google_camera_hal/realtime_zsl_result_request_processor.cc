@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_RealtimeZslResultRequestProcessor"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 
@@ -24,11 +24,21 @@
 #include <log/log.h>
 #include <utils/Trace.h>
 
+#include "hal_types.h"
 #include "hal_utils.h"
 #include "realtime_zsl_result_processor.h"
 
 namespace android {
 namespace google_camera_hal {
+
+bool RealtimeZslResultRequestProcessor::AllDataCollected(
+    const RequestEntry& request_entry) const {
+  return request_entry.zsl_buffer_received &&
+         request_entry.framework_buffer_count ==
+             static_cast<int>(
+                 request_entry.capture_request->output_buffers.size()) &&
+         request_entry.partial_results_received == partial_result_count_;
+}
 
 std::unique_ptr<RealtimeZslResultRequestProcessor>
 RealtimeZslResultRequestProcessor::Create(
@@ -59,6 +69,20 @@ RealtimeZslResultRequestProcessor::RealtimeZslResultRequestProcessor(
                                  pixel_format, partial_result_count) {
 }
 
+void RealtimeZslResultRequestProcessor::UpdateOutputBufferCount(
+    int32_t frame_number, int output_buffer_count) {
+  ATRACE_CALL();
+  std::lock_guard<std::mutex> lock(callback_lock_);
+  // Cache the CaptureRequest in a queue as the metadata and buffers may not
+  // come together.
+  RequestEntry request_entry = {
+      .capture_request = std::make_unique<CaptureRequest>(),
+      .framework_buffer_count = output_buffer_count};
+  request_entry.capture_request->frame_number = frame_number;
+
+  pending_frame_number_to_requests_[frame_number] = std::move(request_entry);
+}
+
 void RealtimeZslResultRequestProcessor::ProcessResult(
     ProcessBlockResult block_result) {
   ATRACE_CALL();
@@ -68,6 +92,10 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
     ALOGW("%s: Received a nullptr result.", __FUNCTION__);
     return;
   }
+
+  // Pending request should always exist
+  RequestEntry& pending_request =
+      pending_frame_number_to_requests_[result->frame_number];
 
   // Return filled raw buffer to internal stream manager
   // And remove raw buffer from result
@@ -83,6 +111,7 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
         ALOGW("%s: (%d)ReturnStreamBuffer fail", __FUNCTION__,
               result->frame_number);
       }
+      pending_request.zsl_buffer_received = true;
     } else {
       modified_output_buffers.push_back(result->output_buffers[i]);
     }
@@ -113,44 +142,89 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
     }
   }
 
-  // Don't send result to framework if only internal raw callback
-  if (returned_output && result->result_metadata == nullptr &&
-      result->output_buffers.size() == 0) {
+  // Return directly for frames with errors.
+  if (pending_error_frames_.find(result->frame_number) !=
+      pending_error_frames_.end()) {
+    RequestEntry& error_entry = pending_error_frames_[result->frame_number];
+    // Also need to process pending buffers and metadata for the frame if exists.
+    // If the result is complete (buffers and all partial results arrived), send
+    // the callback directly. Otherwise wait until the missing pieces arrive.
+    if (pending_request.zsl_buffer_received &&
+        pending_request.framework_buffer_count ==
+            static_cast<int>(
+                pending_request.capture_request->output_buffers.size())) {
+      result->output_buffers = pending_request.capture_request->output_buffers;
+      result->input_buffers = pending_request.capture_request->input_buffers;
+      error_entry.capture_request->output_buffers = result->output_buffers;
+      error_entry.capture_request->input_buffers = result->input_buffers;
+      error_entry.zsl_buffer_received = pending_request.zsl_buffer_received;
+      error_entry.framework_buffer_count =
+          pending_request.framework_buffer_count;
+    }
+    if (pending_request.capture_request->settings != nullptr) {
+      result->result_metadata = HalCameraMetadata::Clone(
+          pending_request.capture_request->settings.get());
+      result->partial_result = pending_request.partial_results_received;
+      error_entry.partial_results_received++;
+    }
+
+    // Reset capture request for pending request as all data has been
+    // transferred to error_entry already.
+    pending_request.capture_request = std::make_unique<CaptureRequest>();
+    pending_request.capture_request->frame_number = result->frame_number;
+
+    if (AllDataCollected(error_entry)) {
+      pending_error_frames_.erase(result->frame_number);
+      pending_frame_number_to_requests_.erase(result->frame_number);
+    }
+
+    // Don't send result to framework if only internal raw callback
+    if (returned_output && result->result_metadata == nullptr &&
+        result->output_buffers.size() == 0) {
+      return;
+    }
+    process_capture_result_(std::move(result));
     return;
   }
 
-  // Cache the CaptureRequest in a queue as the metadata and buffers may not
-  // come together.
-  if (pending_frame_number_to_requests_.find(result->frame_number) ==
-      pending_frame_number_to_requests_.end()) {
-    pending_frame_number_to_requests_[result->frame_number] =
-        std::make_unique<CaptureRequest>();
-    pending_frame_number_to_requests_[result->frame_number]->frame_number =
-        result->frame_number;
-  }
-
   // Fill in final result metadata
-  if (result->result_metadata != nullptr &&
-      result->partial_result == partial_result_count_) {
-    pending_frame_number_to_requests_[result->frame_number]->settings =
-        HalCameraMetadata::Clone(result->result_metadata.get());
+  if (result->result_metadata != nullptr) {
+    pending_request.partial_results_received++;
+    if (result->partial_result < partial_result_count_) {
+      // Early result, clone it
+      pending_request.capture_request->settings =
+          HalCameraMetadata::Clone(result->result_metadata.get());
+    } else {
+      // Final result, early result may or may not exist
+      if (pending_request.capture_request->settings == nullptr) {
+        // No early result, i.e. partial results disabled. Clone final result
+        pending_request.capture_request->settings =
+            HalCameraMetadata::Clone(result->result_metadata.get());
+      } else {
+        // Append final result to early result
+        pending_request.capture_request->settings->Append(
+            result->result_metadata->GetRawCameraMetadata());
+      }
+    }
   }
 
-  // Fill in output buffer
+  // Fill in output buffers
   if (!result->output_buffers.empty()) {
-    pending_frame_number_to_requests_[result->frame_number]->input_buffers =
-        result->input_buffers;
-    pending_frame_number_to_requests_[result->frame_number]->output_buffers =
-        result->output_buffers;
+    auto& output_buffers = pending_request.capture_request->output_buffers;
+    output_buffers.insert(output_buffers.begin(), result->output_buffers.begin(),
+                          result->output_buffers.end());
+  }
+
+  // Fill in input buffers
+  if (!result->input_buffers.empty()) {
+    auto& input_buffers = pending_request.capture_request->input_buffers;
+    input_buffers.insert(input_buffers.begin(), result->input_buffers.begin(),
+                         result->input_buffers.end());
   }
 
   // Submit the request and remove the request from the cache when all data is collected.
-  if (!pending_frame_number_to_requests_[result->frame_number]
-           ->output_buffers.empty() &&
-      pending_frame_number_to_requests_[result->frame_number]->settings !=
-          nullptr) {
-    res =
-        ProcessRequest(*pending_frame_number_to_requests_[result->frame_number]);
+  if (AllDataCollected(pending_request)) {
+    res = ProcessRequest(*pending_request.capture_request);
     pending_frame_number_to_requests_.erase(result->frame_number);
     if (res != OK) {
       ALOGE("%s: ProcessRequest fail", __FUNCTION__);
@@ -240,6 +314,28 @@ status_t RealtimeZslResultRequestProcessor::Flush() {
   }
 
   return process_block_->Flush();
+}
+
+void RealtimeZslResultRequestProcessor::Notify(
+    const ProcessBlockNotifyMessage& block_message) {
+  ATRACE_CALL();
+  std::lock_guard<std::mutex> lock(callback_lock_);
+  const NotifyMessage& message = block_message.message;
+  if (notify_ == nullptr) {
+    ALOGE("%s: notify_ is nullptr. Dropping a message.", __FUNCTION__);
+    return;
+  }
+
+  // Will return buffer for kErrorRequest and kErrorBuffer.
+  if (message.type == MessageType::kError) {
+    if (message.message.error.error_code == ErrorCode::kErrorRequest ||
+        message.message.error.error_code == ErrorCode::kErrorBuffer) {
+      pending_error_frames_.try_emplace(
+          message.message.error.frame_number,
+          RequestEntry{.capture_request = std::make_unique<CaptureRequest>()});
+    }
+  }
+  notify_(message);
 }
 
 }  // namespace google_camera_hal

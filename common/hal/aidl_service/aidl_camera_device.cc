@@ -235,13 +235,14 @@ ScopedAStatus AidlCameraDevice::openInjectionSession(
         static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
   }
   *session = nullptr;
-  return ScopedAStatus::ok();
+  return ScopedAStatus::fromServiceSpecificError(
+      static_cast<int32_t>(Status::OPERATION_NOT_SUPPORTED));
 }
 
-ScopedAStatus AidlCameraDevice::dumpState(const ::ndk::ScopedFileDescriptor& fd) {
-  int raw_fd = fd.get();
-  google_camera_device_->DumpState(raw_fd);
-  return ScopedAStatus::ok();
+binder_status_t AidlCameraDevice::dump(int fd, const char** /*args*/,
+                                       uint32_t /*numArgs*/) {
+  google_camera_device_->DumpState(fd);
+  return OK;
 }
 
 ScopedAStatus AidlCameraDevice::isStreamCombinationSupported(

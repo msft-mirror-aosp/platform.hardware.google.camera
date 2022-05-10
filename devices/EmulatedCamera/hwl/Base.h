@@ -21,12 +21,12 @@
 
 #include <memory>
 
-#include "HandleImporter.h"
+#include "android/hardware/graphics/common/1.1/types.h"
 #include "hwl_types.h"
 
 namespace android {
 
-using android::hardware::camera::common::V1_0::helper::HandleImporter;
+using android::hardware::graphics::common::V1_1::PixelFormat;
 using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::StreamBuffer;
 
@@ -37,11 +37,12 @@ struct YCbCrPlanes {
   uint32_t y_stride = 0;
   uint32_t cbcr_stride = 0;
   uint32_t cbcr_step = 0;
+  size_t bytesPerPixel = 1;
 };
 
 struct SinglePlane {
   uint8_t* img = nullptr;
-  uint32_t stride = 0;
+  uint32_t stride_in_bytes = 0;
   uint32_t buffer_size = 0;
 };
 
@@ -50,10 +51,9 @@ struct SensorBuffer {
   uint32_t frame_number;
   uint32_t pipeline_id;
   uint32_t camera_id;
-  android_pixel_format_t format;
+  PixelFormat format;
   android_dataspace_t dataSpace;
   StreamBuffer stream_buffer;
-  HandleImporter importer;
   HwlPipelineCallback callback;
   int acquire_fence_fd;
   bool is_input;
@@ -70,7 +70,7 @@ struct SensorBuffer {
         frame_number(0),
         pipeline_id(0),
         camera_id(0),
-        format(HAL_PIXEL_FORMAT_RGBA_8888),
+        format(PixelFormat::RGBA_8888),
         dataSpace(HAL_DATASPACE_UNKNOWN),
         acquire_fence_fd(-1),
         is_input(false),
@@ -80,60 +80,13 @@ struct SensorBuffer {
 
   SensorBuffer(const SensorBuffer&) = delete;
   SensorBuffer& operator=(const SensorBuffer&) = delete;
+
+  virtual ~SensorBuffer() {
+  }
 };
 
 typedef std::vector<std::unique_ptr<SensorBuffer>> Buffers;
 
 }  // namespace android
-
-using android::google_camera_hal::BufferStatus;
-using android::google_camera_hal::ErrorCode;
-using android::google_camera_hal::HwlPipelineResult;
-using android::google_camera_hal::MessageType;
-using android::google_camera_hal::NotifyMessage;
-
-template <>
-struct std::default_delete<android::SensorBuffer> {
-  inline void operator()(android::SensorBuffer* buffer) const {
-    if (buffer != nullptr) {
-      if (buffer->stream_buffer.buffer != nullptr) {
-        buffer->importer.unlock(buffer->stream_buffer.buffer);
-        buffer->importer.freeBuffer(buffer->stream_buffer.buffer);
-      }
-
-      if (buffer->acquire_fence_fd >= 0) {
-        buffer->importer.closeFence(buffer->acquire_fence_fd);
-      }
-
-      if ((buffer->stream_buffer.status != BufferStatus::kOk) &&
-          (buffer->callback.notify != nullptr) && (!buffer->is_failed_request)) {
-        NotifyMessage msg = {
-            .type = MessageType::kError,
-            .message.error = {.frame_number = buffer->frame_number,
-                              .error_stream_id = buffer->stream_buffer.stream_id,
-                              .error_code = ErrorCode::kErrorBuffer}};
-        buffer->callback.notify(buffer->pipeline_id, msg);
-      }
-
-      if (buffer->callback.process_pipeline_result != nullptr) {
-        auto result = std::make_unique<HwlPipelineResult>();
-        result->camera_id = buffer->camera_id;
-        result->pipeline_id = buffer->pipeline_id;
-        result->frame_number = buffer->frame_number;
-        result->partial_result = 0;
-
-        buffer->stream_buffer.acquire_fence =
-            buffer->stream_buffer.release_fence = nullptr;
-        if (buffer->is_input) {
-          result->input_buffers.push_back(buffer->stream_buffer);
-        } else {
-          result->output_buffers.push_back(buffer->stream_buffer);
-        }
-        buffer->callback.process_pipeline_result(std::move(result));
-      }
-      delete buffer;
-    }
-  }
-};
 
 #endif

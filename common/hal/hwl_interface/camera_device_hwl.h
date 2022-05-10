@@ -23,6 +23,7 @@
 #include "camera_device_session_hwl.h"
 #include "hal_camera_metadata.h"
 #include "hal_types.h"
+#include "profiler.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -57,6 +58,17 @@ class CameraDeviceHwl {
   // unchanged after this CameraDevice instance is destroyed.
   virtual status_t SetTorchMode(TorchMode mode) = 0;
 
+  // Change the torch strength level of this camera device. If the torch is OFF
+  // and torchStrength > 0, then the torch will turn ON.
+  virtual status_t TurnOnTorchWithStrengthLevel(int32_t /*torch_strength*/) {
+    return UNKNOWN_TRANSACTION;
+  }
+
+  // Get the torch strength level of this camera device HWL.
+  virtual status_t GetTorchStrengthLevel(int32_t& /*torch_strength*/) const {
+    return UNKNOWN_TRANSACTION;
+  }
+
   // Dump the camera device states in fd, using dprintf() or write().
   virtual status_t DumpState(int fd) = 0;
 
@@ -74,6 +86,12 @@ class CameraDeviceHwl {
   // supported. stream_config contains the stream configurations.
   virtual bool IsStreamCombinationSupported(
       const StreamConfiguration& stream_config) = 0;
+
+  // Get customized profiler
+  virtual std::unique_ptr<google::camera_common::Profiler> GetProfiler(
+      uint32_t /* camera_id */, int /* option */) {
+    return nullptr;
+  }
 };
 
 }  // namespace google_camera_hal

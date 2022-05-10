@@ -22,6 +22,7 @@
 #include "hal_camera_metadata.h"
 #include "hwl_types.h"
 #include "multicam_coordinator_hwl.h"
+#include "profiler.h"
 #include "session_data_defs.h"
 #include "zoom_ratio_mapper_hwl.h"
 
@@ -107,9 +108,8 @@ class CameraDeviceSessionHwl {
   // more than one request from a certain pipeline, this method will return an
   // error. All requests captured from camera sensors must be captured
   // synchronously.
-  virtual status_t SubmitRequests(
-      uint32_t frame_number,
-      const std::vector<HwlPipelineRequest>& requests) = 0;
+  virtual status_t SubmitRequests(uint32_t frame_number,
+                                  std::vector<HwlPipelineRequest>& requests) = 0;
 
   // Flush all pending requests.
   virtual status_t Flush() = 0;
@@ -121,6 +121,13 @@ class CameraDeviceSessionHwl {
   // with. If the camera device does not have multiple physical camera devices,
   // this method should return an empty std::vector.
   virtual std::vector<uint32_t> GetPhysicalCameraIds() const = 0;
+
+  // Returns true if the two given physical camera ids can be streamed
+  // simultaneously from this device session.
+  virtual bool CanStreamSimultaneously(uint32_t /* physical_camera_id_1 */,
+                                       uint32_t /* physical_camera_id_2 */) const {
+    return true;
+  }
 
   // Return the characteristics that this camera device session is associated with.
   virtual status_t GetCameraCharacteristics(
@@ -164,6 +171,24 @@ class CameraDeviceSessionHwl {
 
   // Get zoom ratio mapper from HWL.
   virtual std::unique_ptr<ZoomRatioMapperHwl> GetZoomRatioMapperHwl() = 0;
+
+  // Get maximum number of cameras allowed to stream concurrently.
+  virtual int GetMaxSupportedConcurrentCameras() const {
+    return 1;
+  }
+
+  // Get customized profiler
+  virtual std::unique_ptr<google::camera_common::Profiler> GetProfiler(
+      uint32_t /* camera_id */, int /* option */) {
+    return nullptr;
+  }
+
+  // Release unused framework buffers from cache. This should be called when a
+  // ProcessCaptureRequest call includes a non-empty cachesToRemove argument. It
+  // is used to pass the list of buffers to the HWL to handle any internal
+  // caching of file descriptors done by the HWL.
+  virtual void RemoveCachedBuffers(const native_handle_t* /*handle*/) {
+  }
 };
 
 }  // namespace google_camera_hal

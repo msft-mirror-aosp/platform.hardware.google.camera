@@ -17,19 +17,21 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_REALTIME_ZSL_RESULT_PROCESSOR_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_REALTIME_ZSL_RESULT_PROCESSOR_H_
 
+#include <shared_mutex>
+
 #include "internal_stream_manager.h"
 #include "result_processor.h"
 
 namespace android {
 namespace google_camera_hal {
 
-// RealtimeZslResultProcessor implements a ResultProcessor that return filled
-// raw buffer and matedata to internal stream manager and forwards the results
-// without raw buffer to its callback functions.
+// RealtimeZslResultProcessor implements a ResultProcessor that return
+// filled raw buffer and metadata to internal stream manager.
 class RealtimeZslResultProcessor : public ResultProcessor {
  public:
   static std::unique_ptr<RealtimeZslResultProcessor> Create(
-      InternalStreamManager* internal_stream_manager, int32_t raw_stream_id);
+      InternalStreamManager* internal_stream_manager, int32_t stream_id,
+      android_pixel_format_t pixel_format, uint32_t partial_result_count = 1);
 
   virtual ~RealtimeZslResultProcessor() = default;
 
@@ -41,7 +43,7 @@ class RealtimeZslResultProcessor : public ResultProcessor {
       const std::vector<ProcessBlockRequest>& process_block_requests,
       const CaptureRequest& remaining_session_request) override;
 
-  // Return filled raw buffer and matedata to internal stream manager
+  // Return filled raw buffer and metadata to internal stream manager
   // and forwards the results without raw buffer to its callback functions.
   void ProcessResult(ProcessBlockResult block_result) override;
 
@@ -52,7 +54,20 @@ class RealtimeZslResultProcessor : public ResultProcessor {
 
  protected:
   RealtimeZslResultProcessor(InternalStreamManager* internal_stream_manager,
-                             int32_t raw_stream_id);
+                             int32_t stream_id,
+                             android_pixel_format_t pixel_format,
+                             uint32_t partial_result_count);
+
+  InternalStreamManager* internal_stream_manager_;
+  int32_t stream_id_ = -1;
+  // Partial result count reported by HAL
+  uint32_t partial_result_count_;
+
+  std::mutex callback_lock_;
+
+  // The following callbacks must be protected by callback_lock_.
+  ProcessCaptureResultFunc process_capture_result_;
+  NotifyFunc notify_;
 
  private:
   // Save face detect mode for HDR+
@@ -65,14 +80,8 @@ class RealtimeZslResultProcessor : public ResultProcessor {
   // Handle Lens shading metadata from result for HDR+
   status_t HandleLsResultForHdrplus(uint32_t frameNumber,
                                     HalCameraMetadata* metadata);
-  std::mutex callback_lock_;
 
-  // The following callbacks must be protected by callback_lock_.
-  ProcessCaptureResultFunc process_capture_result_;
-  NotifyFunc notify_;
-
-  InternalStreamManager* internal_stream_manager_;
-  int32_t raw_stream_id_ = -1;
+  android_pixel_format_t pixel_format_;
 
   // Current face detect mode set by framework.
   uint8_t current_face_detect_mode_ = ANDROID_STATISTICS_FACE_DETECT_MODE_OFF;
@@ -92,9 +101,11 @@ class RealtimeZslResultProcessor : public ResultProcessor {
   // by framework. And requested_lens_shading_map_modes_ is protected by
   // lens_shading_lock_
   std::unordered_map<uint32_t, uint8_t> requested_lens_shading_map_modes_;
+
+  std::shared_mutex process_block_shared_lock_;
 };
 
 }  // namespace google_camera_hal
 }  // namespace android
 
-#endif  // HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_REALTIME_ZSL_RESULT_PROCESSOR_H_
+#endif  // HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_REALTIME_ZSL_RESULT_REQUEST_PROCESSOR_H_

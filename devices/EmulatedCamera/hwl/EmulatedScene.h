@@ -26,26 +26,16 @@
 #ifndef HW_EMULATOR_CAMERA2_SCENE_H
 #define HW_EMULATOR_CAMERA2_SCENE_H
 
-#include "android/frameworks/sensorservice/1.0/ISensorManager.h"
-#include "android/frameworks/sensorservice/1.0/types.h"
 #include "utils/Timers.h"
 
 namespace android {
 
-using ::android::frameworks::sensorservice::V1_0::IEventQueue;
-using ::android::frameworks::sensorservice::V1_0::IEventQueueCallback;
-using ::android::hardware::sensors::V1_0::Event;
-using ::android::hardware::Return;
-using ::android::hardware::Void;
-
-class EmulatedScene : public RefBase {
+class EmulatedScene {
  public:
   EmulatedScene(int sensor_width_px, int sensor_height_px,
                 float sensor_sensitivity, int sensor_orientation,
                 bool is_front_facing);
   ~EmulatedScene();
-
-  void InitializeSensorQueue();
 
   void Initialize(int sensor_width_px, int sensor_height_px,
                   float sensor_sensitivity);
@@ -65,9 +55,16 @@ class EmulatedScene : public RefBase {
   // Get current hour
   int GetHour() const;
 
+  void SetScreenRotation(uint32_t screen_rotation);
+
   // Set the duration of exposure for determining luminous exposure.
   // Must be called before calculateScene
   void SetExposureDuration(float seconds);
+
+  // Set test pattern mode; this draws a solid-color image set to the color
+  // defined by test pattern data
+  void SetTestPattern(bool enabled);
+  void SetTestPatternData(uint32_t data[4]);
 
   // Calculate scene information for current hour and the time offset since
   // the hour. Resets pixel readout location to 0,0
@@ -94,27 +91,13 @@ class EmulatedScene : public RefBase {
   static const int kSceneHeight = 20;
 
  private:
-  class SensorHandler : public IEventQueueCallback {
-   public:
-    SensorHandler(wp<EmulatedScene> scene) : scene_(scene) {
-    }
-
-    // IEventQueueCallback interface
-    Return<void> onEvent(const Event& e) override;
-
-   private:
-    wp<EmulatedScene> scene_;
-  };
-
   void InitiliazeSceneRotation(bool clock_wise);
 
-  int32_t sensor_handle_;
-  sp<IEventQueue> sensor_event_queue_;
-  std::atomic_uint32_t screen_rotation_;
   uint8_t scene_rot0_[kSceneWidth*kSceneHeight];
   uint8_t scene_rot90_[kSceneWidth*kSceneHeight];
   uint8_t scene_rot180_[kSceneWidth*kSceneHeight];
   uint8_t scene_rot270_[kSceneWidth*kSceneHeight];
+  uint32_t screen_rotation_;
   uint8_t *current_scene_;
   int32_t sensor_orientation_;
   bool is_front_facing_;
@@ -144,6 +127,9 @@ class EmulatedScene : public RefBase {
   int hour_;
   float exposure_duration_;
   float sensor_sensitivity_;  // electrons per lux-second
+
+  bool test_pattern_mode_;  // SOLID_COLOR only
+  uint32_t test_pattern_data_[4];
 
   enum Materials {
     GRASS = 0,

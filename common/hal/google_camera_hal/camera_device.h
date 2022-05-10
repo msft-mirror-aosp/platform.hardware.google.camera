@@ -21,6 +21,7 @@
 #include "camera_device_hwl.h"
 #include "camera_device_session.h"
 #include "hal_camera_metadata.h"
+#include "profiler.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -36,9 +37,10 @@ class CameraDevice {
   // lifetime of CameraDevice
   static std::unique_ptr<CameraDevice> Create(
       std::unique_ptr<CameraDeviceHwl> camera_device_hwl,
-      CameraBufferAllocatorHwl* camera_allocator_hwl = nullptr);
+      CameraBufferAllocatorHwl* camera_allocator_hwl = nullptr,
+      const std::vector<std::string>* configure_streams_libs = nullptr);
 
-  virtual ~CameraDevice() = default;
+  virtual ~CameraDevice();
 
   // Get the resource cost of this camera device.
   status_t GetResourceCost(CameraResourceCost* cost);
@@ -60,6 +62,13 @@ class CameraDevice {
   // unchanged after this CameraDevice instance is destroyed.
   status_t SetTorchMode(TorchMode mode);
 
+  // Change the brightness level of the flash unit in Torch mode.
+  // If the torch is OFF and torchStrength > 0, the torch will be turned ON.
+  status_t TurnOnTorchWithStrengthLevel(int32_t torch_strength);
+
+  // Get the flash unit strength level of this camera device.
+  status_t GetTorchStrengthLevel(int32_t& torch_strength) const;
+
   // Create a CameraDeviceSession to handle capture requests. This method will
   // return ALREADY_EXISTS if previous session has not been destroyed.
   // Created CameraDeviceSession remain valid even after this CameraDevice
@@ -79,6 +88,11 @@ class CameraDevice {
   // supported. stream_config contains the stream configurations.
   bool IsStreamCombinationSupported(const StreamConfiguration& stream_config);
 
+  status_t LoadExternalCaptureSession();
+
+  std::unique_ptr<google::camera_common::Profiler> GetProfiler(uint32_t camere_id,
+                                                               int option);
+
  protected:
   CameraDevice() = default;
 
@@ -92,6 +106,14 @@ class CameraDevice {
 
   // hwl allocator
   CameraBufferAllocatorHwl* camera_allocator_hwl_ = nullptr;
+
+  std::vector<GetCaptureSessionFactoryFunc> external_session_factory_entries_;
+  // Opened library handles that should be closed on destruction
+  std::vector<void*> external_capture_session_lib_handles_;
+  // Stream use cases supported by this camera device
+  std::set<int64_t> stream_use_cases_;
+
+  const std::vector<std::string>* configure_streams_libs_ = nullptr;
 };
 
 }  // namespace google_camera_hal

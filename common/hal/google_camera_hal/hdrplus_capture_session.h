@@ -33,7 +33,7 @@ namespace google_camera_hal {
 // process chains (realtime and HDR+)
 //
 // 1. RealtimeZslRequestProcessor -> RealtimeProcessBlock ->
-//    RealtimeZslResultProcessor
+//    RealtimeZslResultRequestProcessor
 // 2. HdrplusRequestProcessor -> HdrplusProcessBlock -> HdrplusResultProcessor
 //
 // It only supports a single physical camera device session.
@@ -58,7 +58,7 @@ class HdrplusCaptureSession : public CaptureSession {
       CameraDeviceSessionHwl* device_session_hwl,
       const StreamConfiguration& stream_config,
       ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-      HwlRequestBuffersFunc request_stream_buffers,
+      HwlSessionCallback session_callback,
       std::vector<HalStream>* hal_configured_streams,
       CameraBufferAllocatorHwl* camera_allocator_hwl = nullptr);
 

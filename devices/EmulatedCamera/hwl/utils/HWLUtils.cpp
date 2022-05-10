@@ -14,33 +14,17 @@
  * limitations under the License.
  */
 
+#include <unordered_set>
 #define LOG_TAG "HWLUtils"
 #include "HWLUtils.h"
-
 #include <log/log.h>
+#include "utils.h"
 
 #include <map>
 
 namespace android {
 
-bool HasCapability(const HalCameraMetadata* metadata, uint8_t capability) {
-  if (metadata == nullptr) {
-    return false;
-  }
-
-  camera_metadata_ro_entry_t entry;
-  auto ret = metadata->Get(ANDROID_REQUEST_AVAILABLE_CAPABILITIES, &entry);
-  if (ret != OK) {
-    return false;
-  }
-  for (size_t i = 0; i < entry.count; i++) {
-    if (entry.data.u8[i] == capability) {
-      return true;
-    }
-  }
-
-  return false;
-}
+using google_camera_hal::utils::HasCapability;
 
 status_t GetSensorCharacteristics(const HalCameraMetadata* metadata,
                                   SensorCharacteristics* sensor_chars /*out*/) {
@@ -57,6 +41,16 @@ status_t GetSensorCharacteristics(const HalCameraMetadata* metadata,
   }
   sensor_chars->width = entry.data.i32[0];
   sensor_chars->height = entry.data.i32[1];
+  sensor_chars->full_res_width = sensor_chars->width;
+  sensor_chars->full_res_height = sensor_chars->height;
+
+  ret = metadata->Get(ANDROID_SENSOR_INFO_PIXEL_ARRAY_SIZE_MAXIMUM_RESOLUTION,
+                      &entry);
+  if ((ret == OK) && (entry.count == 2)) {
+    sensor_chars->full_res_width = entry.data.i32[0];
+    sensor_chars->full_res_height = entry.data.i32[1];
+    sensor_chars->quad_bayer_sensor = true;
+  }
 
   ret = metadata->Get(ANDROID_REQUEST_MAX_NUM_OUTPUT_STREAMS, &entry);
   if ((ret != OK) || (entry.count != 3)) {
@@ -67,6 +61,46 @@ status_t GetSensorCharacteristics(const HalCameraMetadata* metadata,
   sensor_chars->max_raw_streams = entry.data.i32[0];
   sensor_chars->max_processed_streams = entry.data.i32[1];
   sensor_chars->max_stalling_streams = entry.data.i32[2];
+
+  if (HasCapability(
+          metadata,
+          ANDROID_REQUEST_AVAILABLE_CAPABILITIES_DYNAMIC_RANGE_TEN_BIT)) {
+    ret = metadata->Get(ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP,
+                        &entry);
+    if ((ret != OK) || ((entry.count % 3) != 0)) {
+      ALOGE("%s: Invalid ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP!",
+            __FUNCTION__);
+      return BAD_VALUE;
+    }
+
+    for (size_t i = 0; i < entry.count; i += 3) {
+      sensor_chars->dynamic_range_profiles.emplace(
+          static_cast<
+              camera_metadata_enum_android_request_available_dynamic_range_profiles_map>(
+              entry.data.i64[i]),
+          std::unordered_set<
+              camera_metadata_enum_android_request_available_dynamic_range_profiles_map>());
+      const auto profile_end =
+          ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_DOLBY_VISION_8B_HDR_OEM_PO
+          << 1;
+      uint64_t current_profile =
+          ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD;
+      for (; current_profile != profile_end; current_profile <<= 1) {
+        if (entry.data.i64[i + 1] & current_profile) {
+          sensor_chars->dynamic_range_profiles
+              .at(static_cast<
+                  camera_metadata_enum_android_request_available_dynamic_range_profiles_map>(
+                  entry.data.i64[i]))
+              .emplace(
+                  static_cast<
+                      camera_metadata_enum_android_request_available_dynamic_range_profiles_map>(
+                      current_profile));
+        }
+      }
+    }
+
+    sensor_chars->is_10bit_dynamic_range_capable = true;
+  }
 
   if (HasCapability(metadata,
                     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR)) {
@@ -220,6 +254,14 @@ status_t GetSensorCharacteristics(const HalCameraMetadata* metadata,
     ALOGE("%s: Lens facing absent!", __FUNCTION__);
     return BAD_VALUE;
   }
+
+  if (HasCapability(metadata,
+                    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_STREAM_USE_CASE)) {
+    sensor_chars->support_stream_use_case = true;
+  } else {
+    sensor_chars->support_stream_use_case = false;
+  }
+
   return ret;
 }
 

@@ -15,17 +15,26 @@
  */
 
 //#define LOG_NDEBUG 0
+#include <cstdint>
 #define LOG_TAG "GCH_Utils"
 
-#include "utils.h"
-
+#include <cutils/properties.h>
+#include <dirent.h>
+#include <dlfcn.h>
 #include <hardware/gralloc.h>
+#include <sys/stat.h>
 
+#include "utils.h"
 #include "vendor_tag_defs.h"
 
 namespace android {
 namespace google_camera_hal {
 namespace utils {
+
+constexpr char kRealtimeThreadSetProp[] =
+    "persist.vendor.camera.realtimethread";
+
+constexpr uint32_t kMinSupportedSoftwareDenoiseDimension = 1000;
 
 bool IsDepthStream(const Stream& stream) {
   if (stream.stream_type == StreamType::kOutput &&
@@ -114,6 +123,15 @@ bool IsYUVSnapshotStream(const Stream& stream) {
   return false;
 }
 
+bool IsSoftwareDenoiseEligibleSnapshotStream(const Stream& stream) {
+  if (utils::IsYUVSnapshotStream(stream) ||
+      utils::IsJPEGSnapshotStream(stream)) {
+    return stream.width >= kMinSupportedSoftwareDenoiseDimension ||
+           stream.height >= kMinSupportedSoftwareDenoiseDimension;
+  }
+  return false;
+}
+
 status_t GetSensorPhysicalSize(const HalCameraMetadata* characteristics,
                                float* width, float* height) {
   if (characteristics == nullptr || width == nullptr || height == nullptr) {
@@ -136,21 +154,42 @@ status_t GetSensorPhysicalSize(const HalCameraMetadata* characteristics,
   return OK;
 }
 
+bool HasCapability(const HalCameraMetadata* metadata, uint8_t capability) {
+  if (metadata == nullptr) {
+    return false;
+  }
+
+  camera_metadata_ro_entry_t entry;
+  auto ret = metadata->Get(ANDROID_REQUEST_AVAILABLE_CAPABILITIES, &entry);
+  if (ret != OK) {
+    return false;
+  }
+  for (size_t i = 0; i < entry.count; i++) {
+    if (entry.data.u8[i] == capability) {
+      return true;
+    }
+  }
+  return false;
+}
+
 status_t GetSensorActiveArraySize(const HalCameraMetadata* characteristics,
-                                  Rect* active_array) {
+                                  Rect* active_array, bool maximum_resolution) {
   if (characteristics == nullptr || active_array == nullptr) {
     ALOGE("%s: characteristics or active_array is nullptr", __FUNCTION__);
     return BAD_VALUE;
   }
-
+  uint32_t active_array_tag =
+      maximum_resolution
+          ? ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE_MAXIMUM_RESOLUTION
+          : ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE;
   camera_metadata_ro_entry entry;
-  status_t res =
-      characteristics->Get(ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE, &entry);
+  status_t res = characteristics->Get(active_array_tag, &entry);
   if (res != OK || entry.count != 4) {
     ALOGE(
         "%s: Getting ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE failed: %s(%d) "
-        "count: %zu",
-        __FUNCTION__, strerror(-res), res, entry.count);
+        "count: %zu max resolution ? %s",
+        __FUNCTION__, strerror(-res), res, entry.count,
+        maximum_resolution ? "true" : "false");
     return res;
   }
 
@@ -378,6 +417,107 @@ void ConvertZoomRatio(const float zoom_ratio,
   if (zoom_ratio >= 1.0f) {
     utils::ClampBoundary(active_array_dimension, left, top, width, height);
   }
+}
+
+bool SupportRealtimeThread() {
+  static bool support_real_time = false;
+  static bool first_time = false;
+  if (first_time == false) {
+    first_time = true;
+    support_real_time = property_get_bool(kRealtimeThreadSetProp, false);
+  }
+
+  return support_real_time;
+}
+
+status_t SetRealtimeThread(pthread_t thread) {
+  struct sched_param param = {
+      .sched_priority = 1,
+  };
+  int32_t res =
+      pthread_setschedparam(thread, SCHED_FIFO | SCHED_RESET_ON_FORK, &param);
+  if (res != 0) {
+    ALOGE("%s: Couldn't set SCHED_FIFO", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  return OK;
+}
+
+status_t UpdateThreadSched(pthread_t thread, int32_t policy,
+                           struct sched_param* param) {
+  if (param == nullptr) {
+    ALOGE("%s: sched_param is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+  int32_t res = pthread_setschedparam(thread, policy, param);
+  if (res != 0) {
+    ALOGE("%s: Couldn't set schedparam", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  return OK;
+}
+
+// Returns an array of regular files under dir_path.
+std::vector<std::string> FindLibraryPaths(const char* dir_path) {
+  std::vector<std::string> libs;
+
+  errno = 0;
+  DIR* dir = opendir(dir_path);
+  if (!dir) {
+    ALOGD("%s: Unable to open directory %s (%s)", __FUNCTION__, dir_path,
+          strerror(errno));
+    return libs;
+  }
+
+  struct dirent* entry = nullptr;
+  while ((entry = readdir(dir)) != nullptr) {
+    std::string lib_path(dir_path);
+    lib_path += entry->d_name;
+    struct stat st;
+    if (stat(lib_path.c_str(), &st) == 0) {
+      if (S_ISREG(st.st_mode)) {
+        libs.push_back(lib_path);
+      }
+    }
+  }
+
+  return libs;
+}
+
+bool IsStreamUseCaseSupported(const StreamConfiguration& stream_config,
+                              const std::set<int64_t>& stream_use_cases,
+                              bool log_if_not_supported) {
+  for (const auto& stream : stream_config.streams) {
+    if (stream_use_cases.find(stream.use_case) == stream_use_cases.end()) {
+      if (log_if_not_supported) {
+        ALOGE("Stream use case %d not in set of supported use cases",
+              stream.use_case);
+      }
+      return false;
+    }
+  }
+  return true;
+}
+
+status_t GetStreamUseCases(const HalCameraMetadata* static_metadata,
+                           std::set<int64_t>* stream_use_cases) {
+  if (static_metadata == nullptr || stream_use_cases == nullptr) {
+    return BAD_VALUE;
+  }
+
+  camera_metadata_ro_entry entry;
+  status_t ret =
+      static_metadata->Get(ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES, &entry);
+  if (ret != OK) {
+    ALOGV("%s: No available stream use cases!", __FUNCTION__);
+    stream_use_cases->insert(ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT);
+    return OK;
+  }
+  stream_use_cases->insert(entry.data.i64, entry.data.i64 + entry.count);
+
+  return OK;
 }
 
 }  // namespace utils

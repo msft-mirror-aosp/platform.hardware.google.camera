@@ -67,6 +67,8 @@ class CameraProvider {
       const std::vector<CameraIdAndStreamConfiguration>& configs,
       bool* is_supported);
 
+  status_t NotifyDeviceStateChange(google_camera_hal::DeviceState device_state);
+
  protected:
   CameraProvider() = default;
 
@@ -76,8 +78,7 @@ class CameraProvider {
   // Initialize the vendor tag manager
   status_t InitializeVendorTags();
 
-  status_t CreateCameraProviderHwl(
-      std::unique_ptr<CameraProviderHwl>* camera_provider_hwl);
+  status_t CreateHwl(std::unique_ptr<CameraProviderHwl>* camera_provider_hwl);
 
   // Provider library handle.
   void* hwl_lib_handle_ = nullptr;
@@ -91,6 +92,8 @@ class CameraProvider {
   // Combined list of vendor tags from HAL and HWL
   std::vector<VendorTagSection> vendor_tag_sections_;
 };
+
+extern "C" CameraProviderHwl* CreateCameraProviderHwl();
 
 }  // namespace google_camera_hal
 }  // namespace android

@@ -90,7 +90,7 @@ std::unique_ptr<CaptureSession> RgbirdCaptureSession::Create(
     CameraDeviceSessionHwl* device_session_hwl,
     const StreamConfiguration& stream_config,
     ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-    HwlRequestBuffersFunc request_stream_buffers,
+    HwlSessionCallback session_callback,
     std::vector<HalStream>* hal_configured_streams,
     CameraBufferAllocatorHwl* /*camera_allocator_hwl*/) {
   ATRACE_CALL();
@@ -103,7 +103,7 @@ std::unique_ptr<CaptureSession> RgbirdCaptureSession::Create(
 
   status_t res = session->Initialize(
       device_session_hwl, stream_config, process_capture_result, notify,
-      request_stream_buffers, hal_configured_streams);
+      session_callback.request_stream_buffers, hal_configured_streams);
   if (res != OK) {
     ALOGE("%s: Initializing RgbirdCaptureSession failed: %s (%d).",
           __FUNCTION__, strerror(-res), res);
@@ -954,7 +954,7 @@ status_t RgbirdCaptureSession::Initialize(
 
   // TODO(b/128633958): remove this after FLL syncing is verified
   force_internal_stream_ =
-      property_get_bool("persist.camera.rgbird.forceinternal", false);
+      property_get_bool("persist.vendor.camera.rgbird.forceinternal", false);
   if (force_internal_stream_) {
     ALOGI("%s: Force creating internal streams for IR pipelines", __FUNCTION__);
   }
@@ -1093,9 +1093,10 @@ void RgbirdCaptureSession::NotifyHalMessage(const NotifyMessage& message) {
   }
 
   if (message.type == MessageType::kShutter) {
-    status_t res =
-        result_dispatcher_->AddShutter(message.message.shutter.frame_number,
-                                       message.message.shutter.timestamp_ns);
+    status_t res = result_dispatcher_->AddShutter(
+        message.message.shutter.frame_number,
+        message.message.shutter.timestamp_ns,
+        message.message.shutter.readout_timestamp_ns);
     if (res != OK) {
       ALOGE("%s: frame(%d) fail to AddShutter", __FUNCTION__,
             message.message.shutter.frame_number);

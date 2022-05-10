@@ -14,15 +14,27 @@
  * limitations under the License.
  */
 
+package {
+    // See: http://go/android-license-faq
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
 cc_library_shared {
     name: "libgooglecamerahalutils",
     defaults: ["google_camera_hal_defaults"],
     owner: "google",
-    vendor_available: true,
+    vendor: true,
     srcs: [
         "camera_id_manager.cc",
         "gralloc_buffer_allocator.cc",
         "hal_camera_metadata.cc",
+        "hal_utils.cc",
+        "hdrplus_process_block.cc",
+        "hdrplus_request_processor.cc",
+        "hdrplus_result_processor.cc",
+        "hwl_buffer_allocator.cc",
+        "internal_stream_manager.cc",
+        "multicam_realtime_process_block.cc",
         "pipeline_request_id_manager.cc",
         "result_dispatcher.cc",
         "stream_buffer_cache_manager.cc",
@@ -30,14 +42,21 @@ cc_library_shared {
         "vendor_tag_utils.cc",
         "zoom_ratio_mapper.cc",
         "zsl_buffer_manager.cc",
+        "zsl_result_dispatcher.cc",
     ],
     shared_libs: [
+        "lib_profiler",
         "libcamera_metadata",
         "libcutils",
+        "libgrallocusage",
         "libhardware",
         "liblog",
         "libutils",
+        "libui",
         "libsync",
+    ],
+    export_shared_lib_headers: [
+        "lib_profiler",
     ],
     export_include_dirs: ["."],
     include_dirs: [

@@ -17,9 +17,9 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_TESTS_MOCK_DEVICE_HWL_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_TESTS_MOCK_DEVICE_HWL_H_
 
-#include <camera_device_hwl.h>
 #include <unordered_map>
 
+#include "camera_device_hwl.h"
 #include "mock_device_session_hwl.h"
 
 namespace android {
@@ -83,6 +83,20 @@ class MockDeviceHwl : public CameraDeviceHwl {
     return OK;
   }
 
+   status_t TurnOnTorchWithStrengthLevel(int32_t torch_strength) {
+    if (torch_strength < 1) {
+      return BAD_VALUE;
+    }
+
+    torch_strength_ = torch_strength;
+    return OK;
+  }
+
+  status_t GetTorchStrengthLevel(int32_t& torch_strength) const {
+    torch_strength = torch_strength_;
+    return OK;
+  }
+
   // Dump the camera device states in fd, using dprintf() or write().
   status_t DumpState(int fd) {
     if (fd < 0) {
@@ -114,6 +128,12 @@ class MockDeviceHwl : public CameraDeviceHwl {
   bool IsStreamCombinationSupported(const StreamConfiguration& /*stream_config*/) {
     return true;
   }
+
+  std::unique_ptr<google::camera_common::Profiler> GetProfiler(
+      uint32_t /* camera_id */, int /* option */) {
+    return nullptr;
+  }
+
   // Override functions in CameraDeviceHwl end.
 
   // The following members are public so the test can change the values easily.
@@ -126,6 +146,7 @@ class MockDeviceHwl : public CameraDeviceHwl {
       physical_camera_characteristics_;
 
   std::string dump_string_;
+  int32_t torch_strength_ = 0;
 
  protected:
   MockDeviceHwl() {

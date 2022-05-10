@@ -30,7 +30,6 @@ using google_camera_hal::HalStream;
 using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineRequest;
 using google_camera_hal::RequestTemplate;
-using google_camera_hal::StreamBuffer;
 
 struct PendingRequest;
 
@@ -97,6 +96,7 @@ class EmulatedRequestState {
   static const std::set<uint8_t> kSupportedCapabilites;
   static const std::set<uint8_t> kSupportedHWLevels;
   std::unique_ptr<HalCameraMetadata> static_metadata_;
+  static const std::vector<int64_t> kSupportedUseCases;
 
   // android.blacklevel.*
   uint8_t black_level_lock_ = ANDROID_BLACK_LEVEL_LOCK_ON;
@@ -128,6 +128,8 @@ class EmulatedRequestState {
   bool is_raw_capable_ = false;
   bool supports_private_reprocessing_ = false;
   bool supports_yuv_reprocessing_ = false;
+  bool supports_remosaic_reprocessing_ = false;
+  bool supports_stream_use_case_ = false;
 
   // android.control.*
   struct SceneOverride {
@@ -174,6 +176,7 @@ class EmulatedRequestState {
   std::set<uint8_t> available_antibanding_modes_;
   std::set<uint8_t> available_effects_;
   std::set<uint8_t> available_vstab_modes_;
+  std::set<uint8_t> available_sensor_pixel_modes_;
   std::vector<ExtendedSceneModeCapability> available_extended_scene_mode_caps_;
   std::unordered_map<uint8_t, SceneOverride> scene_overrides_;
   std::vector<FPSRange> available_fps_ranges_;
@@ -191,6 +194,7 @@ class EmulatedRequestState {
   size_t max_awb_regions_ = 0;
   size_t max_af_regions_ = 0;
   uint8_t control_mode_ = ANDROID_CONTROL_MODE_AUTO;
+  uint8_t sensor_pixel_mode_ = ANDROID_SENSOR_PIXEL_MODE_DEFAULT;
   uint8_t scene_mode_ = ANDROID_CONTROL_SCENE_MODE_DISABLED;
   uint8_t ae_mode_ = ANDROID_CONTROL_AE_MODE_ON;
   uint8_t awb_mode_ = ANDROID_CONTROL_AWB_MODE_AUTO;
@@ -260,6 +264,7 @@ class EmulatedRequestState {
   bool report_rotate_and_crop_ = false;
   uint8_t rotate_and_crop_ = ANDROID_SCALER_ROTATE_AND_CROP_NONE;
   int32_t scaler_crop_region_default_[4] = {0, 0, 0, 0};
+  int32_t scaler_crop_region_max_resolution_[4] = {0, 0, 0, 0};
   std::set<uint8_t> available_rotate_crop_modes_;
 
   // android.statistics.*
@@ -293,7 +298,7 @@ class EmulatedRequestState {
   std::set<uint8_t> available_ois_modes_;
   uint8_t ois_mode_ = ANDROID_LENS_OPTICAL_STABILIZATION_MODE_OFF;
   bool report_ois_mode_ = false;
-  float pose_rotation_[5] = {.0f};
+  float pose_rotation_[4] = {.0f};
   float pose_translation_[3] = {.0f};
   float distortion_[5] = {.0f};
   float intrinsic_calibration_[5] = {.0f};

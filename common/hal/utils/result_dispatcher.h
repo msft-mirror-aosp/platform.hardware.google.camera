@@ -56,7 +56,8 @@ class ResultDispatcher {
   // Add a shutter for a frame number. If the frame number doesn't belong to a
   // pending request that was previously added via AddPendingRequest(), an error
   // will be returned.
-  status_t AddShutter(uint32_t frame_number, int64_t timestamp_ns);
+  status_t AddShutter(uint32_t frame_number, int64_t timestamp_ns,
+                      int64_t readout_timestamp_ns);
 
   // Add an error notification for a frame number. When this is called, we no
   // longer wait for a shutter message or result metadata for the given frame.
@@ -65,7 +66,6 @@ class ResultDispatcher {
   // Remove a pending request.
   void RemovePendingRequest(uint32_t frame_number);
 
- protected:
   ResultDispatcher(uint32_t partial_result_count,
                    ProcessCaptureResultFunc process_capture_result,
                    NotifyFunc notify);
@@ -78,6 +78,7 @@ class ResultDispatcher {
   // called.
   struct PendingShutter {
     int64_t timestamp_ns = 0;
+    int64_t readout_timestamp_ns = 0;
     bool ready = false;
   };
 
@@ -173,19 +174,23 @@ class ResultDispatcher {
   // Protected by result_lock_.
   std::map<uint32_t, PendingFinalResultMetadata> pending_final_metadata_;
 
+  std::mutex process_capture_result_lock_;
   ProcessCaptureResultFunc process_capture_result_;
   NotifyFunc notify_;
 
   // A thread to run NotifyCallbackThreadLoop().
   std::thread notify_callback_thread_;
 
-  std::mutex notify_callback_lock;
+  std::mutex notify_callback_lock_;
 
   // Condition to wake up notify_callback_thread_. Used with notify_callback_lock.
   std::condition_variable notify_callback_condition_;
 
   // Protected by notify_callback_lock.
-  bool notify_callback_thread_exiting = false;
+  bool notify_callback_thread_exiting_ = false;
+
+  // State of callback thread is notified or not.
+  volatile bool is_result_shutter_updated_ = false;
 };
 
 }  // namespace google_camera_hal

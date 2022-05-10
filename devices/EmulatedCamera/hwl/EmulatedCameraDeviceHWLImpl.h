@@ -58,6 +58,10 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
 
   status_t SetTorchMode(TorchMode mode) override;
 
+  status_t TurnOnTorchWithStrengthLevel(int32_t torch_strength) override;
+
+  status_t GetTorchStrengthLevel(int32_t& torch_strength) const override;
+
   status_t DumpState(int fd) override;
 
   status_t CreateCameraDeviceSessionHwl(
@@ -77,13 +81,22 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
 
   status_t Initialize();
 
+  int32_t GetDefaultTorchStrengthLevel() const;
+  int32_t GetMaximumTorchStrengthLevel() const;
+
   const uint32_t camera_id_ = 0;
 
   std::unique_ptr<HalCameraMetadata> static_metadata_;
-  std::unique_ptr<StreamConfigurationMap> stream_coniguration_map_;
+  std::unique_ptr<StreamConfigurationMap> stream_configuration_map_;
+  std::unique_ptr<StreamConfigurationMap> stream_configuration_map_max_resolution_;
+  PhysicalStreamConfigurationMap physical_stream_configuration_map_;
+  PhysicalStreamConfigurationMap physical_stream_configuration_map_max_resolution_;
   PhysicalDeviceMapPtr physical_device_map_;
   std::shared_ptr<EmulatedTorchState> torch_state_;
-  SensorCharacteristics sensor_chars_;
+  LogicalCharacteristics sensor_chars_;
+  int32_t default_torch_strength_level_ = 0;
+  int32_t maximum_torch_strength_level_ = 0;
+
 };
 
 }  // namespace android

@@ -106,7 +106,7 @@ enum class StreamRotation : uint32_t {
 };
 
 // See the definition of
-// ::android::hardware::camera::device::V3_4::Stream;
+// ::android::hardware::camera::device::V3_8::Stream;
 struct Stream {
   int32_t id = -1;
   StreamType stream_type = StreamType::kOutput;
@@ -119,6 +119,14 @@ struct Stream {
   bool is_physical_camera_stream = false;
   uint32_t physical_camera_id = 0;
   uint32_t buffer_size = 0;
+  int32_t group_id = -1;
+  bool used_in_max_resolution_mode = false;
+  bool used_in_default_resolution_mode = true;
+  camera_metadata_enum_android_request_available_dynamic_range_profiles_map
+      dynamic_profile =
+          ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD;
+  camera_metadata_enum_android_scaler_available_stream_use_cases use_case =
+      ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT;
 };
 
 // See the definition of
@@ -129,12 +137,13 @@ enum class StreamConfigurationMode : uint32_t {
 };
 
 // See the definition of
-// ::android::hardware::camera::device::V3_5::StreamConfiguration;
+// ::android::hardware::camera::device::V3_8::StreamConfiguration;
 struct StreamConfiguration {
   std::vector<Stream> streams;
   StreamConfigurationMode operation_mode;
   std::unique_ptr<HalCameraMetadata> session_params;
   uint32_t stream_config_counter = 0;
+  bool multi_resolution_input_image = false;
 };
 
 struct CameraIdAndStreamConfiguration {
@@ -207,6 +216,9 @@ struct CaptureRequest {
   // Maps from physical camera ID to physical camera settings.
   std::unordered_map<uint32_t, std::unique_ptr<HalCameraMetadata>>
       physical_camera_settings;
+
+  uint32_t input_width;
+  uint32_t input_height;
 };
 
 // See the definition of
@@ -246,14 +258,15 @@ struct ErrorMessage {
 };
 
 // See the definition of
-// ::android::hardware::camera::device::V3_2::ShutterMsg
+// ::android::hardware::camera::device::V3_8::ShutterMsg
 struct ShutterMessage {
   uint32_t frame_number = 0;
   uint64_t timestamp_ns = 0;
+  uint64_t readout_timestamp_ns = 0;
 };
 
 // See the definition of
-// ::android::hardware::camera::device::V3_2::NotifyMsg
+// ::android::hardware::camera::device::V3_8::NotifyMsg
 struct NotifyMessage {
   MessageType type = MessageType::kError;
 
@@ -293,13 +306,18 @@ struct WeightedRect : Rect {
 };
 
 struct Dimension {
-  uint32_t width;
-  uint32_t height;
+  uint32_t width = 0;
+  uint32_t height = 0;
 };
 
 struct Point {
   uint32_t x;
   uint32_t y;
+};
+
+struct PointI {
+  int32_t x;
+  int32_t y;
 };
 
 struct PointF {
@@ -354,6 +372,15 @@ struct BuffersValue {
 struct BufferReturn {
   int32_t stream_id = -1;
   BuffersValue val;
+};
+
+// See the definition of
+// ::android::hardware::camera::provider::V2_5::DeviceState
+enum class DeviceState : uint64_t {
+  kNormal = 0ull,
+  kBackCovered = 1ull,
+  kFrontCovered = 2ull,
+  kFolded = 4ull
 };
 
 // Callback function invoked to process capture results.

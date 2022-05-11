@@ -40,13 +40,24 @@ const std::set<uint8_t> EmulatedRequestState::kSupportedCapabilites = {
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_PRIVATE_REPROCESSING,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_YUV_REPROCESSING,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA,
-};
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_REMOSAIC_REPROCESSING,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_ULTRA_HIGH_RESOLUTION_SENSOR,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_DYNAMIC_RANGE_TEN_BIT,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_STREAM_USE_CASE};
 
 const std::set<uint8_t> EmulatedRequestState::kSupportedHWLevels = {
     ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED,
     ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_FULL,
     ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_3,
 };
+
+const std::vector<int64_t> EmulatedRequestState::kSupportedUseCases = {
+    ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT,
+    ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_PREVIEW,
+    ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_STILL_CAPTURE,
+    ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_VIDEO_RECORD,
+    ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_PREVIEW_VIDEO_STILL,
+    ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_VIDEO_CALL};
 
 template <typename T>
 T GetClosestValue(T val, T min, T max) {
@@ -505,9 +516,11 @@ status_t EmulatedRequestState::ProcessAE() {
         sensor_exposure_time_ = entry.data.i64[0];
       } else {
         ALOGE(
-            "%s: Sensor exposure time"
+            "%s: Sensor exposure time %" PRId64
             " not within supported range[%" PRId64 ", %" PRId64 "]",
-            __FUNCTION__, sensor_exposure_time_range_.first,
+            __FUNCTION__,
+            entry.data.i64[0],
+            sensor_exposure_time_range_.first,
             sensor_exposure_time_range_.second);
         // Use last valid value
       }
@@ -521,9 +534,10 @@ status_t EmulatedRequestState::ProcessAE() {
         sensor_frame_duration_ = entry.data.i64[0];
       } else {
         ALOGE(
-            "%s: Sensor frame duration "
+            "%s: Sensor frame duration %" PRId64
             " not within supported range[%" PRId64 ", %" PRId64 "]",
-            __FUNCTION__, EmulatedSensor::kSupportedFrameDurationRange[0],
+            __FUNCTION__, entry.data.i64[0],
+            EmulatedSensor::kSupportedFrameDurationRange[0],
             sensor_max_frame_duration_);
         // Use last valid value
       }
@@ -539,8 +553,9 @@ status_t EmulatedRequestState::ProcessAE() {
           (entry.data.i32[0] <= sensor_sensitivity_range_.second)) {
         sensor_sensitivity_ = entry.data.i32[0];
       } else {
-        ALOGE("%s: Sensor sensitivity not within supported range[%d, %d]",
-              __FUNCTION__, sensor_sensitivity_range_.first,
+        ALOGE("%s: Sensor sensitivity %d not within supported range[%d, %d]",
+              __FUNCTION__, entry.data.i32[0],
+              sensor_sensitivity_range_.first,
               sensor_sensitivity_range_.second);
         // Use last valid value
       }
@@ -615,6 +630,17 @@ status_t EmulatedRequestState::InitializeSensorSettings(
       control_mode_ = entry.data.u8[0];
     } else {
       ALOGE("%s: Unsupported control mode!", __FUNCTION__);
+      return BAD_VALUE;
+    }
+  }
+
+  ret = request_settings_->Get(ANDROID_SENSOR_PIXEL_MODE, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    if (available_sensor_pixel_modes_.find(entry.data.u8[0]) !=
+        available_sensor_pixel_modes_.end()) {
+      sensor_pixel_mode_ = entry.data.u8[0];
+    } else {
+      ALOGE("%s: Unsupported control sensor pixel  mode!", __FUNCTION__);
       return BAD_VALUE;
     }
   }
@@ -696,6 +722,32 @@ status_t EmulatedRequestState::InitializeSensorSettings(
       ALOGE("%s: Unsupported edge mode: %u", __FUNCTION__, entry.data.u8[0]);
       return BAD_VALUE;
     }
+  }
+
+  // Check test pattern parameter
+  uint8_t test_pattern_mode = ANDROID_SENSOR_TEST_PATTERN_MODE_OFF;
+  ret = request_settings_->Get(ANDROID_SENSOR_TEST_PATTERN_MODE, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    if (available_test_pattern_modes_.find(entry.data.u8[0]) !=
+        available_test_pattern_modes_.end()) {
+      test_pattern_mode = entry.data.u8[0];
+    } else {
+      ALOGE("%s: Unsupported test pattern mode: %u", __FUNCTION__,
+            entry.data.u8[0]);
+      return BAD_VALUE;
+    }
+  }
+  uint32_t test_pattern_data[4] = {0, 0, 0, 0};
+  if (test_pattern_mode == ANDROID_SENSOR_TEST_PATTERN_MODE_SOLID_COLOR) {
+    ret = request_settings_->Get(ANDROID_SENSOR_TEST_PATTERN_DATA, &entry);
+    if ((ret == OK) && (entry.count == 4)) {
+      // 'Convert' from i32 to u32 here
+      memcpy(test_pattern_data, entry.data.i32, sizeof(test_pattern_data));
+    }
+  }
+  // BLACK is just SOLID_COLOR with all-zero data
+  if (test_pattern_mode == ANDROID_SENSOR_TEST_PATTERN_MODE_BLACK) {
+    test_pattern_mode = ANDROID_SENSOR_TEST_PATTERN_MODE_SOLID_COLOR;
   }
 
   // 3A modes are active in case the scene is disabled or set to face priority
@@ -786,6 +838,10 @@ status_t EmulatedRequestState::InitializeSensorSettings(
   sensor_settings->video_stab = vstab_mode;
   sensor_settings->report_edge_mode = report_edge_mode_;
   sensor_settings->edge_mode = edge_mode;
+  sensor_settings->sensor_pixel_mode = sensor_pixel_mode_;
+  sensor_settings->test_pattern_mode = test_pattern_mode;
+  memcpy(sensor_settings->test_pattern_data, test_pattern_data,
+         sizeof(sensor_settings->test_pattern_data));
 
   return OK;
 }
@@ -804,6 +860,9 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
   result->result_metadata->Set(ANDROID_REQUEST_PIPELINE_DEPTH,
                                &max_pipeline_depth_, 1);
   result->result_metadata->Set(ANDROID_CONTROL_MODE, &control_mode_, 1);
+  result->result_metadata->Set(ANDROID_SENSOR_PIXEL_MODE, &sensor_pixel_mode_,
+                               1);
+
   result->result_metadata->Set(ANDROID_CONTROL_AF_MODE, &af_mode_, 1);
   result->result_metadata->Set(ANDROID_CONTROL_AF_STATE, &af_state_, 1);
   result->result_metadata->Set(ANDROID_CONTROL_AWB_MODE, &awb_mode_, 1);
@@ -920,6 +979,12 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
   }
   if (zoom_ratio_supported_) {
     result->result_metadata->Set(ANDROID_CONTROL_ZOOM_RATIO, &zoom_ratio_, 1);
+    int32_t* chosen_crop_region = scaler_crop_region_default_;
+    if (sensor_pixel_mode_ == ANDROID_SENSOR_PIXEL_MODE_MAXIMUM_RESOLUTION) {
+      chosen_crop_region = scaler_crop_region_max_resolution_;
+    }
+    result->result_metadata->Set(ANDROID_SCALER_CROP_REGION, chosen_crop_region,
+                                 ARRAY_SIZE(scaler_crop_region_default_));
   }
   if (report_extended_scene_mode_) {
     result->result_metadata->Set(ANDROID_CONTROL_EXTENDED_SCENE_MODE,
@@ -1077,6 +1142,8 @@ status_t EmulatedRequestState::InitializeSensorDefaults() {
   int32_t test_pattern_mode = (off_test_pattern_mode_supported)
                                   ? ANDROID_SENSOR_TEST_PATTERN_MODE_OFF
                                   : *available_test_pattern_modes_.begin();
+  int32_t test_pattern_data[4] = {0, 0, 0, 0};
+
   for (size_t idx = 0; idx < kTemplateCount; idx++) {
     if (default_requests_[idx].get() == nullptr) {
       continue;
@@ -1090,6 +1157,8 @@ status_t EmulatedRequestState::InitializeSensorDefaults() {
                                 &sensor_sensitivity_, 1);
     default_requests_[idx]->Set(ANDROID_SENSOR_TEST_PATTERN_MODE,
                                 &test_pattern_mode, 1);
+    default_requests_[idx]->Set(ANDROID_SENSOR_TEST_PATTERN_DATA,
+                                test_pattern_data, 4);
   }
 
   return OK;
@@ -1246,10 +1315,10 @@ status_t EmulatedRequestState::InitializeControlSceneDefaults() {
                               &overrides_entry);
   if ((ret == OK) && ((overrides_entry.count / 3) == available_scenes_.size()) &&
       ((overrides_entry.count % 3) == 0)) {
-    for (size_t i = 0; i < entry.count; i += 3) {
-      SceneOverride scene(overrides_entry.data.u8[i],
-                          overrides_entry.data.u8[i + 1],
-                          overrides_entry.data.u8[i + 2]);
+    for (size_t i = 0; i < entry.count; i++) {
+      SceneOverride scene(overrides_entry.data.u8[i*3],
+                          overrides_entry.data.u8[i*3 + 1],
+                          overrides_entry.data.u8[i*3 + 2]);
       if (available_ae_modes_.find(scene.ae_mode) == available_ae_modes_.end()) {
         ALOGE("%s: AE scene mode override: %d not supported!", __FUNCTION__,
               scene.ae_mode);
@@ -1567,6 +1636,14 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
     return BAD_VALUE;
   }
 
+  available_sensor_pixel_modes_.insert(ANDROID_SENSOR_PIXEL_MODE_DEFAULT);
+
+  if (SupportsCapability(
+          ANDROID_REQUEST_AVAILABLE_CAPABILITIES_ULTRA_HIGH_RESOLUTION_SENSOR)) {
+    available_sensor_pixel_modes_.insert(
+        ANDROID_SENSOR_PIXEL_MODE_MAXIMUM_RESOLUTION);
+  }
+
   // Auto mode must always be present
   if (available_control_modes_.find(ANDROID_CONTROL_MODE_AUTO) ==
       available_control_modes_.end()) {
@@ -1771,7 +1848,8 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
         float min_zoom_ratio, max_zoom_ratio;
 
         if (mode < ANDROID_CONTROL_EXTENDED_SCENE_MODE_DISABLED ||
-            mode > ANDROID_CONTROL_EXTENDED_SCENE_MODE_BOKEH_CONTINUOUS) {
+            (mode > ANDROID_CONTROL_EXTENDED_SCENE_MODE_BOKEH_CONTINUOUS &&
+             mode < ANDROID_CONTROL_EXTENDED_SCENE_MODE_VENDOR_START)) {
           ALOGE("%s: Invalid extended scene mode %d", __FUNCTION__, mode);
           return BAD_VALUE;
         }
@@ -2220,6 +2298,23 @@ status_t EmulatedRequestState::InitializeScalerDefaults() {
       return BAD_VALUE;
     }
 
+    if (SupportsCapability(
+            ANDROID_REQUEST_AVAILABLE_CAPABILITIES_ULTRA_HIGH_RESOLUTION_SENSOR)) {
+      ret = static_metadata_->Get(
+          ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE_MAXIMUM_RESOLUTION, &entry);
+      if ((ret == OK) && (entry.count == 4)) {
+        scaler_crop_region_max_resolution_[0] = entry.data.i32[0];
+        scaler_crop_region_max_resolution_[1] = entry.data.i32[1];
+        scaler_crop_region_max_resolution_[2] = entry.data.i32[2];
+        scaler_crop_region_max_resolution_[3] = entry.data.i32[3];
+      } else {
+        ALOGE(
+            "%s: Sensor pixel array size maximum resolution is not available!",
+            __FUNCTION__);
+        return BAD_VALUE;
+      }
+    }
+
     if (available_requests_.find(ANDROID_SCALER_CROP_REGION) ==
         available_requests_.end()) {
       ALOGE(
@@ -2639,7 +2734,8 @@ status_t EmulatedRequestState::InitializeInfoDefaults() {
 }
 
 status_t EmulatedRequestState::InitializeReprocessDefaults() {
-  if (supports_private_reprocessing_ || supports_yuv_reprocessing_) {
+  if (supports_private_reprocessing_ || supports_yuv_reprocessing_ ||
+      supports_remosaic_reprocessing_) {
     StreamConfigurationMap config_map(*static_metadata_);
     if (!config_map.SupportsReprocessing()) {
       ALOGE(
@@ -2655,8 +2751,12 @@ status_t EmulatedRequestState::InitializeReprocessDefaults() {
           config_map.GetValidOutputFormatsForInput(input_format);
       for (const auto& output_format : output_formats) {
         if (!EmulatedSensor::IsReprocessPathSupported(
-                EmulatedSensor::OverrideFormat(input_format),
-                EmulatedSensor::OverrideFormat(output_format))) {
+                EmulatedSensor::OverrideFormat(
+                    input_format,
+                    ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD),
+                EmulatedSensor::OverrideFormat(
+                    output_format,
+                    ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD))) {
           ALOGE(
               "%s: Input format: 0x%x to output format: 0x%x reprocess is"
               " currently not supported!",
@@ -2740,14 +2840,35 @@ status_t EmulatedRequestState::InitializeRequestDefaults() {
       ANDROID_REQUEST_AVAILABLE_CAPABILITIES_PRIVATE_REPROCESSING);
   supports_yuv_reprocessing_ = SupportsCapability(
       ANDROID_REQUEST_AVAILABLE_CAPABILITIES_YUV_REPROCESSING);
+  supports_remosaic_reprocessing_ = SupportsCapability(
+      ANDROID_REQUEST_AVAILABLE_CAPABILITIES_REMOSAIC_REPROCESSING);
   is_backward_compatible_ = SupportsCapability(
       ANDROID_REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE);
   is_raw_capable_ =
       SupportsCapability(ANDROID_REQUEST_AVAILABLE_CAPABILITIES_RAW);
+  supports_stream_use_case_ =
+      SupportsCapability(ANDROID_REQUEST_AVAILABLE_CAPABILITIES_STREAM_USE_CASE);
 
   if (supports_manual_sensor_) {
     auto templateIdx = static_cast<size_t>(RequestTemplate::kManual);
     default_requests_[templateIdx] = HalCameraMetadata::Create(1, 10);
+  }
+
+  if (supports_stream_use_case_) {
+    ret = static_metadata_->Get(ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES,
+                                &entry);
+    if (ret != OK) {
+      ALOGE("%s: No available stream use cases!", __FUNCTION__);
+      return BAD_VALUE;
+    }
+    for (int64_t useCase : kSupportedUseCases) {
+      if (std::find(entry.data.i64, entry.data.i64 + entry.count, useCase) ==
+          entry.data.i64 + entry.count) {
+        ALOGE("%s: Mandatory stream use case %" PRId64 " not found!",
+              __FUNCTION__, useCase);
+        return BAD_VALUE;
+      }
+    }
   }
 
   for (size_t templateIdx = 0; templateIdx < kTemplateCount; templateIdx++) {

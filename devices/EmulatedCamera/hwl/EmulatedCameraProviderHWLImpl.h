@@ -30,6 +30,7 @@ using google_camera_hal::CameraDeviceHwl;
 using google_camera_hal::CameraDeviceStatus;
 using google_camera_hal::CameraIdAndStreamConfiguration;
 using google_camera_hal::CameraProviderHwl;
+using google_camera_hal::DeviceState;
 using google_camera_hal::HalCameraMetadata;
 using google_camera_hal::HwlCameraProviderCallback;
 using google_camera_hal::HwlPhysicalCameraDeviceStatusChangeFunc;
@@ -71,6 +72,8 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
 
   status_t CreateBufferAllocatorHwl(std::unique_ptr<CameraBufferAllocatorHwl>*
                                         camera_buffer_allocator_hwl) override;
+
+  status_t NotifyDeviceStateChange(DeviceState device_state) override;
   // End of override functions in CameraProviderHwl.
 
  private:
@@ -79,8 +82,6 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
   status_t GetTagFromName(const char* name, uint32_t* tag);
   status_t WaitForQemuSfFakeCameraPropertyAvailable();
   bool SupportsMandatoryConcurrentStreams(uint32_t camera_id);
-
-  static const char* kConfigurationFileLocation[];
 
   std::vector<std::unique_ptr<HalCameraMetadata>> static_metadata_;
   // Logical to physical camera Id mapping. Empty value vector in case

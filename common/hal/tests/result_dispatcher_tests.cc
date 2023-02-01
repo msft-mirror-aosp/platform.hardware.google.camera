@@ -64,7 +64,8 @@ class ResultDispatcherTests : public ::testing::Test {
         [this](std::unique_ptr<CaptureResult> result) {
           ProcessCaptureResult(std::move(result));
         },
-        [this](const NotifyMessage& message) { Notify(message); });
+        [this](const NotifyMessage& message) { Notify(message); },
+        "TestResultDispatcher");
 
     ASSERT_NE(result_dispatcher_, nullptr)
         << "Creating ResultDispatcher failed";
@@ -309,14 +310,17 @@ class ResultDispatcherTests : public ::testing::Test {
 
 TEST_F(ResultDispatcherTests, ShutterOrder) {
   static constexpr uint64_t kFrameDurationNs = 100;
+  static constexpr uint64_t kFrameExposureTimeNs = 33;
 
   std::vector<uint32_t> unordered_frame_numbers = {3, 1, 2, 5, 4, 6};
   AddPendingRequestsToDispatcher(unordered_frame_numbers);
 
   // Add unordered shutters to dispatcher.
   for (auto frame_number : unordered_frame_numbers) {
-    EXPECT_EQ(result_dispatcher_->AddShutter(frame_number,
-                                             frame_number * kFrameDurationNs),
+    EXPECT_EQ(result_dispatcher_->AddShutter(
+                  frame_number,
+                  frame_number * kFrameDurationNs - kFrameExposureTimeNs,
+                  frame_number * kFrameDurationNs),
               OK);
   }
 
@@ -398,6 +402,7 @@ TEST_F(ResultDispatcherTests, OutputBufferOrder) {
 
 TEST_F(ResultDispatcherTests, ShutterOrderWithRemovePengingRequest) {
   static constexpr uint64_t kFrameDurationNs = 100;
+  static constexpr uint64_t kFrameExposureTimeNs = 33;
 
   std::vector<uint32_t> unordered_frame_numbers = {3, 1, 2, 5, 4, 6};
   AddPendingRequestsToDispatcher(unordered_frame_numbers);
@@ -407,8 +412,10 @@ TEST_F(ResultDispatcherTests, ShutterOrderWithRemovePengingRequest) {
   // After erase iter, unordered_frame_numbers = {3, 1, 5, 4, 6};
   unordered_frame_numbers.erase(iter);
   for (auto frame_number : unordered_frame_numbers) {
-    EXPECT_EQ(result_dispatcher_->AddShutter(frame_number,
-                                             frame_number * kFrameDurationNs),
+    EXPECT_EQ(result_dispatcher_->AddShutter(
+                  frame_number,
+                  frame_number * kFrameDurationNs - kFrameExposureTimeNs,
+                  frame_number * kFrameDurationNs),
               OK);
   }
 

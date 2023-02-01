@@ -18,6 +18,8 @@
 #define HARDWARE_GOOGLE_CAMERA_HAL_UTILS_RESULT_DISPATCHER_H_
 
 #include <map>
+#include <string>
+#include <string_view>
 #include <thread>
 
 #include "hal_types.h"
@@ -40,7 +42,8 @@ class ResultDispatcher {
   // notify is the function to notify shutter messages.
   static std::unique_ptr<ResultDispatcher> Create(
       uint32_t partial_result_count,
-      ProcessCaptureResultFunc process_capture_result, NotifyFunc notify);
+      ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
+      std::string_view name = "ResultDispatcher");
 
   virtual ~ResultDispatcher();
 
@@ -56,7 +59,8 @@ class ResultDispatcher {
   // Add a shutter for a frame number. If the frame number doesn't belong to a
   // pending request that was previously added via AddPendingRequest(), an error
   // will be returned.
-  status_t AddShutter(uint32_t frame_number, int64_t timestamp_ns);
+  status_t AddShutter(uint32_t frame_number, int64_t timestamp_ns,
+                      int64_t readout_timestamp_ns);
 
   // Add an error notification for a frame number. When this is called, we no
   // longer wait for a shutter message or result metadata for the given frame.
@@ -67,7 +71,8 @@ class ResultDispatcher {
 
   ResultDispatcher(uint32_t partial_result_count,
                    ProcessCaptureResultFunc process_capture_result,
-                   NotifyFunc notify);
+                   NotifyFunc notify,
+                   std::string_view name = "ResultDispatcher");
 
  private:
   static constexpr uint32_t kCallbackThreadTimeoutMs = 500;
@@ -77,6 +82,7 @@ class ResultDispatcher {
   // called.
   struct PendingShutter {
     int64_t timestamp_ns = 0;
+    int64_t readout_timestamp_ns = 0;
     bool ready = false;
   };
 
@@ -157,6 +163,9 @@ class ResultDispatcher {
   void NotifyCallbackThreadLoop();
 
   void PrintTimeoutMessages();
+
+  // Name used for debugging purpose to disambiguate multiple ResultDispatchers.
+  std::string name_;
 
   std::mutex result_lock_;
 

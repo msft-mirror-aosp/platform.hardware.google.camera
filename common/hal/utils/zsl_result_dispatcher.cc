@@ -63,17 +63,17 @@ status_t ZslResultDispatcher::Initialize(uint32_t partial_result_count) {
   notify_ = NotifyFunc(
       [this](const NotifyMessage& message) { NotifyHalMessage(message); });
 
-  normal_result_dispatcher_ =
-      std::unique_ptr<ResultDispatcher>(new ResultDispatcher(
-          partial_result_count, process_capture_result_, notify_));
+  normal_result_dispatcher_ = std::unique_ptr<ResultDispatcher>(
+      new ResultDispatcher(partial_result_count, process_capture_result_,
+                           notify_, "ZslNormalDispatcher"));
   if (normal_result_dispatcher_ == nullptr) {
     ALOGE("%s: Creating normal_result_dispatcher_ failed.", __FUNCTION__);
     return BAD_VALUE;
   }
 
-  zsl_result_dispatcher_ =
-      std::unique_ptr<ResultDispatcher>(new ResultDispatcher(
-          partial_result_count, process_capture_result_, notify_));
+  zsl_result_dispatcher_ = std::unique_ptr<ResultDispatcher>(
+      new ResultDispatcher(partial_result_count, process_capture_result_,
+                           notify_, "ZslZslDispatcher"));
   if (zsl_result_dispatcher_ == nullptr) {
     ALOGE("%s: Creating zsl_result_dispatcher_ failed.", __FUNCTION__);
     return BAD_VALUE;
@@ -143,13 +143,16 @@ status_t ZslResultDispatcher::AddResult(std::unique_ptr<CaptureResult> result) {
 }
 
 status_t ZslResultDispatcher::AddShutter(uint32_t frame_number,
-                                         int64_t timestamp_ns) {
+                                         int64_t timestamp_ns,
+                                         int64_t readout_timestamp_ns) {
   ATRACE_CALL();
   bool is_zsl_request = IsZslFrame(frame_number);
   if (is_zsl_request) {
-    return zsl_result_dispatcher_->AddShutter(frame_number, timestamp_ns);
+    return zsl_result_dispatcher_->AddShutter(frame_number, timestamp_ns,
+                                              readout_timestamp_ns);
   } else {
-    return normal_result_dispatcher_->AddShutter(frame_number, timestamp_ns);
+    return normal_result_dispatcher_->AddShutter(frame_number, timestamp_ns,
+                                                 readout_timestamp_ns);
   }
 }
 

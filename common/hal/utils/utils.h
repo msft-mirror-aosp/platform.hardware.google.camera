@@ -19,6 +19,7 @@
 
 #include <log/log.h>
 
+#include <set>
 #include <utility>
 
 #include "hal_types.h"
@@ -37,6 +38,7 @@ bool IsYUVSnapshotStream(const Stream& stream);
 bool IsDepthStream(const Stream& stream);
 bool IsOutputZslStream(const Stream& stream);
 bool IsSoftwareDenoiseEligibleSnapshotStream(const Stream& stream);
+bool IsSecuredStream(const Stream& stream);
 
 bool HasCapability(const HalCameraMetadata* metadata, uint8_t capability);
 
@@ -76,6 +78,13 @@ bool SupportRealtimeThread();
 status_t SetRealtimeThread(pthread_t thread);
 status_t UpdateThreadSched(pthread_t thread, int32_t policy,
                            struct sched_param* param);
+
+status_t GetStreamUseCases(const HalCameraMetadata* static_metadata,
+                           std::set<int64_t>* stream_use_cases);
+
+bool IsStreamUseCaseSupported(const StreamConfiguration& stream_config,
+                              const std::set<int64_t>& stream_use_cases,
+                              bool log_if_not_supported = true);
 
 // Map the rectangle to the coordination of HAL.
 void ConvertZoomRatio(float zoom_ratio, const Dimension& active_array_dimension,

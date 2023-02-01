@@ -986,8 +986,8 @@ status_t RgbirdCaptureSession::Initialize(
   }
 
   // Create result dispatcher
-  result_dispatcher_ =
-      ResultDispatcher::Create(kPartialResult, process_capture_result, notify);
+  result_dispatcher_ = ResultDispatcher::Create(
+      kPartialResult, process_capture_result, notify, "RgbirdDispatcher");
   if (result_dispatcher_ == nullptr) {
     ALOGE("%s: Cannot create result dispatcher.", __FUNCTION__);
     return UNKNOWN_ERROR;
@@ -1093,9 +1093,10 @@ void RgbirdCaptureSession::NotifyHalMessage(const NotifyMessage& message) {
   }
 
   if (message.type == MessageType::kShutter) {
-    status_t res =
-        result_dispatcher_->AddShutter(message.message.shutter.frame_number,
-                                       message.message.shutter.timestamp_ns);
+    status_t res = result_dispatcher_->AddShutter(
+        message.message.shutter.frame_number,
+        message.message.shutter.timestamp_ns,
+        message.message.shutter.readout_timestamp_ns);
     if (res != OK) {
       ALOGE("%s: frame(%d) fail to AddShutter", __FUNCTION__,
             message.message.shutter.frame_number);

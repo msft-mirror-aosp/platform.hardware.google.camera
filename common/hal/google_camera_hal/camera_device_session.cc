@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_CameraDeviceSession"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 #include "camera_device_session.h"
@@ -431,6 +431,13 @@ status_t CameraDeviceSession::Initialize(
     return res;
   }
 
+  res = utils::GetStreamUseCases(characteristics.get(), &stream_use_cases_);
+  if (res != OK) {
+    ALOGE("%s: Initializing stream use case failed: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return res;
+  }
+
   res = InitializeBufferManagement(characteristics.get());
   if (res != OK) {
     ALOGE("%s: Initialize buffer management failed: %s(%d)", __FUNCTION__,
@@ -688,6 +695,15 @@ status_t CameraDeviceSession::ConfigureStreams(
 
   operation_mode_ = stream_config.operation_mode;
   multi_res_reprocess_ = stream_config.multi_resolution_input_image;
+
+  // TODO: We would ideally want this to be a part of CreateCaptureSession,
+  // which internally calls IsStreamCombinationSupported. However this
+  // IsStreamCombinationSupported doesn't match the
+  // CameraDevice::IsStreamCombination. We should look at unifying the two for a
+  // potentially cleaner code-base.
+  if (!utils::IsStreamUseCaseSupported(stream_config, stream_use_cases_)) {
+    return BAD_VALUE;
+  }
 
   capture_session_ = CreateCaptureSession(
       stream_config, kWrapperCaptureSessionEntries,
@@ -1416,6 +1432,8 @@ void CameraDeviceSession::RemoveBufferCache(
       }
     };
 
+    device_session_hwl_->RemoveCachedBuffers(buffer_handle_it->second);
+
     if (buffer_mapper_v4_ != nullptr) {
       free_buffer_mapper(buffer_mapper_v4_);
     } else if (buffer_mapper_v3_ != nullptr) {
@@ -1840,9 +1858,9 @@ status_t CameraDeviceSession::RequestStreamBuffers(
       ALOGI("%s: stream %d, buffer request error %d", __FUNCTION__,
             buffer_return.stream_id, buffer_return.val.error);
     }
-
     pending_requests_tracker_->TrackBufferAcquisitionFailure(stream_id,
                                                              num_buffers);
+    pending_requests_tracker_->DumpStatus();
     // TODO(b/129362905): Return partial buffers.
     return UNKNOWN_ERROR;
   }

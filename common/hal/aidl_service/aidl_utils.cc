@@ -893,6 +893,34 @@ static bool sensorPixelModeContains(const Stream& aidl_stream, uint32_t key) {
   return false;
 }
 
+void FixSensorPixelModesInStreamConfig(
+    StreamConfiguration* out_aidl_stream_config) {
+  if (out_aidl_stream_config == nullptr) {
+    ALOGE("%s: input stream config is NULL", __FUNCTION__);
+    return;
+  }
+
+  // Get the sensor pixel modes in the stream config, do one pass and check if
+  // default is present in all.
+  using SensorPixelMode =
+      aidl::android::hardware::camera::metadata::SensorPixelMode;
+  for (const auto& stream : out_aidl_stream_config->streams) {
+    const auto& sensorPixelModes = stream.sensorPixelModesUsed;
+    if ((std::count(sensorPixelModes.begin(), sensorPixelModes.end(),
+                    static_cast<SensorPixelMode>(
+                        ANDROID_SENSOR_PIXEL_MODE_DEFAULT)) == 0)) {
+      return;
+    }
+  }
+
+  // All of them contain DEFAULT, just override them to be default only.
+  for (auto& stream : out_aidl_stream_config->streams) {
+    stream.sensorPixelModesUsed.clear();
+    stream.sensorPixelModesUsed.push_back(
+        static_cast<SensorPixelMode>(ANDROID_SENSOR_PIXEL_MODE_DEFAULT));
+  }
+}
+
 status_t ConvertToHalStreamConfig(
     const StreamConfiguration& aidl_stream_config,
     google_camera_hal::StreamConfiguration* hal_stream_config) {
@@ -1033,9 +1061,9 @@ status_t ConvertToHalStream(const Stream& aidl_stream,
   hal_stream->buffer_size = aidl_stream.bufferSize;
   hal_stream->group_id = aidl_stream.groupId;
 
-  hal_stream->used_in_max_resolution_mode = sensorPixelModeContains(
+  hal_stream->intended_for_max_resolution_mode = sensorPixelModeContains(
       aidl_stream, ANDROID_SENSOR_PIXEL_MODE_MAXIMUM_RESOLUTION);
-  hal_stream->used_in_default_resolution_mode =
+  hal_stream->intended_for_default_resolution_mode =
       aidl_stream.sensorPixelModesUsed.size() > 0
           ? sensorPixelModeContains(aidl_stream,
                                     ANDROID_SENSOR_PIXEL_MODE_DEFAULT)

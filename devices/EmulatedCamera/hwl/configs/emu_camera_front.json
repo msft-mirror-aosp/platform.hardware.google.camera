@@ -641,7 +641,7 @@
    "0"
   ],
   "android.request.partialResultCount": [
-   "1"
+   "2"
   ],
   "android.request.pipelineMaxDepth": [
    "8"
@@ -2089,7 +2089,7 @@
    "0"
   ],
   "android.request.partialResultCount": [
-   "1"
+   "2"
   ],
   "android.request.pipelineMaxDepth": [
    "8"
@@ -3561,7 +3561,7 @@
    "0"
   ],
   "android.request.partialResultCount": [
-   "1"
+   "2"
   ],
   "android.request.pipelineMaxDepth": [
    "8"

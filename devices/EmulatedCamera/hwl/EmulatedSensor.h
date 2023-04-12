@@ -285,6 +285,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
 
   void SetCurrentRequest(std::unique_ptr<LogicalCameraSettings> logical_settings,
                          std::unique_ptr<HwlPipelineResult> result,
+                         std::unique_ptr<HwlPipelineResult> partial_result,
                          std::unique_ptr<Buffers> input_buffers,
                          std::unique_ptr<Buffers> output_buffers);
 
@@ -362,6 +363,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   bool got_vsync_;
   std::unique_ptr<LogicalCameraSettings> current_settings_;
   std::unique_ptr<HwlPipelineResult> current_result_;
+  std::unique_ptr<HwlPipelineResult> partial_result_;
   std::unique_ptr<Buffers> current_output_buffers_;
   std::unique_ptr<Buffers> current_input_buffers_;
   std::unique_ptr<JpegCompressor> jpeg_compressor_;
@@ -455,7 +457,8 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   void ReturnResults(HwlPipelineCallback callback,
                      std::unique_ptr<LogicalCameraSettings> settings,
                      std::unique_ptr<HwlPipelineResult> result,
-                     bool reprocess_request);
+                     bool reprocess_request,
+                     std::unique_ptr<HwlPipelineResult> partial_result);
 
   static float GetBaseGainFactor(float max_raw_value) {
     return max_raw_value / EmulatedSensor::kSaturationElectrons;

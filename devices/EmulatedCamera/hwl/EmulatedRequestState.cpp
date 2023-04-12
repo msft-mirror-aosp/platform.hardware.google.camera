@@ -870,34 +870,6 @@ status_t EmulatedRequestState::InitializeSensorSettings(
   return OK;
 }
 
-uint32_t EmulatedRequestState::GetPartialResultCount(bool is_partial_result) {
-  uint32_t res = 0;
-
-  if (is_partial_result) {
-    res = 1;
-  } else {
-    res = partial_result_count ? partial_result_count : 1;
-  }
-
-  return res;
-}
-
-std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializePartialResult(
-    uint32_t pipeline_id, uint32_t frame_number) {
-  std::lock_guard<std::mutex> lock(request_state_mutex_);
-  auto result = std::make_unique<HwlPipelineResult>();
-
-  if (partial_result_count > 1) {
-    result->camera_id = camera_id_;
-    result->pipeline_id = pipeline_id;
-    result->frame_number = frame_number;
-    result->result_metadata = HalCameraMetadata::Create(0, 0);
-    result->partial_result = GetPartialResultCount(/*is partial result*/ true);
-  }
-
-  return result;
-}
-
 std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
     uint32_t pipeline_id, uint32_t frame_number) {
   std::lock_guard<std::mutex> lock(request_state_mutex_);
@@ -906,7 +878,7 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
   result->pipeline_id = pipeline_id;
   result->frame_number = frame_number;
   result->result_metadata = HalCameraMetadata::Clone(request_settings_.get());
-  result->partial_result = GetPartialResultCount(/*is partial result*/ false);
+  result->partial_result = partial_result_count_;
 
   // Results supported on all emulated devices
   result->result_metadata->Set(ANDROID_REQUEST_PIPELINE_DEPTH,
@@ -2877,11 +2849,9 @@ status_t EmulatedRequestState::InitializeRequestDefaults() {
 
   ret = static_metadata_->Get(ANDROID_REQUEST_PARTIAL_RESULT_COUNT, &entry);
   if ((ret == OK) && (entry.count == 1)) {
-    if (entry.data.i32[0] > 2) {
-      ALOGW("%s: Partial result count greater than 2 not supported!",
-            __FUNCTION__);
+    if (entry.data.i32[0] != 1) {
+      ALOGW("%s: Partial results not supported!", __FUNCTION__);
     }
-    partial_result_count = entry.data.i32[0];
   }
 
   ret = static_metadata_->Get(ANDROID_REQUEST_AVAILABLE_CHARACTERISTICS_KEYS,

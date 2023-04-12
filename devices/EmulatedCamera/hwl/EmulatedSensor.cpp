@@ -682,7 +682,6 @@ status_t EmulatedSensor::ShutDown() {
 void EmulatedSensor::SetCurrentRequest(
     std::unique_ptr<LogicalCameraSettings> logical_settings,
     std::unique_ptr<HwlPipelineResult> result,
-    std::unique_ptr<HwlPipelineResult> partial_result,
     std::unique_ptr<Buffers> input_buffers,
     std::unique_ptr<Buffers> output_buffers) {
   Mutex::Autolock lock(control_mutex_);
@@ -690,7 +689,6 @@ void EmulatedSensor::SetCurrentRequest(
   current_result_ = std::move(result);
   current_input_buffers_ = std::move(input_buffers);
   current_output_buffers_ = std::move(output_buffers);
-  partial_result_ = std::move(partial_result);
 }
 
 bool EmulatedSensor::WaitForVSyncLocked(nsecs_t reltime) {
@@ -766,7 +764,6 @@ bool EmulatedSensor::threadLoop() {
   std::unique_ptr<Buffers> next_buffers;
   std::unique_ptr<Buffers> next_input_buffer;
   std::unique_ptr<HwlPipelineResult> next_result;
-  std::unique_ptr<HwlPipelineResult> partial_result;
   std::unique_ptr<LogicalCameraSettings> settings;
   HwlPipelineCallback callback = {nullptr, nullptr};
   {
@@ -775,7 +772,6 @@ bool EmulatedSensor::threadLoop() {
     std::swap(next_buffers, current_output_buffers_);
     std::swap(next_input_buffer, current_input_buffers_);
     std::swap(next_result, current_result_);
-    std::swap(partial_result, partial_result_);
 
     // Signal VSync for start of readout
     ALOGVV("Sensor VSync");
@@ -1194,7 +1190,7 @@ bool EmulatedSensor::threadLoop() {
   // noticeable effect.
   if ((work_done_real_time + kReturnResultThreshod) > frame_end_real_time) {
     ReturnResults(callback, std::move(settings), std::move(next_result),
-                  reprocess_request, std::move(partial_result));
+                  reprocess_request);
   }
 
   work_done_real_time = systemTime();
@@ -1212,7 +1208,7 @@ bool EmulatedSensor::threadLoop() {
   }
 
   ReturnResults(callback, std::move(settings), std::move(next_result),
-                reprocess_request, std::move(partial_result));
+                reprocess_request);
 
   return true;
 };
@@ -1220,8 +1216,7 @@ bool EmulatedSensor::threadLoop() {
 void EmulatedSensor::ReturnResults(
     HwlPipelineCallback callback,
     std::unique_ptr<LogicalCameraSettings> settings,
-    std::unique_ptr<HwlPipelineResult> result, bool reprocess_request,
-    std::unique_ptr<HwlPipelineResult> partial_result) {
+    std::unique_ptr<HwlPipelineResult> result, bool reprocess_request) {
   if ((callback.process_pipeline_result != nullptr) &&
       (result.get() != nullptr) && (result->result_metadata.get() != nullptr)) {
     auto logical_settings = settings->find(logical_camera_id_);
@@ -1348,11 +1343,6 @@ void EmulatedSensor::ReturnResults(
       }
     }
 
-    // Partial result count for partial result is set to a value
-    // only when partial results are supported
-    if (partial_result->partial_result != 0) {
-      callback.process_pipeline_result(std::move(partial_result));
-    }
     callback.process_pipeline_result(std::move(result));
   }
 }

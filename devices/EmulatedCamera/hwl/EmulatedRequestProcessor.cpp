@@ -490,12 +490,8 @@ void EmulatedRequestProcessor::RequestProcessorLoop() {
           }
 
           if (ret == OK) {
-            auto partial_result = request_state_->InitializeLogicalResult(
-                pipeline_id, frame_number,
-                /*partial result*/ true);
-            auto result = request_state_->InitializeLogicalResult(
-                pipeline_id, frame_number,
-                /*partial result*/ false);
+            auto result = request_state_->InitializeLogicalResult(pipeline_id,
+                                                                  frame_number);
             // The screen rotation will be the same for all logical and physical devices
             uint32_t screen_rotation = screen_rotation_;
             for (auto it = logical_settings->begin();
@@ -505,8 +501,7 @@ void EmulatedRequestProcessor::RequestProcessorLoop() {
 
             sensor_->SetCurrentRequest(
                 std::move(logical_settings), std::move(result),
-                std::move(partial_result), std::move(input_buffers),
-                std::move(output_buffers));
+                std::move(input_buffers), std::move(output_buffers));
           } else {
             NotifyMessage msg{.type = MessageType::kError,
                               .message.error = {

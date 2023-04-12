@@ -48,15 +48,11 @@ class EmulatedRequestState {
 
   std::unique_ptr<HwlPipelineResult> InitializeResult(uint32_t pipeline_id,
                                                       uint32_t frame_number);
-  std::unique_ptr<HwlPipelineResult> InitializePartialResult(
-      uint32_t pipeline_id, uint32_t frame_number);
 
   status_t InitializeSensorSettings(
       std::unique_ptr<HalCameraMetadata> request_settings,
       uint32_t override_frame_number,
       EmulatedSensor::SensorSettings* sensor_settings /*out*/);
-
-  uint32_t GetPartialResultCount(bool is_partial_result);
 
  private:
   bool SupportsCapability(uint8_t cap);
@@ -126,6 +122,7 @@ class EmulatedRequestState {
   std::set<int32_t> available_results_;
   std::set<int32_t> available_requests_;
   uint8_t max_pipeline_depth_ = 0;
+  int32_t partial_result_count_ = 1;  // TODO: add support for partial results
   bool supports_manual_sensor_ = false;
   bool supports_manual_post_processing_ = false;
   bool is_backward_compatible_ = false;
@@ -134,7 +131,6 @@ class EmulatedRequestState {
   bool supports_yuv_reprocessing_ = false;
   bool supports_remosaic_reprocessing_ = false;
   bool supports_stream_use_case_ = false;
-  uint8_t partial_result_count = 1;
 
   // android.control.*
   struct SceneOverride {

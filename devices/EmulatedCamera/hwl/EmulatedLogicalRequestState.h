@@ -68,7 +68,7 @@ class EmulatedLogicalRequestState {
       std::unique_ptr<HalCameraMetadata>* default_settings /*out*/);
 
   std::unique_ptr<HwlPipelineResult> InitializeLogicalResult(
-      uint32_t pipeline_id, uint32_t frame_number, bool is_partial_result);
+      uint32_t pipeline_id, uint32_t frame_number);
 
   status_t InitializeLogicalSettings(
       std::unique_ptr<HalCameraMetadata> request_settings,

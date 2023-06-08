@@ -184,6 +184,7 @@ struct SensorCharacteristics {
   ColorSpaceProfileMap color_space_profiles;
   int32_t raw_crop_region_zoomed[4] = {0};
   int32_t raw_crop_region_unzoomed[4] = {0};
+  int32_t timestamp_source = ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_UNKNOWN;
 };
 
 // Maps logical/physical camera ids to sensor characteristics
@@ -278,6 +279,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
     uint8_t test_pattern_mode = ANDROID_SENSOR_TEST_PATTERN_MODE_OFF;
     uint32_t test_pattern_data[4] = {0, 0, 0, 0};
     uint32_t screen_rotation = 0;
+    uint32_t timestamp_source = ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_UNKNOWN;
   };
 
   // Maps physical and logical camera ids to individual device settings
@@ -460,6 +462,8 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   static float GetBaseGainFactor(float max_raw_value) {
     return max_raw_value / EmulatedSensor::kSaturationElectrons;
   }
+
+  nsecs_t getSystemTimeWithSource(uint32_t timestamp_source);
 };
 
 }  // namespace android

@@ -849,6 +849,15 @@ status_t EmulatedRequestState::InitializeSensorSettings(
     }
   }
 
+  ret = static_metadata_->Get(ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    if (entry.data.u8[0] == ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME) {
+      timestamp_source_ = ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME;
+    } else if (entry.data.u8[0] != ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_UNKNOWN) {
+      ALOGE("%s: Unsupported timestamp source", __FUNCTION__);
+    }
+  }
+
   sensor_settings->exposure_time = sensor_exposure_time_;
   sensor_settings->frame_duration = sensor_frame_duration_;
   sensor_settings->gain = sensor_sensitivity_;
@@ -864,6 +873,7 @@ status_t EmulatedRequestState::InitializeSensorSettings(
   sensor_settings->edge_mode = edge_mode;
   sensor_settings->sensor_pixel_mode = sensor_pixel_mode_;
   sensor_settings->test_pattern_mode = test_pattern_mode;
+  sensor_settings->timestamp_source = timestamp_source_;
   memcpy(sensor_settings->test_pattern_data, test_pattern_data,
          sizeof(sensor_settings->test_pattern_data));
 

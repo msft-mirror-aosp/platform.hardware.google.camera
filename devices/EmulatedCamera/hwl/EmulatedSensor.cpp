@@ -753,6 +753,13 @@ status_t EmulatedSensor::Flush() {
   return ret ? OK : TIMED_OUT;
 }
 
+nsecs_t EmulatedSensor::getSystemTimeWithSource(uint32_t timestamp_source) {
+  if (timestamp_source == ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME) {
+    return systemTime(SYSTEM_TIME_BOOTTIME);
+  }
+  return systemTime(SYSTEM_TIME_MONOTONIC);
+}
+
 bool EmulatedSensor::threadLoop() {
   ATRACE_CALL();
   /**
@@ -785,13 +792,15 @@ bool EmulatedSensor::threadLoop() {
 
   auto frame_duration = EmulatedSensor::kSupportedFrameDurationRange[0];
   auto exposure_time = EmulatedSensor::kSupportedExposureTimeRange[0];
+  uint32_t timestamp_source = ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_UNKNOWN;
   // Frame duration must always be the same among all physical devices
   if ((settings.get() != nullptr) && (!settings->empty())) {
     frame_duration = settings->begin()->second.frame_duration;
     exposure_time = settings->begin()->second.exposure_time;
+    timestamp_source = settings->begin()->second.timestamp_source;
   }
 
-  nsecs_t start_real_time = systemTime();
+  nsecs_t start_real_time = getSystemTimeWithSource(timestamp_source);
   // Stagefright cares about system time for timestamps, so base simulated
   // time on that.
   nsecs_t frame_end_real_time = start_real_time + frame_duration;
@@ -1179,7 +1188,7 @@ bool EmulatedSensor::threadLoop() {
     next_input_buffer->clear();
   }
 
-  nsecs_t work_done_real_time = systemTime();
+  nsecs_t work_done_real_time = getSystemTimeWithSource(timestamp_source);
   // Returning the results at this point is not entirely correct from timing
   // perspective. Under ideal conditions where 'ReturnResults' completes
   // in less than 'time_accuracy' we need to return the results after the
@@ -1197,7 +1206,7 @@ bool EmulatedSensor::threadLoop() {
                   reprocess_request, std::move(partial_result));
   }
 
-  work_done_real_time = systemTime();
+  work_done_real_time = getSystemTimeWithSource(timestamp_source);
   ALOGVV("Sensor vertical blanking interval");
   const nsecs_t time_accuracy = 2e6;  // 2 ms of imprecision is ok
   if (work_done_real_time < frame_end_real_time - time_accuracy) {

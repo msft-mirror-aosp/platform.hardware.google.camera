@@ -267,6 +267,7 @@ class EmulatedRequestState {
   bool report_green_split_ = false;
   bool report_noise_profile_ = false;
   bool report_extended_scene_mode_ = false;
+  uint32_t timestamp_source_ = ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_UNKNOWN;
 
   // android.scaler.*
   bool report_rotate_and_crop_ = false;

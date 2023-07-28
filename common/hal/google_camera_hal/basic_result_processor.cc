@@ -95,6 +95,29 @@ void BasicResultProcessor::ProcessResult(ProcessBlockResult block_result) {
   process_capture_result_(std::move(block_result.result));
 }
 
+void BasicResultProcessor::ProcessBatchResult(
+    std::vector<ProcessBlockResult> block_results) {
+  ATRACE_CALL();
+  std::lock_guard<std::mutex> lock(callback_lock_);
+  if (process_capture_result_ == nullptr) {
+    ALOGE("%s: process_capture_result_ is nullptr. Dropping a result.",
+          __FUNCTION__);
+    return;
+  }
+
+  std::vector<std::unique_ptr<CaptureResult>> capture_results;
+  capture_results.reserve(block_results.size());
+  for (auto& block_result : block_results) {
+    if (block_result.result == nullptr) {
+      ALOGW("%s: Received a nullptr result.", __FUNCTION__);
+      continue;
+    }
+    capture_results.push_back(std::move(block_result.result));
+  }
+
+  process_batch_capture_result_(std::move(capture_results));
+}
+
 void BasicResultProcessor::Notify(const ProcessBlockNotifyMessage& block_message) {
   ATRACE_CALL();
   std::lock_guard<std::mutex> lock(callback_lock_);

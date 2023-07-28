@@ -58,6 +58,13 @@ class ResultProcessor {
   // Called by a ProcessBlock to send the capture results.
   virtual void ProcessResult(ProcessBlockResult block_result) = 0;
 
+  // Called by a ProcessBlock to send the batched capture results.
+  virtual void ProcessBatchResult(std::vector<ProcessBlockResult> block_results) {
+    for (auto& result : block_results) {
+      ProcessResult(std::move(result));
+    }
+  }
+
   // Called by a ProcessBlock to notify a message.
   virtual void Notify(const ProcessBlockNotifyMessage& block_message) = 0;
 

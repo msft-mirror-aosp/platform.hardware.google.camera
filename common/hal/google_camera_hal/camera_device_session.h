@@ -46,6 +46,9 @@ struct CameraDeviceSessionCallback {
   // Callback to notify when a camera device produces a capture result.
   ProcessCaptureResultFunc process_capture_result;
 
+  // Callback to notify when a camera device produces a batched capture result.
+  ProcessBatchCaptureResultFunc process_batch_capture_result;
+
   // Callback to notify shutters or errors.
   NotifyFunc notify;
 

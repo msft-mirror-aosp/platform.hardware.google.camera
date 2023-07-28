@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_RgbirdCaptureSession"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
+#include "rgbird_capture_session.h"
+
 #include <cutils/properties.h>
+#include <inttypes.h>
 #include <log/log.h>
 #include <utils/Trace.h>
 
-#include <inttypes.h>
 #include <set>
 
 #include "basic_result_processor.h"
@@ -31,7 +33,6 @@
 #include "hdrplus_request_processor.h"
 #include "hdrplus_result_processor.h"
 #include "multicam_realtime_process_block.h"
-#include "rgbird_capture_session.h"
 #include "rgbird_depth_result_processor.h"
 #include "rgbird_result_request_processor.h"
 #include "rgbird_rt_request_processor.h"
@@ -89,8 +90,9 @@ bool RgbirdCaptureSession::IsStreamConfigurationSupported(
 std::unique_ptr<CaptureSession> RgbirdCaptureSession::Create(
     CameraDeviceSessionHwl* device_session_hwl,
     const StreamConfiguration& stream_config,
-    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-    HwlSessionCallback session_callback,
+    ProcessCaptureResultFunc process_capture_result,
+    ProcessBatchCaptureResultFunc /*process_batch_capture_result*/,
+    NotifyFunc notify, HwlSessionCallback session_callback,
     std::vector<HalStream>* hal_configured_streams,
     CameraBufferAllocatorHwl* /*camera_allocator_hwl*/) {
   ATRACE_CALL();

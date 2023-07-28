@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_HdrplusCaptureSession"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 #include "hdrplus_capture_session.h"
@@ -80,8 +80,9 @@ bool HdrplusCaptureSession::IsStreamConfigurationSupported(
 std::unique_ptr<HdrplusCaptureSession> HdrplusCaptureSession::Create(
     CameraDeviceSessionHwl* device_session_hwl,
     const StreamConfiguration& stream_config,
-    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-    HwlSessionCallback /*session_callback*/,
+    ProcessCaptureResultFunc process_capture_result,
+    ProcessBatchCaptureResultFunc /*process_batch_capture_result*/,
+    NotifyFunc notify, HwlSessionCallback /*session_callback*/,
     std::vector<HalStream>* hal_configured_streams,
     CameraBufferAllocatorHwl* /*camera_allocator_hwl*/) {
   ATRACE_CALL();

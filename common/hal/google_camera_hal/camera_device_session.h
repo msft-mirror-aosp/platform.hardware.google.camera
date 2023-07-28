@@ -242,6 +242,10 @@ class CameraDeviceSession {
   // Process the capture result returned from the HWL
   void ProcessCaptureResult(std::unique_ptr<CaptureResult> result);
 
+  // Process the batched capture result returned from the HWL
+  void ProcessBatchCaptureResult(
+      std::vector<std::unique_ptr<CaptureResult>> results);
+
   // Notify error message with error code for stream of frame[frame_number].
   // Caller is responsible to make sure this function is called only once for any frame.
   void NotifyErrorMessage(uint32_t frame_number, int32_t stream_id,
@@ -289,6 +293,15 @@ class CameraDeviceSession {
   // For all the stream ID groups, derive the mapping between all stream IDs
   // within that group to one single stream ID for easier tracking.
   void DeriveGroupedStreamIdMap();
+
+  // Try handling a single capture result. Returns true when the result callback
+  // was sent in the function, or failed to handle it by running into an
+  // error. So the caller could skip sending the result callback when the
+  // function returned true.
+  bool TryHandleCaptureResult(std::unique_ptr<CaptureResult>& result);
+
+  // Tracks the returned buffers in capture results.
+  void TrackReturnedBuffers(const std::vector<StreamBuffer> buffers);
 
   uint32_t camera_id_ = 0;
   std::unique_ptr<CameraDeviceSessionHwl> device_session_hwl_;

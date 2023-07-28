@@ -26,10 +26,11 @@
 #include <utils/StrongPointer.h>
 
 #include <shared_mutex>
+#include <vector>
 
 #include "aidl_profiler.h"
-#include "aidl_thermal_utils.h"
 #include "camera_device_session.h"
+#include "hal_types.h"
 
 namespace android {
 namespace hardware {
@@ -151,6 +152,10 @@ class AidlCameraDeviceSession
   void ProcessCaptureResult(
       std::unique_ptr<google_camera_hal::CaptureResult> hal_result);
 
+  // Invoked when receiving a batched result from HAL.
+  void ProcessBatchCaptureResult(
+      std::vector<std::unique_ptr<google_camera_hal::CaptureResult>> hal_results);
+
   // Invoked when receiving a message from HAL.
   void NotifyHalMessage(const google_camera_hal::NotifyMessage& hal_message);
 
@@ -182,6 +187,10 @@ class AidlCameraDeviceSession
 
   // Unregister thermal changed callback.
   void UnregisterThermalChangedCallback();
+
+  // Log when the first frame buffers are all received.
+  void TryLogFirstFrameDone(const google_camera_hal::CaptureResult& result,
+                            const char* caller_func_name);
 
   std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session_;
 

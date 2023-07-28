@@ -575,7 +575,8 @@ status_t RgbirdCaptureSession::SetupRealtimeProcessChain(
     ALOGE("%s: Creating RgbirdResultRequestProcessor failed.", __FUNCTION__);
     return UNKNOWN_ERROR;
   }
-  rt_result_processor->SetResultCallback(process_capture_result, notify);
+  rt_result_processor->SetResultCallback(
+      process_capture_result, notify, /*process_batch_capture_result=*/nullptr);
 
   if (is_hdrplus_supported_) {
     res = rt_result_processor->ConfigureStreams(internal_stream_manager_.get(),
@@ -654,7 +655,8 @@ status_t RgbirdCaptureSession::SetupHdrplusProcessChain(
     ALOGE("%s: Creating HdrplusResultProcessor failed.", __FUNCTION__);
     return UNKNOWN_ERROR;
   }
-  result_processor->SetResultCallback(process_capture_result, notify);
+  result_processor->SetResultCallback(process_capture_result, notify,
+                                      /*process_batch_capture_result=*/nullptr);
 
   StreamConfiguration process_block_stream_config;
   status_t res =
@@ -718,7 +720,9 @@ status_t RgbirdCaptureSession::CreateProcessChain(
 
   // Connecting the depth segment of the realtime process chain.
   if (NeedDepthProcessBlock()) {
-    depth_result_processor->SetResultCallback(process_capture_result, notify);
+    depth_result_processor->SetResultCallback(
+        process_capture_result, notify,
+        /*process_batch_capture_result=*/nullptr);
 
     res = ConnectProcessChain(realtime_result_processor.get(),
                               std::move(depth_process_block),

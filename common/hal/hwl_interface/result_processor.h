@@ -36,8 +36,9 @@ class ResultProcessor {
 
   // Set the callbacks to send the finished results. Must be called before
   // calling ProcessResult.
-  virtual void SetResultCallback(ProcessCaptureResultFunc process_capture_result,
-                                 NotifyFunc notify) = 0;
+  virtual void SetResultCallback(
+      ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
+      ProcessBatchCaptureResultFunc process_batch_capture_result) = 0;
 
   // Add pending requests to the result processor.
   //

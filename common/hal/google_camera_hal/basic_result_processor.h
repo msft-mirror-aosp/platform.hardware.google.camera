@@ -31,8 +31,9 @@ class BasicResultProcessor : public ResultProcessor {
   virtual ~BasicResultProcessor();
 
   // Override functions of ResultProcessor start.
-  void SetResultCallback(ProcessCaptureResultFunc process_capture_result,
-                         NotifyFunc notify) override;
+  void SetResultCallback(
+      ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
+      ProcessBatchCaptureResultFunc process_batch_capture_result) override;
 
   status_t AddPendingRequests(
       const std::vector<ProcessBlockRequest>& process_block_requests,
@@ -53,6 +54,7 @@ class BasicResultProcessor : public ResultProcessor {
 
   // The following callbacks must be protected by callback_lock_.
   ProcessCaptureResultFunc process_capture_result_;
+  ProcessBatchCaptureResultFunc process_batch_capture_result_;
   NotifyFunc notify_;
 };
 

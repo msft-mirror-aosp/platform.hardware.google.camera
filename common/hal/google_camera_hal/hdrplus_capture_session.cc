@@ -381,7 +381,8 @@ status_t HdrplusCaptureSession::SetupRealtimeProcessChain(
     ALOGE("%s: Creating RealtimeZslResultProcessor failed.", __FUNCTION__);
     return UNKNOWN_ERROR;
   }
-  result_processor->SetResultCallback(process_capture_result, notify);
+  result_processor->SetResultCallback(process_capture_result, notify,
+                                      /*process_batch_capture_result=*/nullptr);
 
   *realtime_process_block = std::move(process_block);
   *realtime_result_processor = std::move(result_processor);
@@ -427,7 +428,8 @@ status_t HdrplusCaptureSession::SetupHdrplusProcessChain(
     ALOGE("%s: Creating HdrplusResultProcessor failed.", __FUNCTION__);
     return UNKNOWN_ERROR;
   }
-  result_processor->SetResultCallback(process_capture_result, notify);
+  result_processor->SetResultCallback(process_capture_result, notify,
+                                      /*process_batch_capture_result=*/nullptr);
 
   status_t res = ConfigureHdrplusStreams(
       stream_config, hdrplus_request_processor_.get(), process_block.get());

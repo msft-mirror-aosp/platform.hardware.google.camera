@@ -24,7 +24,6 @@
 #include <android/binder_manager.h>
 #include <android/binder_process.h>
 #include <apex_update_listener.h>
-#include <binder/ProcessState.h>
 #include <cutils/properties.h>
 #include <hidl/HidlTransportSupport.h>
 #include <malloc.h>
@@ -49,10 +48,7 @@ const std::string kProviderInstance = "/internal/0";
 
 int main() {
   ALOGI("Google camera provider service is starting.");
-  // The camera HAL may communicate to other vendor components via
-  // /dev/vndbinder
   mallopt(M_DECAY_TIME, 1);
-  android::ProcessState::initWithDriver("/dev/vndbinder");
   android::hardware::configureRpcThreadpool(/*maxThreads=*/6,
                                             /*callerWillJoin=*/true);
 

@@ -99,7 +99,6 @@ cc_defaults {
         "android.hardware.thermal@1.0",
         "android.hardware.thermal@2.0",
         "android.hardware.thermal-V1-ndk",
-        "libbinder",
         "libbinder_ndk",
         "libbase",
         "libcamera_metadata",

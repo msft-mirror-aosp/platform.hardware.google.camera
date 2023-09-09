@@ -19,6 +19,7 @@
 
 #include <cutils/native_handle.h>
 #include <system/graphics-base-v1.0.h>
+
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -395,6 +396,10 @@ enum class DeviceState : uint64_t {
 // Callback function invoked to process capture results.
 using ProcessCaptureResultFunc =
     std::function<void(std::unique_ptr<CaptureResult> /*result*/)>;
+
+// Callback function invoked to process a batched capture result.
+using ProcessBatchCaptureResultFunc =
+    std::function<void(std::vector<std::unique_ptr<CaptureResult>> /*results*/)>;
 
 // Callback function invoked to notify messages.
 using NotifyFunc = std::function<void(const NotifyMessage& /*message*/)>;

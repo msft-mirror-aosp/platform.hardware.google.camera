@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_DualIrCaptureSession"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
+#include "dual_ir_capture_session.h"
+
 #include <log/log.h>
 #include <utils/Trace.h>
 
 #include <set>
 #include <vector>
 
-#include "dual_ir_capture_session.h"
 #include "dual_ir_request_processor.h"
 #include "dual_ir_result_request_processor.h"
 #include "hal_utils.h"
@@ -90,8 +91,9 @@ bool DualIrCaptureSession::IsStreamConfigurationSupported(
 std::unique_ptr<CaptureSession> DualIrCaptureSession::Create(
     CameraDeviceSessionHwl* device_session_hwl,
     const StreamConfiguration& stream_config,
-    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-    HwlSessionCallback /*session_callback*/,
+    ProcessCaptureResultFunc process_capture_result,
+    ProcessBatchCaptureResultFunc /*process_batch_capture_result*/,
+    NotifyFunc notify, HwlSessionCallback /*session_callback*/,
     std::vector<HalStream>* hal_configured_streams,
     CameraBufferAllocatorHwl* /*camera_allocator_hwl*/) {
   ATRACE_CALL();
@@ -480,7 +482,9 @@ status_t DualIrCaptureSession::CreateProcessChain(
   // Only connect the depth segment of the realtime process chain when depth
   // stream is configured
   if (has_depth_stream_) {
-    depth_result_processor->SetResultCallback(process_capture_result, notify);
+    depth_result_processor->SetResultCallback(
+        process_capture_result, notify,
+        /*process_batch_capture_result=*/nullptr);
     res = ConnectProcessChain(rt_result_request_processor.get(),
                               std::move(depth_process_block),
                               std::move(depth_result_processor));
@@ -491,7 +495,8 @@ status_t DualIrCaptureSession::CreateProcessChain(
     }
   }
 
-  rt_result_request_processor->SetResultCallback(process_capture_result, notify);
+  rt_result_request_processor->SetResultCallback(
+      process_capture_result, notify, /*process_batch_capture_result=*/nullptr);
   res =
       ConnectProcessChain(request_processor_.get(), std::move(rt_process_block),
                           std::move(rt_result_request_processor));

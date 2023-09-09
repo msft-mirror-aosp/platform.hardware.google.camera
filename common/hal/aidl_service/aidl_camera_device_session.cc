@@ -29,6 +29,7 @@
 #include <utils/Trace.h>
 
 #include "aidl_profiler.h"
+#include "aidl_thermal_utils.h"
 #include "aidl_utils.h"
 namespace android {
 namespace hardware {
@@ -98,20 +99,8 @@ void AidlCameraDeviceSession::ProcessCaptureResult(
     return;
   }
 
-  {
-    std::lock_guard<std::mutex> pending_lock(pending_first_frame_buffers_mutex_);
-    if (!hal_result->output_buffers.empty() &&
-        num_pending_first_frame_buffers_ > 0 &&
-        first_request_frame_number_ == hal_result->frame_number) {
-      num_pending_first_frame_buffers_ -= hal_result->output_buffers.size();
-      if (num_pending_first_frame_buffers_ == 0) {
-        ALOGI("%s: First frame done", __FUNCTION__);
-        aidl_profiler_->FirstFrameEnd();
-        ATRACE_ASYNC_END("first_frame", 0);
-        ATRACE_ASYNC_END("switch_mode", 0);
-      }
-    }
-  }
+  TryLogFirstFrameDone(*hal_result, __FUNCTION__);
+
   for (auto& buffer : hal_result->output_buffers) {
     aidl_profiler_->ProfileFrameRate("Stream " +
                                      std::to_string(buffer.stream_id));
@@ -124,6 +113,44 @@ void AidlCameraDeviceSession::ProcessCaptureResult(
     ALOGE("%s: Converting to AIDL result failed: %s(%d)", __FUNCTION__,
           strerror(-res), res);
     return;
+  }
+
+  auto aidl_res = aidl_device_callback_->processCaptureResult(aidl_results);
+  if (!aidl_res.isOk()) {
+    ALOGE("%s: processCaptureResult transaction failed: %s.", __FUNCTION__,
+          aidl_res.getMessage());
+    return;
+  }
+}
+
+void AidlCameraDeviceSession::ProcessBatchCaptureResult(
+    std::vector<std::unique_ptr<google_camera_hal::CaptureResult>> hal_results) {
+  std::shared_lock lock(aidl_device_callback_lock_);
+  if (aidl_device_callback_ == nullptr) {
+    ALOGE("%s: aidl_device_callback_ is nullptr", __FUNCTION__);
+    return;
+  }
+  int batch_size = hal_results.size();
+  std::vector<CaptureResult> aidl_results(batch_size);
+  for (size_t i = 0; i < hal_results.size(); ++i) {
+    std::unique_ptr<google_camera_hal::CaptureResult>& hal_result =
+        hal_results[i];
+    auto& aidl_result = aidl_results[i];
+
+    TryLogFirstFrameDone(*hal_result, __FUNCTION__);
+
+    for (auto& buffer : hal_result->output_buffers) {
+      aidl_profiler_->ProfileFrameRate("Stream " +
+                                       std::to_string(buffer.stream_id));
+    }
+
+    status_t res = aidl_utils::ConvertToAidlCaptureResult(
+        result_metadata_queue_.get(), std::move(hal_result), &aidl_result);
+    if (res != OK) {
+      ALOGE("%s: Converting to AIDL result failed: %s(%d)", __FUNCTION__,
+            strerror(-res), res);
+      return;
+    }
   }
 
   auto aidl_res = aidl_device_callback_->processCaptureResult(aidl_results);
@@ -423,6 +450,13 @@ void AidlCameraDeviceSession::SetSessionCallbacks() {
           [this](std::unique_ptr<google_camera_hal::CaptureResult> result) {
             ProcessCaptureResult(std::move(result));
           }),
+      .process_batch_capture_result =
+          google_camera_hal::ProcessBatchCaptureResultFunc(
+              [this](
+                  std::vector<std::unique_ptr<google_camera_hal::CaptureResult>>
+                      results) {
+                ProcessBatchCaptureResult(std::move(results));
+              }),
       .notify = google_camera_hal::NotifyFunc(
           [this](const google_camera_hal::NotifyMessage& message) {
             NotifyHalMessage(message);
@@ -832,6 +866,22 @@ ndk::ScopedAStatus AidlCameraDeviceSession::isReconfigurationRequired(
   auto binder = BnCameraDeviceSession::createBinder();
   AIBinder_setInheritRt(binder.get(), true);
   return binder;
+}
+
+void AidlCameraDeviceSession::TryLogFirstFrameDone(
+    const google_camera_hal::CaptureResult& result,
+    const char* caller_func_name) {
+  std::lock_guard<std::mutex> pending_lock(pending_first_frame_buffers_mutex_);
+  if (!result.output_buffers.empty() && num_pending_first_frame_buffers_ > 0 &&
+      first_request_frame_number_ == result.frame_number) {
+    num_pending_first_frame_buffers_ -= result.output_buffers.size();
+    if (num_pending_first_frame_buffers_ == 0) {
+      ALOGI("%s: First frame done", caller_func_name);
+      aidl_profiler_->FirstFrameEnd();
+      ATRACE_ASYNC_END("first_frame", 0);
+      ATRACE_ASYNC_END("switch_mode", 0);
+    }
+  }
 }
 
 }  // namespace implementation

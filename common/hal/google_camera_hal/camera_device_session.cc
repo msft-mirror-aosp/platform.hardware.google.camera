@@ -186,48 +186,7 @@ status_t CameraDeviceSession::UpdatePendingRequest(CaptureResult* result) {
 
 void CameraDeviceSession::ProcessCaptureResult(
     std::unique_ptr<CaptureResult> result) {
-  if (result == nullptr) {
-    ALOGE("%s: result is nullptr", __FUNCTION__);
-    return;
-  }
-  zoom_ratio_mapper_.UpdateCaptureResult(result.get());
-
-  // If buffer management is not supported, simply send the result to the client.
-  if (!buffer_management_supported_) {
-    std::shared_lock lock(session_callback_lock_);
-    session_callback_.process_capture_result(std::move(result));
-    return;
-  }
-
-  status_t res = UpdatePendingRequest(result.get());
-  if (res != OK) {
-    ALOGE("%s: Updating inflight requests/streams failed.", __FUNCTION__);
-  }
-
-  for (auto& stream_buffer : result->output_buffers) {
-    ALOGV("%s: [sbc] <= Return result output buf[%p], bid[%" PRIu64
-          "], strm[%d], frm[%u]",
-          __FUNCTION__, stream_buffer.buffer, stream_buffer.buffer_id,
-          stream_buffer.stream_id, result->frame_number);
-  }
-  for (auto& stream_buffer : result->input_buffers) {
-    ALOGV("%s: [sbc] <= Return result input buf[%p], bid[%" PRIu64
-          "], strm[%d], frm[%u]",
-          __FUNCTION__, stream_buffer.buffer, stream_buffer.buffer_id,
-          stream_buffer.stream_id, result->frame_number);
-  }
-
-  // If there is dummy buffer or a dummy buffer has been observed of this frame,
-  // handle the capture result specifically.
-  bool result_handled = false;
-  res = TryHandleDummyResult(result.get(), &result_handled);
-  if (res != OK) {
-    ALOGE("%s: Failed to handle dummy result.", __FUNCTION__);
-    return;
-  }
-  if (result_handled == true) {
-    return;
-  }
+  if (TryHandleCaptureResult(result)) return;
 
   // Update pending request tracker with returned buffers.
   std::vector<StreamBuffer> buffers;
@@ -244,14 +203,36 @@ void CameraDeviceSession::ProcessCaptureResult(
     session_callback_.process_capture_result(std::move(result));
   }
 
-  if (!buffers.empty()) {
-    if (pending_requests_tracker_->TrackReturnedAcquiredBuffers(buffers) != OK) {
-      ALOGE("%s: Tracking requested acquired buffers failed", __FUNCTION__);
+  TrackReturnedBuffers(buffers);
+}
+
+void CameraDeviceSession::ProcessBatchCaptureResult(
+    std::vector<std::unique_ptr<CaptureResult>> results) {
+  std::vector<std::unique_ptr<CaptureResult>> results_to_callback;
+  results_to_callback.reserve(results.size());
+  std::vector<StreamBuffer> buffers;
+  for (auto& result : results) {
+    if (TryHandleCaptureResult(result)) continue;
+
+    // Update pending request tracker with returned buffers.
+    buffers.insert(buffers.end(), result->output_buffers.begin(),
+                   result->output_buffers.end());
+
+    if (result->result_metadata) {
+      std::lock_guard<std::mutex> lock(request_record_lock_);
+      pending_results_.erase(result->frame_number);
     }
-    if (pending_requests_tracker_->TrackReturnedResultBuffers(buffers) != OK) {
-      ALOGE("%s: Tracking requested quota buffers failed", __FUNCTION__);
-    }
+
+    results_to_callback.push_back(std::move(result));
   }
+
+  {
+    std::shared_lock lock(session_callback_lock_);
+    session_callback_.process_batch_capture_result(
+        std::move(results_to_callback));
+  }
+
+  TrackReturnedBuffers(buffers);
 }
 
 void CameraDeviceSession::Notify(const NotifyMessage& result) {
@@ -358,6 +339,12 @@ void CameraDeviceSession::InitializeCallbacks() {
       ProcessCaptureResultFunc([this](std::unique_ptr<CaptureResult> result) {
         ProcessCaptureResult(std::move(result));
       });
+
+  camera_device_session_callback_.process_batch_capture_result =
+      ProcessBatchCaptureResultFunc(
+          [this](std::vector<std::unique_ptr<CaptureResult>> results) {
+            ProcessBatchCaptureResult(std::move(results));
+          });
 
   camera_device_session_callback_.notify =
       NotifyFunc([this](const NotifyMessage& result) { Notify(result); });
@@ -739,7 +726,8 @@ status_t CameraDeviceSession::ConfigureStreams(
       external_capture_session_entries_, kCaptureSessionEntries,
       hwl_session_callback_, camera_allocator_hwl_, device_session_hwl_.get(),
       hal_config, camera_device_session_callback_.process_capture_result,
-      camera_device_session_callback_.notify);
+      camera_device_session_callback_.notify,
+      camera_device_session_callback_.process_batch_capture_result);
 
   if (capture_session_ == nullptr) {
     ALOGE("%s: Cannot find a capture session compatible with stream config",
@@ -1938,6 +1926,64 @@ void CameraDeviceSession::ReturnStreamBuffers(
 std::unique_ptr<google::camera_common::Profiler>
 CameraDeviceSession::GetProfiler(uint32_t camera_id, int option) {
   return device_session_hwl_->GetProfiler(camera_id, option);
+}
+
+bool CameraDeviceSession::TryHandleCaptureResult(
+    std::unique_ptr<CaptureResult>& result) {
+  if (result == nullptr) {
+    ALOGE("%s: result is nullptr", __FUNCTION__);
+    return true;
+  }
+  zoom_ratio_mapper_.UpdateCaptureResult(result.get());
+
+  // If buffer management is not supported, simply send the result to the client.
+  if (!buffer_management_supported_) {
+    std::shared_lock lock(session_callback_lock_);
+    session_callback_.process_capture_result(std::move(result));
+    return true;
+  }
+
+  status_t res = UpdatePendingRequest(result.get());
+  if (res != OK) {
+    ALOGE("%s: Updating inflight requests/streams failed: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return true;
+  }
+
+  for (auto& stream_buffer : result->output_buffers) {
+    ALOGV("%s: [sbc] <= Return result output buf[%p], bid[%" PRIu64
+          "], strm[%d], frm[%u]",
+          __FUNCTION__, stream_buffer.buffer, stream_buffer.buffer_id,
+          stream_buffer.stream_id, result->frame_number);
+  }
+  for (auto& stream_buffer : result->input_buffers) {
+    ALOGV("%s: [sbc] <= Return result input buf[%p], bid[%" PRIu64
+          "], strm[%d], frm[%u]",
+          __FUNCTION__, stream_buffer.buffer, stream_buffer.buffer_id,
+          stream_buffer.stream_id, result->frame_number);
+  }
+
+  // If there is placeholder buffer or a placeholder buffer has been observed of
+  // this frame, handle the capture result specifically.
+  bool result_handled = false;
+  res = TryHandleDummyResult(result.get(), &result_handled);
+  if (res != OK) {
+    ALOGE("%s: Failed to handle placeholder result.", __FUNCTION__);
+    return true;
+  }
+  return result_handled;
+}
+
+void CameraDeviceSession::TrackReturnedBuffers(
+    const std::vector<StreamBuffer> buffers) {
+  if (!buffers.empty()) {
+    if (pending_requests_tracker_->TrackReturnedAcquiredBuffers(buffers) != OK) {
+      ALOGE("%s: Tracking requested acquired buffers failed", __FUNCTION__);
+    }
+    if (pending_requests_tracker_->TrackReturnedResultBuffers(buffers) != OK) {
+      ALOGE("%s: Tracking requested quota buffers failed", __FUNCTION__);
+    }
+  }
 }
 
 }  // namespace google_camera_hal

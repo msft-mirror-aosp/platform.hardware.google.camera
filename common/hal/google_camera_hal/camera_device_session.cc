@@ -1975,7 +1975,7 @@ bool CameraDeviceSession::TryHandleCaptureResult(
 }
 
 void CameraDeviceSession::TrackReturnedBuffers(
-    const std::vector<StreamBuffer> buffers) {
+    const std::vector<StreamBuffer>& buffers) {
   if (!buffers.empty()) {
     if (pending_requests_tracker_->TrackReturnedAcquiredBuffers(buffers) != OK) {
       ALOGE("%s: Tracking requested acquired buffers failed", __FUNCTION__);

@@ -301,7 +301,7 @@ class CameraDeviceSession {
   bool TryHandleCaptureResult(std::unique_ptr<CaptureResult>& result);
 
   // Tracks the returned buffers in capture results.
-  void TrackReturnedBuffers(const std::vector<StreamBuffer> buffers);
+  void TrackReturnedBuffers(const std::vector<StreamBuffer>& buffers);
 
   uint32_t camera_id_ = 0;
   std::unique_ptr<CameraDeviceSessionHwl> device_session_hwl_;

@@ -32,7 +32,6 @@
 
 namespace android {
 
-using google_camera_hal::Rect;
 using google_camera_hal::utils::GetSensorActiveArraySize;
 using google_camera_hal::utils::HasCapability;
 
@@ -106,7 +105,7 @@ EmulatedCameraDeviceSessionHwlImpl::Create(
 
 static std::pair<Dimension, Dimension> GetArrayDimensions(
     uint32_t camera_id, const HalCameraMetadata* metadata) {
-  Rect active_array_size;
+  google_camera_hal::Rect active_array_size;
   Dimension active_array_size_dimension;
   Dimension active_array_size_dimension_maximum_resolution;
   status_t ret = GetSensorActiveArraySize(metadata, &active_array_size);

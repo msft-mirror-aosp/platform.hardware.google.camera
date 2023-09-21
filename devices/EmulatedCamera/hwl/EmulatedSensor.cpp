@@ -775,7 +775,11 @@ bool EmulatedSensor::threadLoop() {
   std::unique_ptr<HwlPipelineResult> next_result;
   std::unique_ptr<HwlPipelineResult> partial_result;
   std::unique_ptr<LogicalCameraSettings> settings;
-  HwlPipelineCallback callback = {nullptr, nullptr};
+  HwlPipelineCallback callback = {
+      .process_pipeline_result = nullptr,
+      .process_pipeline_batch_result = nullptr,
+      .notify = nullptr,
+  };
   {
     Mutex::Autolock lock(control_mutex_);
     std::swap(settings, current_settings_);

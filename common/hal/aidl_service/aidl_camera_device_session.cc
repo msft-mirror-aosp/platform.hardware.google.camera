@@ -26,9 +26,11 @@
 #include <cutils/trace.h>
 #include <log/log.h>
 #include <malloc.h>
+#include <ui/GraphicBufferMapper.h>
 #include <utils/Trace.h>
 
 #include "aidl_profiler.h"
+#include "aidl_thermal_utils.h"
 #include "aidl_utils.h"
 namespace android {
 namespace hardware {
@@ -98,20 +100,8 @@ void AidlCameraDeviceSession::ProcessCaptureResult(
     return;
   }
 
-  {
-    std::lock_guard<std::mutex> pending_lock(pending_first_frame_buffers_mutex_);
-    if (!hal_result->output_buffers.empty() &&
-        num_pending_first_frame_buffers_ > 0 &&
-        first_request_frame_number_ == hal_result->frame_number) {
-      num_pending_first_frame_buffers_ -= hal_result->output_buffers.size();
-      if (num_pending_first_frame_buffers_ == 0) {
-        ALOGI("%s: First frame done", __FUNCTION__);
-        aidl_profiler_->FirstFrameEnd();
-        ATRACE_ASYNC_END("first_frame", 0);
-        ATRACE_ASYNC_END("switch_mode", 0);
-      }
-    }
-  }
+  TryLogFirstFrameDone(*hal_result, __FUNCTION__);
+
   for (auto& buffer : hal_result->output_buffers) {
     aidl_profiler_->ProfileFrameRate("Stream " +
                                      std::to_string(buffer.stream_id));
@@ -124,6 +114,44 @@ void AidlCameraDeviceSession::ProcessCaptureResult(
     ALOGE("%s: Converting to AIDL result failed: %s(%d)", __FUNCTION__,
           strerror(-res), res);
     return;
+  }
+
+  auto aidl_res = aidl_device_callback_->processCaptureResult(aidl_results);
+  if (!aidl_res.isOk()) {
+    ALOGE("%s: processCaptureResult transaction failed: %s.", __FUNCTION__,
+          aidl_res.getMessage());
+    return;
+  }
+}
+
+void AidlCameraDeviceSession::ProcessBatchCaptureResult(
+    std::vector<std::unique_ptr<google_camera_hal::CaptureResult>> hal_results) {
+  std::shared_lock lock(aidl_device_callback_lock_);
+  if (aidl_device_callback_ == nullptr) {
+    ALOGE("%s: aidl_device_callback_ is nullptr", __FUNCTION__);
+    return;
+  }
+  int batch_size = hal_results.size();
+  std::vector<CaptureResult> aidl_results(batch_size);
+  for (size_t i = 0; i < hal_results.size(); ++i) {
+    std::unique_ptr<google_camera_hal::CaptureResult>& hal_result =
+        hal_results[i];
+    auto& aidl_result = aidl_results[i];
+
+    TryLogFirstFrameDone(*hal_result, __FUNCTION__);
+
+    for (auto& buffer : hal_result->output_buffers) {
+      aidl_profiler_->ProfileFrameRate("Stream " +
+                                       std::to_string(buffer.stream_id));
+    }
+
+    status_t res = aidl_utils::ConvertToAidlCaptureResult(
+        result_metadata_queue_.get(), std::move(hal_result), &aidl_result);
+    if (res != OK) {
+      ALOGE("%s: Converting to AIDL result failed: %s(%d)", __FUNCTION__,
+            strerror(-res), res);
+      return;
+    }
   }
 
   auto aidl_res = aidl_device_callback_->processCaptureResult(aidl_results);
@@ -250,21 +278,11 @@ AidlCameraDeviceSession::RequestStreamBuffers(
         if (!aidl_utils::IsAidlNativeHandleNull(aidl_buffer.buffer)) {
           native_handle_t* aidl_buffer_native_handle =
               makeFromAidl(aidl_buffer.buffer);
-          if (buffer_mapper_v4_ != nullptr) {
-            hal_buffer.buffer = ImportBufferHandle<
-                android::hardware::graphics::mapper::V4_0::IMapper,
-                android::hardware::graphics::mapper::V4_0::Error>(
-                buffer_mapper_v4_, aidl_buffer_native_handle);
-          } else if (buffer_mapper_v3_ != nullptr) {
-            hal_buffer.buffer = ImportBufferHandle<
-                android::hardware::graphics::mapper::V3_0::IMapper,
-                android::hardware::graphics::mapper::V3_0::Error>(
-                buffer_mapper_v3_, aidl_buffer_native_handle);
-          } else {
-            hal_buffer.buffer = ImportBufferHandle<
-                android::hardware::graphics::mapper::V2_0::IMapper,
-                android::hardware::graphics::mapper::V2_0::Error>(
-                buffer_mapper_v2_, aidl_buffer_native_handle);
+          status_t status = GraphicBufferMapper::get().importBufferNoValidate(
+              aidl_buffer_native_handle, &hal_buffer.buffer);
+          if (status != OK) {
+            ALOGE("%s: Importing graphic buffer failed. Status: %s",
+                  __FUNCTION__, ::android::statusToString(status).c_str());
           }
           native_handle_delete(aidl_buffer_native_handle);
         }
@@ -279,26 +297,6 @@ AidlCameraDeviceSession::RequestStreamBuffers(
   }
 
   return hal_buffer_request_status;
-}
-
-template <class T, class U>
-buffer_handle_t AidlCameraDeviceSession::ImportBufferHandle(
-    const sp<T> buffer_mapper_, const hidl_handle& buffer_hidl_handle) {
-  U mapper_error;
-  buffer_handle_t imported_buffer_handle;
-
-  auto hidl_res = buffer_mapper_->importBuffer(
-      buffer_hidl_handle, [&](const auto& error, const auto& buffer_handle) {
-        mapper_error = error;
-        imported_buffer_handle = static_cast<buffer_handle_t>(buffer_handle);
-      });
-  if (!hidl_res.isOk() || mapper_error != U::NONE) {
-    ALOGE("%s: Importing buffer failed: %s, mapper error %u", __FUNCTION__,
-          hidl_res.description().c_str(), mapper_error);
-    return nullptr;
-  }
-
-  return imported_buffer_handle;
 }
 
 void AidlCameraDeviceSession::ReturnStreamBuffers(
@@ -329,29 +327,6 @@ void AidlCameraDeviceSession::ReturnStreamBuffers(
           aidl_res.getMessage());
     return;
   }
-}
-
-status_t AidlCameraDeviceSession::InitializeBufferMapper() {
-  buffer_mapper_v4_ =
-      android::hardware::graphics::mapper::V4_0::IMapper::getService();
-  if (buffer_mapper_v4_ != nullptr) {
-    return OK;
-  }
-
-  buffer_mapper_v3_ =
-      android::hardware::graphics::mapper::V3_0::IMapper::getService();
-  if (buffer_mapper_v3_ != nullptr) {
-    return OK;
-  }
-
-  buffer_mapper_v2_ =
-      android::hardware::graphics::mapper::V2_0::IMapper::getService();
-  if (buffer_mapper_v2_ != nullptr) {
-    return OK;
-  }
-
-  ALOGE("%s: Getting buffer mapper failed.", __FUNCTION__);
-  return UNKNOWN_ERROR;
 }
 
 status_t AidlCameraDeviceSession::Initialize(
@@ -388,18 +363,13 @@ status_t AidlCameraDeviceSession::Initialize(
   }
 
   // Initialize buffer mapper
-  res = InitializeBufferMapper();
-  if (res != OK) {
-    ALOGE("%s: Initialize buffer mapper failed: %s(%d)", __FUNCTION__,
-          strerror(-res), res);
-    return res;
-  }
+  GraphicBufferMapper::preloadHal();
 
   const std::string thermal_instance_name =
       std::string(aidl::android::hardware::thermal::IThermal::descriptor) +
       "/default";
   if (AServiceManager_isDeclared(thermal_instance_name.c_str())) {
-    auto thermal_ =
+    thermal_ =
         aidl::android::hardware::thermal::IThermal::fromBinder(ndk::SpAIBinder(
             AServiceManager_waitForService(thermal_instance_name.c_str())));
     if (!thermal_) {
@@ -423,6 +393,13 @@ void AidlCameraDeviceSession::SetSessionCallbacks() {
           [this](std::unique_ptr<google_camera_hal::CaptureResult> result) {
             ProcessCaptureResult(std::move(result));
           }),
+      .process_batch_capture_result =
+          google_camera_hal::ProcessBatchCaptureResultFunc(
+              [this](
+                  std::vector<std::unique_ptr<google_camera_hal::CaptureResult>>
+                      results) {
+                ProcessBatchCaptureResult(std::move(results));
+              }),
       .notify = google_camera_hal::NotifyFunc(
           [this](const google_camera_hal::NotifyMessage& message) {
             NotifyHalMessage(message);
@@ -832,6 +809,22 @@ ndk::ScopedAStatus AidlCameraDeviceSession::isReconfigurationRequired(
   auto binder = BnCameraDeviceSession::createBinder();
   AIBinder_setInheritRt(binder.get(), true);
   return binder;
+}
+
+void AidlCameraDeviceSession::TryLogFirstFrameDone(
+    const google_camera_hal::CaptureResult& result,
+    const char* caller_func_name) {
+  std::lock_guard<std::mutex> pending_lock(pending_first_frame_buffers_mutex_);
+  if (!result.output_buffers.empty() && num_pending_first_frame_buffers_ > 0 &&
+      first_request_frame_number_ == result.frame_number) {
+    num_pending_first_frame_buffers_ -= result.output_buffers.size();
+    if (num_pending_first_frame_buffers_ == 0) {
+      ALOGI("%s: First frame done", caller_func_name);
+      aidl_profiler_->FirstFrameEnd();
+      ATRACE_ASYNC_END("first_frame", 0);
+      ATRACE_ASYNC_END("switch_mode", 0);
+    }
+  }
 }
 
 }  // namespace implementation

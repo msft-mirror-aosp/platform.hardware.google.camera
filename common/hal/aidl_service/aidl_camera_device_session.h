@@ -26,10 +26,11 @@
 #include <utils/StrongPointer.h>
 
 #include <shared_mutex>
+#include <vector>
 
 #include "aidl_profiler.h"
-#include "aidl_thermal_utils.h"
 #include "camera_device_session.h"
+#include "hal_types.h"
 
 namespace android {
 namespace hardware {
@@ -151,6 +152,10 @@ class AidlCameraDeviceSession
   void ProcessCaptureResult(
       std::unique_ptr<google_camera_hal::CaptureResult> hal_result);
 
+  // Invoked when receiving a batched result from HAL.
+  void ProcessBatchCaptureResult(
+      std::vector<std::unique_ptr<google_camera_hal::CaptureResult>> hal_results);
+
   // Invoked when receiving a message from HAL.
   void NotifyHalMessage(const google_camera_hal::NotifyMessage& hal_message);
 
@@ -162,11 +167,6 @@ class AidlCameraDeviceSession
   // Invoked when returning stream buffers from HAL.
   void ReturnStreamBuffers(
       const std::vector<google_camera_hal::StreamBuffer>& return_hal_buffers);
-
-  // Import a buffer handle.
-  template <class T, class U>
-  buffer_handle_t ImportBufferHandle(const sp<T> buffer_mapper_,
-                                     const hidl_handle& buffer_hidl_handle);
 
   // Set camera device session callbacks.
   void SetSessionCallbacks();
@@ -183,6 +183,10 @@ class AidlCameraDeviceSession
   // Unregister thermal changed callback.
   void UnregisterThermalChangedCallback();
 
+  // Log when the first frame buffers are all received.
+  void TryLogFirstFrameDone(const google_camera_hal::CaptureResult& result,
+                            const char* caller_func_name);
+
   std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session_;
 
   // Metadata queue to read the request metadata from.
@@ -197,10 +201,6 @@ class AidlCameraDeviceSession
   // Protected by aidl_device_callback_lock_
   std::shared_ptr<aidl::android::hardware::camera::device::ICameraDeviceCallback>
       aidl_device_callback_;
-
-  android::sp<android::hardware::graphics::mapper::V2_0::IMapper> buffer_mapper_v2_;
-  android::sp<android::hardware::graphics::mapper::V3_0::IMapper> buffer_mapper_v3_;
-  android::sp<android::hardware::graphics::mapper::V4_0::IMapper> buffer_mapper_v4_;
 
   std::mutex aidl_thermal_mutex_;
   std::shared_ptr<aidl::android::hardware::thermal::IThermal> thermal_;

@@ -17,10 +17,6 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_CAMERA_DEVICE__SESSION_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_CAMERA_DEVICE__SESSION_H_
 
-#include <android/hardware/graphics/mapper/2.0/IMapper.h>
-#include <android/hardware/graphics/mapper/3.0/IMapper.h>
-#include <android/hardware/graphics/mapper/4.0/IMapper.h>
-
 #include <memory>
 #include <set>
 #include <shared_mutex>
@@ -45,6 +41,9 @@ namespace google_camera_hal {
 struct CameraDeviceSessionCallback {
   // Callback to notify when a camera device produces a capture result.
   ProcessCaptureResultFunc process_capture_result;
+
+  // Callback to notify when a camera device produces a batched capture result.
+  ProcessBatchCaptureResultFunc process_batch_capture_result;
 
   // Callback to notify shutters or errors.
   NotifyFunc notify;
@@ -147,9 +146,6 @@ class CameraDeviceSession {
       CameraBufferAllocatorHwl* camera_allocator_hwl,
       std::vector<GetCaptureSessionFactoryFunc> external_session_factory_entries);
 
-  // Initialize the latest available gralloc buffer mapper.
-  status_t InitializeBufferMapper();
-
   // Initialize callbacks from HWL and callbacks to the client.
   void InitializeCallbacks();
 
@@ -168,9 +164,7 @@ class CameraDeviceSession {
 
   // Import the buffer handle of a buffer.
   // Must be protected by imported_buffer_handle_map_lock_.
-  template <class T, class U>
-  status_t ImportBufferHandleLocked(const sp<T> buffer_mapper,
-                                    const StreamBuffer& buffer);
+  status_t ImportBufferHandleLocked(const StreamBuffer& buffer);
 
   // Create a request with updated buffer handles and modified settings.
   // Must be protected by session_lock_.
@@ -190,11 +184,9 @@ class CameraDeviceSession {
 
   // Free all imported buffer handles belonging to the stream id.
   // Must be protected by imported_buffer_handle_map_lock_.
-  template <class T>
-  void FreeBufferHandlesLocked(const sp<T> buffer_mapper, int32_t stream_id);
+  void FreeBufferHandlesLocked(int32_t stream_id);
 
-  template <class T>
-  void FreeImportedBufferHandles(const sp<T> buffer_mapper);
+  void FreeImportedBufferHandles();
 
   // Clean up stale streams with new stream configuration.
   // Must be protected by session_lock_.
@@ -238,6 +230,10 @@ class CameraDeviceSession {
 
   // Process the capture result returned from the HWL
   void ProcessCaptureResult(std::unique_ptr<CaptureResult> result);
+
+  // Process the batched capture result returned from the HWL
+  void ProcessBatchCaptureResult(
+      std::vector<std::unique_ptr<CaptureResult>> results);
 
   // Notify error message with error code for stream of frame[frame_number].
   // Caller is responsible to make sure this function is called only once for any frame.
@@ -287,13 +283,17 @@ class CameraDeviceSession {
   // within that group to one single stream ID for easier tracking.
   void DeriveGroupedStreamIdMap();
 
+  // Try handling a single capture result. Returns true when the result callback
+  // was sent in the function, or failed to handle it by running into an
+  // error. So the caller could skip sending the result callback when the
+  // function returned true.
+  bool TryHandleCaptureResult(std::unique_ptr<CaptureResult>& result);
+
+  // Tracks the returned buffers in capture results.
+  void TrackReturnedBuffers(const std::vector<StreamBuffer>& buffers);
+
   uint32_t camera_id_ = 0;
   std::unique_ptr<CameraDeviceSessionHwl> device_session_hwl_;
-
-  // Graphics buffer mapper used to import and free buffers.
-  sp<android::hardware::graphics::mapper::V2_0::IMapper> buffer_mapper_v2_;
-  sp<android::hardware::graphics::mapper::V3_0::IMapper> buffer_mapper_v3_;
-  sp<android::hardware::graphics::mapper::V4_0::IMapper> buffer_mapper_v4_;
 
   // Assuming callbacks to framework is thread-safe, the shared mutex is only
   // used to protect member variable writing and reading.

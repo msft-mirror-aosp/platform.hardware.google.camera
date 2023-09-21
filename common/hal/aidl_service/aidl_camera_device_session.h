@@ -168,11 +168,6 @@ class AidlCameraDeviceSession
   void ReturnStreamBuffers(
       const std::vector<google_camera_hal::StreamBuffer>& return_hal_buffers);
 
-  // Import a buffer handle.
-  template <class T, class U>
-  buffer_handle_t ImportBufferHandle(const sp<T> buffer_mapper_,
-                                     const hidl_handle& buffer_hidl_handle);
-
   // Set camera device session callbacks.
   void SetSessionCallbacks();
 
@@ -206,10 +201,6 @@ class AidlCameraDeviceSession
   // Protected by aidl_device_callback_lock_
   std::shared_ptr<aidl::android::hardware::camera::device::ICameraDeviceCallback>
       aidl_device_callback_;
-
-  android::sp<android::hardware::graphics::mapper::V2_0::IMapper> buffer_mapper_v2_;
-  android::sp<android::hardware::graphics::mapper::V3_0::IMapper> buffer_mapper_v3_;
-  android::sp<android::hardware::graphics::mapper::V4_0::IMapper> buffer_mapper_v4_;
 
   std::mutex aidl_thermal_mutex_;
   std::shared_ptr<aidl::android::hardware::thermal::IThermal> thermal_;

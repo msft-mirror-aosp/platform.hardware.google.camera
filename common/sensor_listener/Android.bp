@@ -7,7 +7,6 @@ cc_library {
     name: "lib_sensor_listener",
     vendor: true,
     owner: "google",
-    host_supported: true,
 
     srcs: [
         "goog_gyro_direct.cc",
@@ -23,7 +22,6 @@ cc_library {
 
     cflags: [
         "-Werror",
-        "-Wall",
         "-Wthread-safety",
         "-Wno-unused-parameter",
         "-Wno-unused-function",
@@ -31,22 +29,20 @@ cc_library {
     ],
     header_libs: [
         "libhardware_headers",
+        "//hardware/google/graphics/common/gralloc-headers:pixel-gralloc-headers",
     ],
     shared_libs: [
         "android.frameworks.sensorservice@1.0",
-        "android.hardware.graphics.allocator@3.0",
-        "android.hardware.graphics.mapper@3.0",
         "android.hardware.sensors@1.0",
-        "android.hidl.allocator@1.0",
         "libbase",
         "libcutils",
         "libhidlbase",
         "liblog",
+        "libui",
         "libutils",
     ],
     export_shared_lib_headers: [
         "android.frameworks.sensorservice@1.0",
-        "android.hardware.graphics.allocator@3.0",
     ],
 }
 
@@ -67,6 +63,7 @@ cc_test {
     shared_libs: [
         "libbinder",
         "liblog",
+        "libui",
         "libutils",
         "lib_sensor_listener",
     ],

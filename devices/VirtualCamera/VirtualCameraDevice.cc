@@ -20,7 +20,6 @@
 #define LOG_TAG "VirtualCameraDevice"
 
 #include <array>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -32,8 +31,6 @@
 #include "android/binder_auto_utils.h"
 #include "android/binder_status.h"
 #include "log/log.h"
-#include "system/camera_metadata.h"
-#include "util/MetadataBuilder.h"
 #include "util/Util.h"
 
 namespace android {
@@ -52,67 +49,178 @@ using ::aidl::android::hardware::camera::device::StreamType;
 using ::aidl::android::hardware::graphics::common::PixelFormat;
 
 namespace {
-
-using namespace std::literals;
-
 // Prefix of camera name - "device@1.1/virtual/{numerical_id}"
 const char* kDevicePathPrefix = "device@1.1/virtual/";
 
-constexpr int32_t kVgaWidth = 640;
-constexpr int32_t kVgaHeight = 480;
-constexpr std::chrono::nanoseconds kMinFrameDuration30Fps = 1s / 30;
-constexpr int32_t kMaxJpegSize = 3 * 1024 * 1024 /*3MiB*/;
-
-constexpr MetadataBuilder::ControlRegion kDefaultEmptyControlRegion{
-    .x0 = 0, .y0 = 0, .x1 = 0, .y1 = 0};
-
-// TODO(b/301023410) - Populate camera characteristics according to camera configuration.
-CameraMetadata initCameraCharacteristics() {
-  auto metadata =
-      MetadataBuilder()
-          .setSupportedHardwareLevel(
-              ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_EXTERNAL)
-          .setFlashAvailable(false)
-          .setLensFacing(ANDROID_LENS_FACING_EXTERNAL)
-          .setSensorOrientation(0)
-          .setAvailableFaceDetectModes({ANDROID_STATISTICS_FACE_DETECT_MODE_OFF})
-          .setControlAfAvailableModes({ANDROID_CONTROL_AF_MODE_OFF})
-          .setAvailableOutputStreamConfigurations(
-              {MetadataBuilder::StreamConfiguration{
-                   .width = kVgaWidth,
-                   .height = kVgaHeight,
-                   .format =
-                       ANDROID_SCALER_AVAILABLE_FORMATS_IMPLEMENTATION_DEFINED,
-                   .minFrameDuration = kMinFrameDuration30Fps,
-                   .minStallDuration = 0s},
-               {MetadataBuilder::StreamConfiguration{
-                   .width = kVgaWidth,
-                   .height = kVgaHeight,
-                   .format = ANDROID_SCALER_AVAILABLE_FORMATS_BLOB,
-                   .minFrameDuration = kMinFrameDuration30Fps,
-                   .minStallDuration = 0s}}})
-          .setControlAeAvailableFpsRange(10, 30)
-          .setControlMaxRegions(0, 0, 0)
-          .setSensorActiveArraySize(0, 0, kVgaWidth, kVgaHeight)
-          .setControlAfRegions({kDefaultEmptyControlRegion})
-          .setControlAeRegions({kDefaultEmptyControlRegion})
-          .setControlAwbRegions({kDefaultEmptyControlRegion})
-          .setControlAeCompensationRange(0, 1)
-          .setControlAeCompensationStep(camera_metadata_rational_t{0, 1})
-          .setMaxJpegSize(kMaxJpegSize)
-          .setAvailableRequestKeys({ANDROID_CONTROL_AF_MODE})
-          .setAvailableResultKeys({ANDROID_CONTROL_AF_MODE})
-          .setAvailableCapabilities(
-              {ANDROID_REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE})
-          .setAvailableCharacteristicKeys()
-          .build();
-
-  if (metadata == nullptr) {
-    ALOGE("Failed to build metadata!");
-    return CameraMetadata();
+void convertToAidl(const camera_metadata_t* src, CameraMetadata* dest) {
+  if (src == nullptr) {
+    return;
   }
 
-  return std::move(*metadata);
+  size_t size = get_camera_metadata_size(src);
+  auto* src_start = (uint8_t*)src;
+  uint8_t* src_end = src_start + size;
+  dest->metadata.assign(src_start, src_end);
+}
+
+// TODO(b/301023410) - Create utility class to interact with CameraMetadata
+// instead of the mess below.
+// TODO(b/301023410) - Populate camera characteristics according to camera
+// configuration.
+CameraMetadata initCameraCharacteristics() {
+  android::hardware::camera::common::helper::CameraMetadata cameraCharacteristics;
+
+  const uint8_t hardware_level = ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_EXTERNAL;
+  cameraCharacteristics.update(ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL,
+                               &hardware_level, 1);
+
+  const uint8_t flash_available = ANDROID_FLASH_INFO_AVAILABLE_FALSE;
+  cameraCharacteristics.update(ANDROID_FLASH_INFO_AVAILABLE, &flash_available,
+                               1);
+
+  const uint8_t lens_facing = ANDROID_LENS_FACING_EXTERNAL;
+  cameraCharacteristics.update(ANDROID_LENS_FACING, &lens_facing, 1);
+
+  const int32_t sensor_orientation = 0;
+  cameraCharacteristics.update(ANDROID_SENSOR_ORIENTATION, &sensor_orientation,
+                               1);
+
+  const uint8_t faceDetectMode = ANDROID_STATISTICS_FACE_DETECT_MODE_OFF;
+  cameraCharacteristics.update(
+      ANDROID_STATISTICS_INFO_AVAILABLE_FACE_DETECT_MODES, &faceDetectMode, 1);
+
+  const std::array<uint8_t, 2> afAvailableModes{ANDROID_CONTROL_AF_MODE_AUTO,
+                                                ANDROID_CONTROL_AF_MODE_OFF};
+  cameraCharacteristics.update(ANDROID_CONTROL_AF_AVAILABLE_MODES,
+                               afAvailableModes.data(), afAvailableModes.size());
+
+  const std::array<int32_t, 8> availableStreamConfigurations{
+      ANDROID_SCALER_AVAILABLE_FORMATS_IMPLEMENTATION_DEFINED,
+      640,
+      480,
+      ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT,
+      ANDROID_SCALER_AVAILABLE_FORMATS_BLOB,
+      640,
+      480,
+      ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT};
+  cameraCharacteristics.update(ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS,
+                               availableStreamConfigurations.data(),
+                               availableStreamConfigurations.size());
+
+  const std::array<int32_t, 2> fpsRanges{10, 30};
+  cameraCharacteristics.update(ANDROID_CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,
+                               fpsRanges.data(), fpsRanges.size());
+
+  const std::array<int64_t, 8> minFrameDurations{
+      ANDROID_SCALER_AVAILABLE_FORMATS_IMPLEMENTATION_DEFINED,
+      640,
+      480,
+      1000000000LL / 30,
+      ANDROID_SCALER_AVAILABLE_FORMATS_BLOB,
+      640,
+      480,
+      1000000000LL / 30};  // 30 FPS
+  cameraCharacteristics.update(ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS,
+                               minFrameDurations.data(),
+                               minFrameDurations.size());
+
+  const std::array<int64_t, 8> stallDurations{
+      ANDROID_SCALER_AVAILABLE_FORMATS_IMPLEMENTATION_DEFINED,
+      640,
+      480,
+      0,
+      ANDROID_SCALER_AVAILABLE_FORMATS_BLOB,
+      640,
+      480,
+      0};
+  cameraCharacteristics.update(ANDROID_SCALER_AVAILABLE_STALL_DURATIONS,
+                               stallDurations.data(), stallDurations.size());
+
+  const std::array<int32_t, 3> maxControlRegions{0, 0, 0};
+  cameraCharacteristics.update(ANDROID_CONTROL_MAX_REGIONS,
+                               maxControlRegions.data(),
+                               maxControlRegions.size());
+
+  const std::array<int32_t, 4> activeArraySize{0, 0, 640, 480};
+  cameraCharacteristics.update(ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE,
+                               activeArraySize.data(), activeArraySize.size());
+
+  int32_t awbRegions = 0;
+  cameraCharacteristics.update(ANDROID_CONTROL_AWB_REGIONS, &awbRegions, 1);
+
+  int32_t aeRegions = 0;
+  cameraCharacteristics.update(ANDROID_CONTROL_AE_REGIONS, &aeRegions, 1);
+
+  int32_t afRegions = 0;
+  cameraCharacteristics.update(ANDROID_CONTROL_AF_REGIONS, &afRegions, 1);
+
+  const std::array<int32_t, 2> aeCompensationRange{0, 1};
+  cameraCharacteristics.update(ANDROID_CONTROL_AE_COMPENSATION_RANGE,
+                               aeCompensationRange.data(),
+                               aeCompensationRange.size());
+
+  const camera_metadata_rational_t controlAeCompensationStep[] = {{0, 1}};
+  cameraCharacteristics.update(ANDROID_CONTROL_AE_COMPENSATION_STEP,
+                               controlAeCompensationStep, 1);
+
+  int32_t jpegMaxSize = 640 * 480;
+  cameraCharacteristics.update(ANDROID_JPEG_MAX_SIZE, &jpegMaxSize, 1);
+
+  const float scalerAvailableMaxDigitalZoom = 1.f;
+  cameraCharacteristics.update(ANDROID_SCALER_AVAILABLE_MAX_DIGITAL_ZOOM,
+                               &scalerAvailableMaxDigitalZoom, 1);
+
+  const std::array<uint8_t, 2> controlAvailableModes{ANDROID_CONTROL_MODE_OFF,
+                                                     ANDROID_CONTROL_MODE_AUTO};
+  cameraCharacteristics.update(ANDROID_CONTROL_AVAILABLE_MODES,
+                               controlAvailableModes.data(),
+                               controlAvailableModes.size());
+
+  const std::array<int32_t, 1> availableRequestKeys{ANDROID_CONTROL_AF_MODE};
+  cameraCharacteristics.update(ANDROID_REQUEST_AVAILABLE_REQUEST_KEYS,
+                               availableRequestKeys.data(),
+                               availableRequestKeys.size());
+
+  const std::array<int32_t, 1> availableResultKeys{ANDROID_CONTROL_AF_MODE};
+  cameraCharacteristics.update(ANDROID_REQUEST_AVAILABLE_RESULT_KEYS,
+                               availableResultKeys.data(),
+                               availableResultKeys.size());
+
+  const std::array<uint8_t, 1> availableRequestCapabilities{
+      ANDROID_REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE};
+  cameraCharacteristics.update(ANDROID_REQUEST_AVAILABLE_CAPABILITIES,
+                               availableRequestCapabilities.data(),
+                               availableRequestCapabilities.size());
+  const std::array<int32_t, 19> availableCharacteristicKeys{
+      ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL,
+      ANDROID_FLASH_INFO_AVAILABLE,
+      ANDROID_CONTROL_AF_AVAILABLE_MODES,
+      ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS,
+      ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS,
+      ANDROID_SCALER_AVAILABLE_STALL_DURATIONS,
+      ANDROID_CONTROL_MAX_REGIONS,
+      ANDROID_CONTROL_AE_REGIONS,
+      ANDROID_CONTROL_AF_REGIONS,
+      ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE,
+      ANDROID_CONTROL_AE_COMPENSATION_RANGE,
+      ANDROID_CONTROL_AE_COMPENSATION_STEP,
+      ANDROID_LENS_FACING,
+      ANDROID_SENSOR_ORIENTATION,
+      ANDROID_CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,
+      ANDROID_STATISTICS_INFO_AVAILABLE_FACE_DETECT_MODES,
+      ANDROID_REQUEST_AVAILABLE_CAPABILITIES,
+      ANDROID_REQUEST_AVAILABLE_RESULT_KEYS,
+      ANDROID_REQUEST_AVAILABLE_REQUEST_KEYS};
+
+  cameraCharacteristics.update(ANDROID_REQUEST_AVAILABLE_CHARACTERISTICS_KEYS,
+                               availableCharacteristicKeys.data(),
+                               availableCharacteristicKeys.size());
+
+  CameraMetadata aidlCameraCharacteristics;
+  const camera_metadata_t* metadata = cameraCharacteristics.getAndLock();
+  convertToAidl(metadata, &aidlCameraCharacteristics);
+  cameraCharacteristics.unlock(metadata);
+  return aidlCameraCharacteristics;
 }
 
 }  // namespace

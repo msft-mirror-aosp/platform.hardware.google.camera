@@ -1,0 +1,82 @@
+package {
+    // See: http://go/android-license-faq
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+cc_defaults {
+    name: "libvirtualcamera_defaults",
+    shared_libs: [
+        "android.hardware.camera.provider-V2-ndk",
+        "android.hardware.camera.common-V1-ndk",
+        "android.hardware.camera.device-V2-ndk",
+        "android.hardware.camera.metadata-V2-ndk",
+        "libbinder_ndk",
+        "libcamera_metadata",
+        "liblog",
+        "libfmq",
+        "libandroid",
+        "libnativewindow",
+        "libbase",
+        "libcutils",
+    ],
+    static_libs: [
+        "android.hardware.camera.common@1.0-helper",
+        "libaidlcommonsupport",
+    ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wformat",
+        "-Wthread-safety",
+    ],
+}
+
+cc_library_static {
+    name: "libvirtualcamera_utils",
+    srcs: [
+        "util/Util.cc",
+        "util/TestPatternHelper.cc",
+    ],
+    defaults: [
+        "libvirtualcamera_defaults",
+    ],
+    export_include_dirs: ["util"],
+}
+
+cc_library_static {
+    name: "libvirtualcamera",
+    srcs: [
+        "VirtualCameraProvider.cc",
+        "VirtualCameraDevice.cc",
+        "VirtualCameraSession.cc",
+        "VirtualCameraStream.cc",
+    ],
+    defaults: [
+        "libvirtualcamera_defaults",
+    ],
+    static_libs: [
+        "libvirtualcamera_utils",
+    ],
+    export_include_dirs: ["."],
+    min_sdk_version: "current",
+}
+
+cc_binary {
+    name: "virtual_camera",
+    srcs: ["main.cc"],
+    defaults: [
+        "libvirtualcamera_defaults",
+    ],
+    static_libs: [
+        "libvirtualcamera",
+        "libvirtualcamera_utils",
+    ],
+    // Remove before flight.
+    // We don't want the service to be started and discovered
+    // yet - remove comments on the lines below in order to
+    // test locally.
+    // vintf_fragments: [
+    //    "android.hardware.camera.provider-virtual.xml",
+    // ],
+    // init_rc: ["virtual_camera.hal.rc"],
+}

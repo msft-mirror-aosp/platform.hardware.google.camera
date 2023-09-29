@@ -34,7 +34,6 @@ namespace virtualcamera {
 class VirtualCameraStream {
  public:
   VirtualCameraStream(
-      int streamId,
       const ::aidl::android::hardware::camera::device::Stream& stream);
 
   // Get AHardwareBuffer instance corresponding to StreamBuffer from camera AIDL.
@@ -51,7 +50,6 @@ class VirtualCameraStream {
   bool removeBuffer(int bufferId) EXCLUDES(mLock);
 
  private:
-  const int mId;
   const ::aidl::android::hardware::camera::device::Stream mStreamConfig;
   std::mutex mLock;
 

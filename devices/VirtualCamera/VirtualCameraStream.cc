@@ -65,8 +65,9 @@ std::shared_ptr<AHardwareBuffer> importBuffer(const NativeHandle& aidlHandle,
       &bufferDesc, nativeHandle.get(),
       AHARDWAREBUFFER_CREATE_FROM_HANDLE_METHOD_CLONE, &hwBufferPtr);
   if (ret != NO_ERROR) {
-    ALOGE("Failed to import buffer from native handle, err = %d, Stream = %s",
-          ret, streamConfig.toString().c_str());
+    ALOGE(
+        "%s: Failed to import buffer from native handle, err = %d, Stream = %s",
+        __func__, ret, streamConfig.toString().c_str());
     return nullptr;
   }
 
@@ -75,15 +76,15 @@ std::shared_ptr<AHardwareBuffer> importBuffer(const NativeHandle& aidlHandle,
 
 }  // namespace
 
-VirtualCameraStream::VirtualCameraStream(int id, const Stream& stream)
-    : mId(id), mStreamConfig(stream) {
+VirtualCameraStream::VirtualCameraStream(const Stream& stream)
+    : mStreamConfig(stream) {
 }
 
 std::shared_ptr<AHardwareBuffer> VirtualCameraStream::getHardwareBuffer(
     const StreamBuffer& buffer) {
   if (buffer.streamId != mStreamConfig.id) {
-    ALOGE("Caller requesting buffer belonging to stream %d from stream %d",
-          buffer.streamId, mStreamConfig.id);
+    ALOGE("%s: Caller requesting buffer belonging to stream %d from stream %d",
+          __func__, buffer.streamId, mStreamConfig.id);
     return nullptr;
   }
 
@@ -94,7 +95,8 @@ std::shared_ptr<AHardwareBuffer> VirtualCameraStream::getHardwareBuffer(
     return it->second;
   }
 
-  ALOGV("Importing buffer %ld for stream %d", buffer.bufferId, buffer.streamId);
+  ALOGV("%s: Importing buffer %" PRId64 " for stream %d", __func__,
+        buffer.bufferId, buffer.streamId);
 
   auto hwBufferPtr = importBuffer(buffer.buffer, mStreamConfig);
   if (hwBufferPtr != nullptr) {

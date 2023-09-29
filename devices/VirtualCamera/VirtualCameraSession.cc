@@ -37,12 +37,12 @@
 #include "aidl/android/hardware/camera/device/HalStream.h"
 #include "aidl/android/hardware/camera/device/StreamConfiguration.h"
 #include "aidl/android/hardware/camera/device/StreamRotation.h"
+#include "aidl/android/hardware/graphics/common/BufferUsage.h"
 #include "android/binder_auto_utils.h"
 #include "android/hardware_buffer.h"
 #include "fmq/AidlMessageQueue.h"
 #include "system/camera_metadata.h"
 #include "system/graphics-sw.h"
-#include "util/MetadataBuilder.h"
 #include "util/TestPatternHelper.h"
 #include "util/Util.h"
 
@@ -64,6 +64,7 @@ using ::aidl::android::hardware::camera::device::StreamConfiguration;
 using ::aidl::android::hardware::camera::device::StreamRotation;
 using ::aidl::android::hardware::common::fmq::MQDescriptor;
 using ::aidl::android::hardware::common::fmq::SynchronizedReadWrite;
+using ::aidl::android::hardware::graphics::common::BufferUsage;
 using ::aidl::android::hardware::graphics::common::PixelFormat;
 using ::android::base::unique_fd;
 
@@ -82,8 +83,7 @@ static constexpr size_t kMaxStreamBuffers = 2;
 CameraMetadata createDefaultRequestSettings(RequestTemplate type) {
   hardware::camera::common::V1_0::helper::CameraMetadata metadataHelper;
 
-  camera_metadata_enum_android_control_capture_intent_t intent =
-      ANDROID_CONTROL_CAPTURE_INTENT_PREVIEW;
+  uint8_t intent = ANDROID_CONTROL_CAPTURE_INTENT_PREVIEW;
   switch (type) {
     case RequestTemplate::PREVIEW:
       intent = ANDROID_CONTROL_CAPTURE_INTENT_PREVIEW;
@@ -101,20 +101,24 @@ CameraMetadata createDefaultRequestSettings(RequestTemplate type) {
       // Leave default.
       break;
   }
+  metadataHelper.update(ANDROID_CONTROL_CAPTURE_INTENT, &intent, 1);
 
-  auto metadata = MetadataBuilder().setControlCaptureIntent(intent).build();
-  return (metadata != nullptr) ? std::move(*metadata) : CameraMetadata();
+  auto mdPtr = metadata_ptr(metadataHelper.release(), free_camera_metadata);
+  const uint8_t* rawMd = reinterpret_cast<uint8_t*>(mdPtr.get());
+  CameraMetadata aidlMd;
+  aidlMd.metadata.assign(rawMd, rawMd + get_camera_metadata_size(mdPtr.get()));
+  return aidlMd;
 }
 
-CameraMetadata createCaptureResultMetadata(
-    const std::chrono::nanoseconds timestamp) {
-  std::unique_ptr<CameraMetadata> metadata =
-      MetadataBuilder().setSensorTimestamp(timestamp).build();
-  if (metadata == nullptr) {
-    ALOGE("Failed to build capture result metadata");
-    return CameraMetadata();
-  }
-  return std::move(*metadata);
+CameraMetadata createCaptureResultMetadata(const int64_t timestamp) {
+  hardware::camera::common::V1_0::helper::CameraMetadata metadataHelper;
+  metadataHelper.update(ANDROID_SENSOR_TIMESTAMP, &timestamp, 1);
+
+  auto mdPtr = metadata_ptr(metadataHelper.release(), free_camera_metadata);
+  const uint8_t* rawMd = reinterpret_cast<uint8_t*>(mdPtr.get());
+  CameraMetadata aidlMd;
+  aidlMd.metadata.assign(rawMd, rawMd + get_camera_metadata_size(mdPtr.get()));
+  return aidlMd;
 }
 
 }  // namespace
@@ -138,6 +142,7 @@ VirtualCameraSession::VirtualCameraSession(
 
 ndk::ScopedAStatus VirtualCameraSession::close() {
   ALOGV("%s", __func__);
+  std::lock_guard<std::mutex> lock(mLock);
   mStreams.clear();
   return ndk::ScopedAStatus::ok();
 }
@@ -145,7 +150,7 @@ ndk::ScopedAStatus VirtualCameraSession::close() {
 ndk::ScopedAStatus VirtualCameraSession::configureStreams(
     const StreamConfiguration& in_requestedConfiguration,
     std::vector<HalStream>* _aidl_return) {
-  ALOGV("%s requestedConfiguration: %s", __func__,
+  ALOGV("%s: requestedConfiguration: %s", __func__,
         in_requestedConfiguration.toString().c_str());
 
   if (_aidl_return == nullptr) {
@@ -174,14 +179,13 @@ ndk::ScopedAStatus VirtualCameraSession::configureStreams(
     halStreams[i].physicalCameraId = streams[i].physicalCameraId;
     halStreams[i].overrideDataSpace = streams[i].dataSpace;
     halStreams[i].maxBuffers = kMaxStreamBuffers;
-    halStreams[i].overrideFormat =
-        ::aidl::android::hardware::graphics::common::PixelFormat::YCBCR_420_888;
-    halStreams[i].producerUsage = streams[i].usage;
+    halStreams[i].overrideFormat = PixelFormat::YCBCR_420_888;
+    halStreams[i].producerUsage = BufferUsage::CPU_WRITE_OFTEN;
     halStreams[i].supportOffline = false;
 
     mStreams.emplace(std::piecewise_construct,
                      std::forward_as_tuple(streams[i].id),
-                     std::forward_as_tuple(streams[i].id, streams[i]));
+                     std::forward_as_tuple(streams[i]));
   }
 
   mFirstRequest.store(true);
@@ -190,7 +194,7 @@ ndk::ScopedAStatus VirtualCameraSession::configureStreams(
 
 ndk::ScopedAStatus VirtualCameraSession::constructDefaultRequestSettings(
     RequestTemplate in_type, CameraMetadata* _aidl_return) {
-  ALOGV("%s type %d", __func__, in_type);
+  ALOGV("%s: type %d", __func__, in_type);
 
   switch (in_type) {
     case RequestTemplate::PREVIEW:
@@ -237,7 +241,7 @@ ndk::ScopedAStatus VirtualCameraSession::getCaptureResultMetadataQueue(
 ndk::ScopedAStatus VirtualCameraSession::isReconfigurationRequired(
     const CameraMetadata& in_oldSessionParams,
     const CameraMetadata& in_newSessionParams, bool* _aidl_return) {
-  ALOGV("%s oldSessionParams: %s newSessionParams: %s", __func__,
+  ALOGV("%s: oldSessionParams: %s newSessionParams: %s", __func__,
         in_newSessionParams.toString().c_str(),
         in_oldSessionParams.toString().c_str());
 
@@ -310,15 +314,16 @@ void VirtualCameraSession::removeBufferCaches(
   for (const auto& bufferCache : cachesToRemove) {
     auto it = mStreams.find(bufferCache.streamId);
     if (it == mStreams.end()) {
-      ALOGE("Ask to remove buffer %ld from unknown stream %d",
-            bufferCache.bufferId, bufferCache.streamId);
+      ALOGE("%s: Ask to remove buffer %" PRId64 " from unknown stream %d",
+            __func__, bufferCache.bufferId, bufferCache.streamId);
       continue;
     }
     if (it->second.removeBuffer(bufferCache.bufferId)) {
-      ALOGD("Successfully removed buffer %ld from cache of stream %d",
-            bufferCache.bufferId, bufferCache.streamId);
+      ALOGD("%s: Successfully removed buffer %" PRId64
+            " from cache of stream %d",
+            __func__, bufferCache.bufferId, bufferCache.streamId);
     } else {
-      ALOGE("Failed to buffer %ld from cache of stream %d",
+      ALOGE("%s Failed to buffer %" PRId64 " from cache of stream %d", __func__,
             bufferCache.bufferId, bufferCache.streamId);
     }
   }
@@ -329,7 +334,7 @@ std::shared_ptr<AHardwareBuffer> VirtualCameraSession::fetchHardwareBuffer(
   std::lock_guard<std::mutex> lock(mLock);
   auto it = mStreams.find(streamBuffer.streamId);
   if (it == mStreams.end()) {
-    ALOGE("StreamBuffer references buffer of unknown streamId %d",
+    ALOGE("%s: StreamBuffer references buffer of unknown streamId %d", __func__,
           streamBuffer.streamId);
     return nullptr;
   }
@@ -338,21 +343,36 @@ std::shared_ptr<AHardwareBuffer> VirtualCameraSession::fetchHardwareBuffer(
 
 ndk::ScopedAStatus VirtualCameraSession::processCaptureRequest(
     const CaptureRequest& request) {
-  ALOGD("Processing CaptureRequest: %s", request.toString().c_str());
+  ALOGD("%s: request: %s", __func__, request.toString().c_str());
 
   if (mFirstRequest.exchange(false) && request.settings.metadata.empty()) {
     return cameraStatus(Status::ILLEGAL_ARGUMENT);
   }
 
-  const std::chrono::nanoseconds timestamp =
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::steady_clock::now().time_since_epoch());
+  std::shared_ptr<ICameraDeviceCallback> cameraCallback = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(mLock);
+    cameraCallback = mCameraDeviceCallback;
+  }
+
+  if (cameraCallback == nullptr) {
+    ALOGE(
+        "%s: processCaptureRequest called, but there's no camera callback "
+        "configured",
+        __func__);
+    return cameraStatus(Status::INTERNAL_ERROR);
+  }
+
+  const int64_t timestamp =
+      std::chrono::duration_cast<std::chrono::microseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count();
   for (const auto& streamBuffer : request.outputBuffers) {
     std::shared_ptr<AHardwareBuffer> hwBuffer =
         fetchHardwareBuffer(streamBuffer);
     if (hwBuffer == nullptr) {
-      ALOGE("Failed to get hardware buffer id %ld for streamId %d",
-            streamBuffer.bufferId, streamBuffer.streamId);
+      ALOGE("%s: Failed to get hardware buffer id %" PRId64 " for streamId %d",
+            __func__, streamBuffer.bufferId, streamBuffer.streamId);
       return cameraStatus(Status::ILLEGAL_ARGUMENT);
     }
 
@@ -363,9 +383,9 @@ ndk::ScopedAStatus VirtualCameraSession::processCaptureRequest(
     msg.set<::aidl::android::hardware::camera::device::NotifyMsg::Tag::shutter>(
         ::aidl::android::hardware::camera::device::ShutterMsg{
             .frameNumber = request.frameNumber,
-            .timestamp = timestamp.count(),
+            .timestamp = timestamp,
         });
-    mCameraDeviceCallback->notify({msg});
+    cameraCallback->notify({msg});
   }
 
   ::aidl::android::hardware::camera::device::CaptureResult captureResult;
@@ -389,14 +409,14 @@ ndk::ScopedAStatus VirtualCameraSession::processCaptureRequest(
       captureResults(1);
   captureResults[0] = std::move(captureResult);
 
-  auto status = mCameraDeviceCallback->processCaptureResult(captureResults);
+  auto status = cameraCallback->processCaptureResult(captureResults);
   if (!status.isOk()) {
-    ALOGE("processCaptureResult call failed: %s",
+    ALOGE("%s: processCaptureResult call failed: %s", __func__,
           status.getDescription().c_str());
     return cameraStatus(Status::INTERNAL_ERROR);
   }
 
-  ALOGD("Successfully called processCaptureResult");
+  ALOGD("%s: Successfully called processCaptureResult", __func__);
 
   return ndk::ScopedAStatus::ok();
 }

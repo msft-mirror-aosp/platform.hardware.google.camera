@@ -14,8 +14,9 @@ using ::aidl::android::hardware::common::NativeHandle;
 FenceGuard::FenceGuard(const NativeHandle& aidlHandle) {
   if (aidlHandle.fds.size() != 1) {
     ALOGE(
-        "Cannot import fence from aidlHandle containing %ld file descriptors.",
-        aidlHandle.fds.size());
+        "%s: Cannot import fence from aidlHandle containing %d file "
+        "descriptors.",
+        __func__, static_cast<int>(aidlHandle.fds.size()));
     return;
   }
 

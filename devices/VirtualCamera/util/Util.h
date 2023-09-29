@@ -22,6 +22,7 @@
 #include "aidl/android/hardware/camera/common/Status.h"
 #include "aidl/android/hardware/camera/device/StreamBuffer.h"
 #include "android/binder_auto_utils.h"
+#include "ui/Fence.h"
 
 namespace android {
 namespace services {
@@ -34,27 +35,12 @@ inline ndk::ScopedAStatus cameraStatus(
       static_cast<int32_t>(status));
 }
 
-// RAII wrapper to extract sync fence file descriptor
-// from AIDL NativeHandle and ensure it's properly closed.
-class FenceGuard {
- public:
-  explicit FenceGuard(
-      const ::aidl::android::hardware::common::NativeHandle& handle);
-
-  // Make this move-only.
-  FenceGuard(FenceGuard&&) = default;
-  FenceGuard& operator=(FenceGuard&&) = default;
-  FenceGuard(const FenceGuard&) = delete;
-  FenceGuard& operator=(const FenceGuard&) = delete;
-
-  // Returns underlying file descriptor, or -1 if there's none.
-  int get() const;
-
-  ~FenceGuard();
-
- private:
-  int mFd = -1;
-};
+// Import Fence from AIDL NativeHandle.
+//
+// If the handle can't be used to construct Fence (is empty or doesn't contain
+// only single fd) this function will return Fence instance in invalid state.
+sp<Fence> importFence(
+    const ::aidl::android::hardware::common::NativeHandle& handle);
 
 }  // namespace virtualcamera
 }  // namespace services

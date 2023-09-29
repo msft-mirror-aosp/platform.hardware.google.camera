@@ -18,7 +18,11 @@ cc_defaults {
         "libnativewindow",
         "libbase",
         "libcutils",
+        "libui",
         "libutils",
+        "libEGL",
+        "libGLESv2",
+        "libGLESv3",
     ],
     static_libs: [
         "android.hardware.camera.common@1.0-helper",
@@ -38,6 +42,10 @@ cc_library_static {
         "util/MetadataBuilder.cc",
         "util/Util.cc",
         "util/TestPatternHelper.cc",
+        "util/EglDisplayContext.cc",
+        "util/EglFramebuffer.cc",
+        "util/EglProgram.cc",
+        "util/EglUtil.cc",
     ],
     defaults: [
         "libvirtualcamera_defaults",

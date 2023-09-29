@@ -18,24 +18,29 @@ cc_defaults {
         "libnativewindow",
         "libbase",
         "libcutils",
-        "libutils",
     ],
     static_libs: [
         "android.hardware.camera.common@1.0-helper",
         "libaidlcommonsupport",
+    ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wformat",
+        "-Wthread-safety",
     ],
 }
 
 cc_library_static {
     name: "libvirtualcamera_utils",
     srcs: [
-        "util/MetadataBuilder.cc",
         "util/Util.cc",
         "util/TestPatternHelper.cc",
     ],
     defaults: [
         "libvirtualcamera_defaults",
     ],
+    export_include_dirs: ["util"],
 }
 
 cc_library_static {

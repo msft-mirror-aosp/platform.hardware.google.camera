@@ -16,7 +16,12 @@
 
 #include "TestPatternHelper.h"
 
+#define LOG_TAG "TestPatternHelper"
+
 #include <complex>
+
+#include "log/log.h"
+#include "utils/Errors.h"
 
 namespace android {
 namespace services {
@@ -55,6 +60,11 @@ void renderTestPatternYCbCr420(const std::shared_ptr<AHardwareBuffer> buffer,
   int result = AHardwareBuffer_lockPlanes(buffer.get(),
                                           AHARDWAREBUFFER_USAGE_CPU_READ_RARELY,
                                           fence, nullptr, &planes_info);
+  if (result != OK) {
+    ALOGE("%s: Failed to lock planes: %d", __func__, result);
+    return;
+  }
+
   float time = float(frameNumber) / 120.0f;
   const std::complex<float> c(std::sin(time), std::cos(time));
 

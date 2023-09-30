@@ -43,6 +43,7 @@
 #include "fmq/AidlMessageQueue.h"
 #include "system/camera_metadata.h"
 #include "system/graphics-sw.h"
+#include "util/MetadataBuilder.h"
 #include "util/TestPatternHelper.h"
 #include "util/Util.h"
 
@@ -83,7 +84,8 @@ static constexpr size_t kMaxStreamBuffers = 2;
 CameraMetadata createDefaultRequestSettings(RequestTemplate type) {
   hardware::camera::common::V1_0::helper::CameraMetadata metadataHelper;
 
-  uint8_t intent = ANDROID_CONTROL_CAPTURE_INTENT_PREVIEW;
+  camera_metadata_enum_android_control_capture_intent_t intent =
+      ANDROID_CONTROL_CAPTURE_INTENT_PREVIEW;
   switch (type) {
     case RequestTemplate::PREVIEW:
       intent = ANDROID_CONTROL_CAPTURE_INTENT_PREVIEW;
@@ -101,24 +103,20 @@ CameraMetadata createDefaultRequestSettings(RequestTemplate type) {
       // Leave default.
       break;
   }
-  metadataHelper.update(ANDROID_CONTROL_CAPTURE_INTENT, &intent, 1);
 
-  auto mdPtr = metadata_ptr(metadataHelper.release(), free_camera_metadata);
-  const uint8_t* rawMd = reinterpret_cast<uint8_t*>(mdPtr.get());
-  CameraMetadata aidlMd;
-  aidlMd.metadata.assign(rawMd, rawMd + get_camera_metadata_size(mdPtr.get()));
-  return aidlMd;
+  auto metadata = MetadataBuilder().setControlCaptureIntent(intent).build();
+  return (metadata != nullptr) ? std::move(*metadata) : CameraMetadata();
 }
 
-CameraMetadata createCaptureResultMetadata(const int64_t timestamp) {
-  hardware::camera::common::V1_0::helper::CameraMetadata metadataHelper;
-  metadataHelper.update(ANDROID_SENSOR_TIMESTAMP, &timestamp, 1);
-
-  auto mdPtr = metadata_ptr(metadataHelper.release(), free_camera_metadata);
-  const uint8_t* rawMd = reinterpret_cast<uint8_t*>(mdPtr.get());
-  CameraMetadata aidlMd;
-  aidlMd.metadata.assign(rawMd, rawMd + get_camera_metadata_size(mdPtr.get()));
-  return aidlMd;
+CameraMetadata createCaptureResultMetadata(
+    const std::chrono::nanoseconds timestamp) {
+  std::unique_ptr<CameraMetadata> metadata =
+      MetadataBuilder().setSensorTimestamp(timestamp).build();
+  if (metadata == nullptr) {
+    ALOGE("%s: Failed to build capture result metadata", __func__);
+    return CameraMetadata();
+  }
+  return std::move(*metadata);
 }
 
 }  // namespace
@@ -323,8 +321,8 @@ void VirtualCameraSession::removeBufferCaches(
             " from cache of stream %d",
             __func__, bufferCache.bufferId, bufferCache.streamId);
     } else {
-      ALOGE("%s Failed to buffer %" PRId64 " from cache of stream %d", __func__,
-            bufferCache.bufferId, bufferCache.streamId);
+      ALOGE("%s: Failed to buffer %" PRId64 " from cache of stream %d",
+            __func__, bufferCache.bufferId, bufferCache.streamId);
     }
   }
 }
@@ -363,10 +361,9 @@ ndk::ScopedAStatus VirtualCameraSession::processCaptureRequest(
     return cameraStatus(Status::INTERNAL_ERROR);
   }
 
-  const int64_t timestamp =
-      std::chrono::duration_cast<std::chrono::microseconds>(
-          std::chrono::steady_clock::now().time_since_epoch())
-          .count();
+  const std::chrono::nanoseconds timestamp =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now().time_since_epoch());
   for (const auto& streamBuffer : request.outputBuffers) {
     std::shared_ptr<AHardwareBuffer> hwBuffer =
         fetchHardwareBuffer(streamBuffer);
@@ -383,7 +380,7 @@ ndk::ScopedAStatus VirtualCameraSession::processCaptureRequest(
     msg.set<::aidl::android::hardware::camera::device::NotifyMsg::Tag::shutter>(
         ::aidl::android::hardware::camera::device::ShutterMsg{
             .frameNumber = request.frameNumber,
-            .timestamp = timestamp,
+            .timestamp = timestamp.count(),
         });
     cameraCallback->notify({msg});
   }

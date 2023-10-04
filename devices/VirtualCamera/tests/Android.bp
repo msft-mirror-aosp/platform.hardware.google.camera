@@ -1,0 +1,21 @@
+package {
+    // See: http://go/android-license-faq
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+cc_test {
+    name: "virtual_camera_tests",
+    defaults: [
+        "libvirtualcamera_defaults",
+    ],
+    include_dirs: [
+        "hardware/google/camera/devices/VirtualCamera",
+    ],
+    static_libs: [
+        "libvirtualcamera",
+        "libvirtualcamera_utils",
+        "libgtest",
+        "libgmock",
+    ],
+    srcs: ["VirtualCameraProviderTest.cc"],
+}

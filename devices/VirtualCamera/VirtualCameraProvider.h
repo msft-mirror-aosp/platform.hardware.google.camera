@@ -78,6 +78,8 @@ class VirtualCameraProvider
   // TODO(b/301023410) - Add camera configuration.
   std::shared_ptr<VirtualCameraDevice> createCamera();
 
+  bool removeCamera(const std::string& name);
+
  private:
   std::mutex mLock;
 

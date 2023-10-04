@@ -174,11 +174,37 @@ std::shared_ptr<VirtualCameraDevice> VirtualCameraProvider::createCamera() {
     auto ret = callback->cameraDeviceStatusChange(camera->getCameraName(),
                                                   CameraDeviceStatus::PRESENT);
     if (!ret.isOk()) {
-      ALOGE("Failed to announce camera status change: %s",
-            ret.getDescription().c_str());
+      ALOGE("Failed to announce camera %s status change (PRESENT): %s",
+            camera->getCameraName().c_str(), ret.getDescription().c_str());
     }
   }
   return camera;
+}
+
+bool VirtualCameraProvider::removeCamera(const std::string& name) {
+  std::shared_ptr<ICameraProviderCallback> callback;
+  {
+    const std::lock_guard<std::mutex> lock(mLock);
+    auto it = mCameras.find(name);
+    if (it == mCameras.end()) {
+      ALOGE("Cannot remove camera %s: no such camera", name.c_str());
+      return false;
+    }
+    // TODO(b/301023410) Gracefully shut down camera.
+    mCameras.erase(it);
+    callback = mCameraProviderCallback;
+  }
+
+  if (callback != nullptr) {
+    auto ret = callback->cameraDeviceStatusChange(
+        name, CameraDeviceStatus::NOT_PRESENT);
+    if (!ret.isOk()) {
+      ALOGE("Failed to announce camera %s status change (NOT_PRESENT): %s",
+            name.c_str(), ret.getDescription().c_str());
+    }
+  }
+
+  return true;
 }
 
 }  // namespace virtualcamera

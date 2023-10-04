@@ -18,4 +18,5 @@ cc_test {
         "libgmock",
     ],
     srcs: ["VirtualCameraProviderTest.cc"],
+    test_suites: ["device-tests"],
 }

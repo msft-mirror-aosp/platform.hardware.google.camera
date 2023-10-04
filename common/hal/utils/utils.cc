@@ -15,6 +15,7 @@
  */
 
 //#define LOG_NDEBUG 0
+#include <cassert>
 #include <cstdint>
 #define LOG_TAG "GCH_Utils"
 

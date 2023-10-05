@@ -17,8 +17,6 @@
 #ifndef ANDROID_SERVICES_VIRTUALCAMERA_VIRTUALCAMERASESSION_H
 #define ANDROID_SERVICES_VIRTUALCAMERA_VIRTUALCAMERASESSION_H
 
-#include <deque>
-#include <list>
 #include <map>
 #include <memory>
 
@@ -28,8 +26,11 @@
 #include "aidl/android/hardware/camera/device/BufferRequest.h"
 #include "aidl/android/hardware/camera/device/ICameraDeviceCallback.h"
 #include "aidl/android/hardware/camera/device/Stream.h"
+#include "aidl/android/hardware/camera/device/StreamBuffer.h"
 #include "android-base/unique_fd.h"
 #include "android/hardware_buffer.h"
+#include "util/EglDisplayContext.h"
+#include "util/EglProgram.h"
 #include "utils/Mutex.h"
 
 namespace android {
@@ -114,8 +115,16 @@ class VirtualCameraSession
   std::shared_ptr<AHardwareBuffer> fetchHardwareBuffer(
       const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer);
 
+  std::shared_ptr<EglFrameBuffer> fetchEglFramebuffer(
+      const EGLDisplay eglDisplay,
+      const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer);
+
   ndk::ScopedAStatus processCaptureRequest(
       const ::aidl::android::hardware::camera::device::CaptureRequest& request);
+
+  ndk::ScopedAStatus renderIntoStreamBuffer(
+      const ::aidl::android::hardware::camera::device::CaptureRequest& request,
+      const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer);
 
   const std::string mCameraId;
 
@@ -136,6 +145,9 @@ class VirtualCameraSession
   std::shared_ptr<ResultMetadataQueue> mResultMetadataQueue;
 
   std::atomic_bool mFirstRequest{true};
+
+  std::unique_ptr<EglDisplayContext> mEglDisplayContext;
+  std::unique_ptr<EglTestPatternProgram> mEglTestPatternProgram;
 };
 
 }  // namespace virtualcamera

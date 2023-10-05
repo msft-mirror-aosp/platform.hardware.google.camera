@@ -16,13 +16,18 @@
 #ifndef ANDROID_SERVICES_VIRTUALCAMERA_VIRTUALCAMERASTREAM_H
 #define ANDROID_SERVICES_VIRTUALCAMERA_VIRTUALCAMERASTREAM_H
 
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
+#include <tuple>
 #include <unordered_map>
 
+#include "EGL/egl.h"
 #include "aidl/android/hardware/camera/device/Stream.h"
 #include "aidl/android/hardware/camera/device/StreamBuffer.h"
 #include "android/hardware_buffer.h"
+#include "util/EglFramebuffer.h"
 #include "utils/Mutex.h"
 
 namespace android {
@@ -45,17 +50,37 @@ class VirtualCameraStream {
       const ::aidl::android::hardware::camera::device::StreamBuffer& buffer)
       EXCLUDES(mLock);
 
+  std::shared_ptr<EglFrameBuffer> getEglFrameBuffer(
+      const EGLDisplay eglDisplay,
+      const ::aidl::android::hardware::camera::device::StreamBuffer& buffer)
+      EXCLUDES(mLock);
+
   // Un-maps the previously mapped buffer and removes it from the stream cache.
   // Returns true if removal is successful, false otherwise.
   bool removeBuffer(int bufferId) EXCLUDES(mLock);
 
  private:
+  std::shared_ptr<AHardwareBuffer> getHardwareBufferLocked(
+      const ::aidl::android::hardware::camera::device::StreamBuffer& buffer)
+      REQUIRES(mLock);
+
   const ::aidl::android::hardware::camera::device::Stream mStreamConfig;
   std::mutex mLock;
 
   // Cache for already mapped buffers, mapping bufferId -> AHardwareBuffer instance.
   std::unordered_map<int, std::shared_ptr<AHardwareBuffer>> mBuffers
       GUARDED_BY(mLock);
+
+  using FramebufferMapKey = std::pair<int, EGLDisplay>;
+  struct FramebufferMapKeyHash {
+    std::size_t operator()(const FramebufferMapKey& key) const {
+      return std::hash<int>{}(key.first) ^
+             (std::hash<void*>{}(reinterpret_cast<void*>(key.second)) << 1);
+    }
+  };
+  std::unordered_map<FramebufferMapKey, std::shared_ptr<EglFrameBuffer>,
+                     FramebufferMapKeyHash>
+      mEglFramebuffers GUARDED_BY(mLock);
 };
 
 }  // namespace virtualcamera

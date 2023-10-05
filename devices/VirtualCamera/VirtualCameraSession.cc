@@ -31,18 +31,24 @@
 #include <utility>
 
 #include "CameraMetadata.h"
+#include "EGL/egl.h"
+#include "VirtualCameraStream.h"
 #include "aidl/android/hardware/camera/common/Status.h"
 #include "aidl/android/hardware/camera/device/BufferCache.h"
 #include "aidl/android/hardware/camera/device/CaptureRequest.h"
 #include "aidl/android/hardware/camera/device/HalStream.h"
+#include "aidl/android/hardware/camera/device/NotifyMsg.h"
+#include "aidl/android/hardware/camera/device/ShutterMsg.h"
 #include "aidl/android/hardware/camera/device/StreamConfiguration.h"
 #include "aidl/android/hardware/camera/device/StreamRotation.h"
 #include "aidl/android/hardware/graphics/common/BufferUsage.h"
-#include "android/binder_auto_utils.h"
 #include "android/hardware_buffer.h"
 #include "fmq/AidlMessageQueue.h"
 #include "system/camera_metadata.h"
 #include "system/graphics-sw.h"
+#include "util/EglDisplayContext.h"
+#include "util/EglFramebuffer.h"
+#include "util/EglProgram.h"
 #include "util/MetadataBuilder.h"
 #include "util/TestPatternHelper.h"
 #include "util/Util.h"
@@ -53,13 +59,18 @@ namespace virtualcamera {
 
 using ::aidl::android::hardware::camera::common::Status;
 using ::aidl::android::hardware::camera::device::BufferCache;
+using ::aidl::android::hardware::camera::device::BufferStatus;
 using ::aidl::android::hardware::camera::device::CameraMetadata;
 using ::aidl::android::hardware::camera::device::CameraOfflineSessionInfo;
 using ::aidl::android::hardware::camera::device::CaptureRequest;
+using ::aidl::android::hardware::camera::device::ErrorCode;
+using ::aidl::android::hardware::camera::device::ErrorMsg;
 using ::aidl::android::hardware::camera::device::HalStream;
 using ::aidl::android::hardware::camera::device::ICameraDeviceCallback;
 using ::aidl::android::hardware::camera::device::ICameraOfflineSession;
+using ::aidl::android::hardware::camera::device::NotifyMsg;
 using ::aidl::android::hardware::camera::device::RequestTemplate;
+using ::aidl::android::hardware::camera::device::ShutterMsg;
 using ::aidl::android::hardware::camera::device::StreamBuffer;
 using ::aidl::android::hardware::camera::device::StreamConfiguration;
 using ::aidl::android::hardware::camera::device::StreamRotation;
@@ -74,12 +85,19 @@ namespace {
 using metadata_ptr =
     std::unique_ptr<camera_metadata_t, void (*)(camera_metadata_t*)>;
 
+using namespace std::chrono_literals;
+
+static constexpr std::chrono::milliseconds kAcquireFenceTimeout = 500ms;
+
 // Size of request/result metadata fast message queue.
 // Setting to 0 to always disables FMQ.
 static constexpr size_t kMetadataMsgQueueSize = 0;
 
 // Maximum number of buffers to use per single stream.
 static constexpr size_t kMaxStreamBuffers = 2;
+
+// Whether to use EGL for rendering - will be removed soon.
+static constexpr bool kUseEGL = true;
 
 CameraMetadata createDefaultRequestSettings(RequestTemplate type) {
   hardware::camera::common::V1_0::helper::CameraMetadata metadataHelper;
@@ -119,6 +137,24 @@ CameraMetadata createCaptureResultMetadata(
   return std::move(*metadata);
 }
 
+NotifyMsg createShutterNotifyMsg(int frameNumber,
+                                 std::chrono::nanoseconds timestamp) {
+  NotifyMsg msg;
+  msg.set<NotifyMsg::Tag::shutter>(ShutterMsg{
+      .frameNumber = frameNumber,
+      .timestamp = timestamp.count(),
+  });
+  return msg;
+}
+
+NotifyMsg createErrorNotifyMsg(int frameNumber, int streamId, ErrorCode error) {
+  NotifyMsg msg;
+  msg.set<NotifyMsg::Tag::error>(ErrorMsg{.frameNumber = frameNumber,
+                                          .errorStreamId = streamId,
+                                          .errorCode = error});
+  return msg;
+}
+
 }  // namespace
 
 VirtualCameraSession::VirtualCameraSession(
@@ -135,6 +171,11 @@ VirtualCameraSession::VirtualCameraSession(
       kMetadataMsgQueueSize, false /* non blocking */);
   if (!mResultMetadataQueue->isValid()) {
     ALOGE("%s: invalid result fmq", __func__);
+  }
+
+  if (kUseEGL) {
+    mEglDisplayContext = std::make_unique<EglDisplayContext>();
+    mEglTestPatternProgram = std::make_unique<EglTestPatternProgram>();
   }
 }
 
@@ -178,7 +219,8 @@ ndk::ScopedAStatus VirtualCameraSession::configureStreams(
     halStreams[i].overrideDataSpace = streams[i].dataSpace;
     halStreams[i].maxBuffers = kMaxStreamBuffers;
     halStreams[i].overrideFormat = PixelFormat::YCBCR_420_888;
-    halStreams[i].producerUsage = BufferUsage::CPU_WRITE_OFTEN;
+    halStreams[i].producerUsage =
+        kUseEGL ? BufferUsage::GPU_RENDER_TARGET : BufferUsage::CPU_WRITE_OFTEN;
     halStreams[i].supportOffline = false;
 
     mStreams.emplace(std::piecewise_construct,
@@ -339,6 +381,18 @@ std::shared_ptr<AHardwareBuffer> VirtualCameraSession::fetchHardwareBuffer(
   return it->second.getHardwareBuffer(streamBuffer);
 }
 
+std::shared_ptr<EglFrameBuffer> VirtualCameraSession::fetchEglFramebuffer(
+    const EGLDisplay eglDisplay, const StreamBuffer& streamBuffer) {
+  std::lock_guard<std::mutex> lock(mLock);
+  auto it = mStreams.find(streamBuffer.streamId);
+  if (it == mStreams.end()) {
+    ALOGE("%s: StreamBuffer references buffer of unknown streamId %d", __func__,
+          streamBuffer.streamId);
+    return nullptr;
+  }
+  return it->second.getEglFrameBuffer(eglDisplay, streamBuffer);
+}
+
 ndk::ScopedAStatus VirtualCameraSession::processCaptureRequest(
     const CaptureRequest& request) {
   ALOGD("%s: request: %s", __func__, request.toString().c_str());
@@ -364,26 +418,6 @@ ndk::ScopedAStatus VirtualCameraSession::processCaptureRequest(
   const std::chrono::nanoseconds timestamp =
       std::chrono::duration_cast<std::chrono::nanoseconds>(
           std::chrono::steady_clock::now().time_since_epoch());
-  for (const auto& streamBuffer : request.outputBuffers) {
-    std::shared_ptr<AHardwareBuffer> hwBuffer =
-        fetchHardwareBuffer(streamBuffer);
-    if (hwBuffer == nullptr) {
-      ALOGE("%s: Failed to get hardware buffer id %" PRId64 " for streamId %d",
-            __func__, streamBuffer.bufferId, streamBuffer.streamId);
-      return cameraStatus(Status::ILLEGAL_ARGUMENT);
-    }
-
-    FenceGuard fence(streamBuffer.acquireFence);
-    renderTestPatternYCbCr420(hwBuffer, request.frameNumber, fence.get());
-
-    ::aidl::android::hardware::camera::device::NotifyMsg msg;
-    msg.set<::aidl::android::hardware::camera::device::NotifyMsg::Tag::shutter>(
-        ::aidl::android::hardware::camera::device::ShutterMsg{
-            .frameNumber = request.frameNumber,
-            .timestamp = timestamp.count(),
-        });
-    cameraCallback->notify({msg});
-  }
 
   ::aidl::android::hardware::camera::device::CaptureResult captureResult;
   captureResult.fmqResultSize = 0;
@@ -399,7 +433,15 @@ ndk::ScopedAStatus VirtualCameraSession::processCaptureRequest(
     StreamBuffer& outBuffer = captureResult.outputBuffers[i];
     outBuffer.streamId = request.outputBuffers[i].streamId;
     outBuffer.bufferId = request.outputBuffers[i].bufferId;
-    outBuffer.status = request.outputBuffers[i].status;
+    if (renderIntoStreamBuffer(request, request.outputBuffers[i]).isOk()) {
+      cameraCallback->notify(
+          {createShutterNotifyMsg(request.frameNumber, timestamp)});
+      outBuffer.status = BufferStatus::OK;
+    } else {
+      cameraCallback->notify({createErrorNotifyMsg(
+          request.frameNumber, outBuffer.bufferId, ErrorCode::ERROR_BUFFER)});
+      outBuffer.status = BufferStatus::ERROR;
+    }
   }
 
   std::vector<::aidl::android::hardware::camera::device::CaptureResult>
@@ -414,6 +456,52 @@ ndk::ScopedAStatus VirtualCameraSession::processCaptureRequest(
   }
 
   ALOGD("%s: Successfully called processCaptureResult", __func__);
+
+  return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus VirtualCameraSession::renderIntoStreamBuffer(
+    const ::aidl::android::hardware::camera::device::CaptureRequest& request,
+    const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer) {
+  sp<Fence> fence = importFence(streamBuffer.acquireFence);
+  if (kUseEGL && mEglDisplayContext->isInitialized()) {
+    // Wait for fence to clear.
+    if (fence->isValid()) {
+      status_t ret = fence->wait(kAcquireFenceTimeout.count());
+      if (ret != 0) {
+        ALOGE("Timeout while waiting for the acquire fence for buffer%" PRId64
+              " for streamId %d",
+              streamBuffer.bufferId, streamBuffer.streamId);
+        return cameraStatus(Status::INTERNAL_ERROR);
+      }
+    }
+
+    // Render test pattern using EGL.
+    std::shared_ptr<EglFrameBuffer> framebuffer =
+        fetchEglFramebuffer(mEglDisplayContext->getEglDisplay(), streamBuffer);
+    if (framebuffer == nullptr) {
+      ALOGE(
+          "%s: Failed to get EGL framebuffer corresponding to buffer id "
+          "%" PRId64 " for streamId %d",
+          __func__, streamBuffer.bufferId, streamBuffer.streamId);
+      return cameraStatus(Status::ILLEGAL_ARGUMENT);
+    }
+    mEglDisplayContext->makeCurrent();
+    framebuffer->beforeDraw();
+    mEglTestPatternProgram->draw(framebuffer->getWidth(),
+                                 framebuffer->getHeight(), request.frameNumber);
+    framebuffer->afterDraw();
+  } else {
+    // Render test pattern on CPU.
+    std::shared_ptr<AHardwareBuffer> hwBuffer =
+        fetchHardwareBuffer(streamBuffer);
+    if (hwBuffer == nullptr) {
+      ALOGE("%s: Failed to get hardware buffer id %" PRId64 " for streamId %d",
+            __func__, streamBuffer.bufferId, streamBuffer.streamId);
+      return cameraStatus(Status::ILLEGAL_ARGUMENT);
+    }
+    renderTestPatternYCbCr420(hwBuffer, request.frameNumber, fence->get());
+  }
 
   return ndk::ScopedAStatus::ok();
 }

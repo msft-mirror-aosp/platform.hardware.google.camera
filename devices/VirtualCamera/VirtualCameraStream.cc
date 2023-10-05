@@ -15,6 +15,9 @@
  */
 #include "VirtualCameraStream.h"
 
+#include "EGL/egl.h"
+#include "util/EglFramebuffer.h"
+
 // #define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCameraStream"
 
@@ -89,7 +92,41 @@ std::shared_ptr<AHardwareBuffer> VirtualCameraStream::getHardwareBuffer(
   }
 
   std::lock_guard<std::mutex> lock(mLock);
+  return getHardwareBufferLocked(buffer);
+}
 
+std::shared_ptr<EglFrameBuffer> VirtualCameraStream::getEglFrameBuffer(
+    const EGLDisplay eglDisplay,
+    const ::aidl::android::hardware::camera::device::StreamBuffer& buffer) {
+  if (buffer.streamId != mStreamConfig.id) {
+    ALOGE("%s: Caller requesting buffer belonging to stream %d from stream %d",
+          __func__, buffer.streamId, mStreamConfig.id);
+    return nullptr;
+  }
+
+  const FramebufferMapKey key(buffer.bufferId, eglDisplay);
+
+  std::lock_guard<std::mutex> lock(mLock);
+
+  auto it = mEglFramebuffers.find(key);
+  if (it != mEglFramebuffers.end()) {
+    return it->second;
+  }
+
+  std::shared_ptr<AHardwareBuffer> hwBufferPtr = getHardwareBufferLocked(buffer);
+  if (hwBufferPtr == nullptr) {
+    return nullptr;
+  }
+  std::shared_ptr<EglFrameBuffer> framebufferPtr =
+      std::make_shared<EglFrameBuffer>(eglDisplay, hwBufferPtr);
+  mEglFramebuffers.emplace(std::piecewise_construct, std::forward_as_tuple(key),
+                           std::forward_as_tuple(framebufferPtr));
+
+  return framebufferPtr;
+}
+
+std::shared_ptr<AHardwareBuffer> VirtualCameraStream::getHardwareBufferLocked(
+    const StreamBuffer& buffer) {
   auto it = mBuffers.find(buffer.bufferId);
   if (it != mBuffers.end()) {
     return it->second;
@@ -104,7 +141,6 @@ std::shared_ptr<AHardwareBuffer> VirtualCameraStream::getHardwareBuffer(
                      std::forward_as_tuple(buffer.bufferId),
                      std::forward_as_tuple(hwBufferPtr));
   }
-
   return hwBufferPtr;
 }
 

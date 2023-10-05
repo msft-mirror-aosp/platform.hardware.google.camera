@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#include "VirtualCameraDevice.h"
-
 // #define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCameraDevice"
+#include "VirtualCameraDevice.h"
 
 #include <array>
 #include <chrono>

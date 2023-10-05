@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "VirtualCameraProvider.h"
 
 // #define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCameraProvider"
+#include "VirtualCameraProvider.h"
 
 #include <algorithm>
 #include <atomic>

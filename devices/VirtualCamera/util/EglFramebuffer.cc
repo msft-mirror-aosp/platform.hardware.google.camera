@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "EglFramebuffer.h"
-
+// #define LOG_NDEBUG 0
 #define LOG_TAG "EglFramebuffer"
+#include "EglFramebuffer.h"
 
 #include "EGL/eglext.h"
 #include "EglUtil.h"

@@ -14,16 +14,14 @@
  * limitations under the License.
  */
 
+// #define LOG_NDEBUG 0
+#define LOG_TAG "MetadataBuilder"
 #include "MetadataBuilder.h"
 
 #include <algorithm>
-#include <iterator>
-
-#define LOG_NDEBUG 0
-#define LOG_TAG "MetadataBuilder"
-
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <memory>
 #include <tuple>
 #include <utility>
@@ -32,6 +30,7 @@
 
 #include "CameraMetadata.h"
 #include "aidl/android/hardware/camera/device/CameraMetadata.h"
+#include "log/log.h"
 #include "system/camera_metadata.h"
 #include "utils/Errors.h"
 

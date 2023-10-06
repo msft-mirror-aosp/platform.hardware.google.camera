@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "EglUtil.h"
-
+// #define LOG_NDEBUG 0
 #define LOG_TAG "EglUtil"
+#include "EglUtil.h"
 
 #include "GLES/gl.h"
 #include "log/log.h"

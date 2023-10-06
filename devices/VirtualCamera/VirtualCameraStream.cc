@@ -13,13 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "VirtualCameraStream.h"
-
-#include "EGL/egl.h"
-#include "util/EglFramebuffer.h"
 
 // #define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCameraStream"
+#include "VirtualCameraStream.h"
 
 #include <cstdint>
 #include <memory>
@@ -27,6 +24,7 @@
 #include <tuple>
 #include <utility>
 
+#include "EGL/egl.h"
 #include "aidl/android/hardware/camera/device/Stream.h"
 #include "aidl/android/hardware/camera/device/StreamBuffer.h"
 #include "aidlcommonsupport/NativeHandle.h"

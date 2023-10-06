@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "TestPatternHelper.h"
-
+// #define LOG_NDEBUG 0
 #define LOG_TAG "TestPatternHelper"
+#include "TestPatternHelper.h"
 
 #include <complex>
 

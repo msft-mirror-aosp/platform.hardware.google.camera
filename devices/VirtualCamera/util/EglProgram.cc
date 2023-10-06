@@ -13,9 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "EglProgram.h"
 
+// #define LOG_NDEBUG 0
 #define LOG_TAG "EglProgram"
+#include "EglProgram.h"
 
 #include <array>
 

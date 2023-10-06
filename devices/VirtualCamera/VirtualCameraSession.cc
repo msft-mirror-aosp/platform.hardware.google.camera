@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#include "VirtualCameraSession.h"
-
 // #define LOG_NDEBUG 0
 #define LOG_TAG "VirtualCameraSession"
+#include "VirtualCameraSession.h"
 
 #include <atomic>
 #include <chrono>
@@ -44,6 +43,7 @@
 #include "aidl/android/hardware/graphics/common/BufferUsage.h"
 #include "android/hardware_buffer.h"
 #include "fmq/AidlMessageQueue.h"
+#include "log/log.h"
 #include "system/camera_metadata.h"
 #include "system/graphics-sw.h"
 #include "util/EglDisplayContext.h"

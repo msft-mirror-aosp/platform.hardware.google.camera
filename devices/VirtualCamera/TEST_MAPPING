@@ -1,0 +1,7 @@
+{
+  "presubmit": [
+    {
+      "name": "virtual_camera_tests"
+    }
+  ]
+}

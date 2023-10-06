@@ -13,6 +13,7 @@ cc_defaults {
         "liblog",
         "libfmq",
         "libandroid",
+        "libgui",
         "libnativewindow",
         "libbase",
         "libcutils",
@@ -47,6 +48,7 @@ cc_library_static {
         "util/EglDisplayContext.cc",
         "util/EglFramebuffer.cc",
         "util/EglProgram.cc",
+        "util/EglSurfaceTexture.cc",
         "util/EglUtil.cc",
     ],
     defaults: [

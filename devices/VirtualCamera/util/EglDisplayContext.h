@@ -17,11 +17,7 @@
 #ifndef ANDROID_SERVICES_VIRTUALCAMERA_EGLDISPLAYCONTEXT_H
 #define ANDROID_SERVICES_VIRTUALCAMERA_EGLDISPLAYCONTEXT_H
 
-#include <memory>
-
 #include "EGL/egl.h"
-#include "GLES/gl.h"
-#include "android/hardware_buffer.h"
 
 namespace android {
 namespace services {

@@ -19,10 +19,12 @@
 #include "EglProgram.h"
 
 #include <array>
+#include <complex>
 
 #include "EglUtil.h"
 #include "GLES/gl.h"
 #include "GLES2/gl2.h"
+#include "GLES2/gl2ext.h"
 #include "log/log.h"
 
 namespace android {
@@ -31,13 +33,13 @@ namespace virtualcamera {
 
 namespace {
 
-const char* kIdentityVertexShader = R"(
+constexpr char kIdentityVertexShader[] = R"(
     attribute vec4 vPosition;
     void main() {
       gl_Position = vPosition;
     })";
 
-const char* kJuliaFractalFragmentShader = R"(
+constexpr char kJuliaFractalFragmentShader[] = R"(
     precision mediump float;
     uniform vec2 uResolution;
     uniform vec2 uC;
@@ -63,13 +65,36 @@ const char* kJuliaFractalFragmentShader = R"(
       gl_FragColor = vec4( juliaVal,uUV.x,uUV.y,0.0);
     })";
 
-constexpr int kCoordsPerVertex = 3;
-const std::array<float, 12> kSquareCoords{-1.f, 1.0f, 0.0f,   // top left
-                                          -1.f, -1.f, 0.0f,   // bottom left
-                                          1.0f, -1.f, 0.0f,   // bottom right
-                                          1.0f, 1.0f, 0.0f};  // top right
+constexpr char kExternalTextureVertexShader[] = R"(
+  attribute vec4 aPosition;
+  attribute vec2 aTextureCoord;
+  varying vec2 vTextureCoord;
+  void main() {
+    gl_Position = aPosition;
+    vTextureCoord = aTextureCoord;
+  })";
 
-const std::array<uint8_t, 6> kDrawOrder{0, 1, 2, 0, 2, 3};
+constexpr char kExternalTextureFragmentShader[] = R"(
+    #extension GL_OES_EGL_image_external : require
+    precision mediump float;
+    varying vec2 vTextureCoord;
+    uniform samplerExternalOES uTexture;
+    void main() {
+      gl_FragColor = texture2D(uTexture, vTextureCoord);
+    })";
+
+constexpr int kCoordsPerVertex = 3;
+constexpr std::array<float, 12> kSquareCoords{-1.f, 1.0f, 0.0f,  // top left
+                                              -1.f, -1.f, 0.0f,  // bottom left
+                                              1.0f, -1.f, 0.0f,  // bottom right
+                                              1.0f, 1.0f, 0.0f};  // top right
+
+constexpr std::array<float, 8> kTextureCoords{0.0f, 1.0f,   // top left
+                                              0.0f, 0.0f,   // bottom left
+                                              1.0f, 0.0f,   // bottom right
+                                              1.0f, 1.0f};  // top right
+
+constexpr std::array<uint8_t, 6> kDrawOrder{0, 1, 2, 0, 2, 3};
 
 GLuint compileShader(GLenum shaderType, const char* src) {
   GLuint shader = glCreateShader(shaderType);
@@ -192,6 +217,49 @@ bool EglTestPatternProgram::draw(int width, int height, int frameNumber) {
   // Prepare the triangle coordinate data.
   glVertexAttribPointer(positionHandle, kCoordsPerVertex, GL_FLOAT, false,
                         kSquareCoords.size(), kSquareCoords.data());
+
+  // Draw triangle strip forming a square filling the viewport.
+  glDrawElements(GL_TRIANGLES, kDrawOrder.size(), GL_UNSIGNED_BYTE,
+                 kDrawOrder.data());
+  if (checkEglError("glDrawElements")) {
+    return false;
+  }
+
+  return true;
+}
+
+EglTextureProgram::EglTextureProgram() {
+  if (initialize(kExternalTextureVertexShader, kExternalTextureFragmentShader)) {
+    ALOGV("Successfully initialized EGL shaders for external texture program.");
+  } else {
+    ALOGE("External texture EGL shader program initialization failed.");
+  }
+}
+
+bool EglTextureProgram::draw(GLuint textureId) {
+  // Load compiled shader.
+  glUseProgram(mProgram);
+  if (checkEglError("glUseProgram")) {
+    return false;
+  }
+
+  // Pass vertex array to the shader.
+  int positionHandle = glGetAttribLocation(mProgram, "aPosition");
+  glEnableVertexAttribArray(positionHandle);
+  glVertexAttribPointer(positionHandle, kCoordsPerVertex, GL_FLOAT, false,
+                        kSquareCoords.size(), kSquareCoords.data());
+
+  // Pass texture coordinates corresponding to vertex array to the shader.
+  int textureCoordHandle = glGetAttribLocation(mProgram, "aTextureCoord");
+  glEnableVertexAttribArray(textureCoordHandle);
+  glVertexAttribPointer(textureCoordHandle, 2, GL_FLOAT, false,
+                        kTextureCoords.size(), kTextureCoords.data());
+
+  // Configure texture for the shader.
+  int textureHandle = glGetUniformLocation(mProgram, "uTexture");
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_EXTERNAL_OES, textureId);
+  glUniform1i(textureHandle, 0);
 
   // Draw triangle strip forming a square filling the viewport.
   glDrawElements(GL_TRIANGLES, kDrawOrder.size(), GL_UNSIGNED_BYTE,

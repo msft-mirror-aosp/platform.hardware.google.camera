@@ -18,13 +18,10 @@
 #define LOG_TAG "VirtualCameraDevice"
 #include "VirtualCameraDevice.h"
 
-#include <array>
 #include <chrono>
-#include <cstddef>
 #include <cstdint>
 #include <string>
 
-#include "CameraMetadata.h"
 #include "VirtualCameraSession.h"
 #include "aidl/android/hardware/camera/common/Status.h"
 #include "aidl/android/hardware/camera/device/CameraMetadata.h"

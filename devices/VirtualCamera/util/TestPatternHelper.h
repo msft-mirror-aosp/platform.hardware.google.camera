@@ -20,6 +20,7 @@
 #include <memory>
 
 #include "android/hardware_buffer.h"
+#include "gui/Surface.h"
 
 namespace android {
 namespace services {
@@ -29,6 +30,9 @@ namespace virtualcamera {
 // testing purposes.
 void renderTestPatternYCbCr420(std::shared_ptr<AHardwareBuffer> buffer,
                                int frameNumber, int fence = -1);
+
+// Helper function for rendering test pattern into Surface.
+void renderTestPatternYCbCr420(sp<Surface> surface, int frameNumber);
 
 }  // namespace virtualcamera
 }  // namespace services

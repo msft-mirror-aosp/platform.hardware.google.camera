@@ -17,8 +17,6 @@
 #ifndef ANDROID_SERVICES_VIRTUALCAMERA_EGLPROGRAM_H
 #define ANDROID_SERVICES_VIRTUALCAMERA_EGLPROGRAM_H
 
-#include <complex>
-
 #include "GLES/gl.h"
 
 namespace android {
@@ -42,8 +40,19 @@ class EglTestPatternProgram : public EglProgram {
   EglTestPatternProgram();
 
   bool draw(int width, int height, int frameNumber);
+};
 
- private:
+// Shader program to  draw texture.
+//
+// Shader stretches the texture over the viewport (if the texture is not same
+// aspect ratio as viewport, it will be deformed).
+//
+// TODO(b/301023410) Add support for translation / cropping.
+class EglTextureProgram : public EglProgram {
+ public:
+  EglTextureProgram();
+
+  bool draw(GLuint textureId);
 };
 
 }  // namespace virtualcamera

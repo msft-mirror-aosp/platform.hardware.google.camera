@@ -16,22 +16,15 @@
 
 // #define LOG_NDEBUG 0
 #define LOG_TAG "EglDisplayContext"
-#include "EglDisplayContext.h"
-
-#include "log/log.h"
-
 #define EGL_EGLEXT_PROTOTYPES
 #define GL_GLEXT_PROTOTYPES
 
-#include <cstdint>
+#include "EglDisplayContext.h"
 
 #include "EGL/egl.h"
-#include "EGL/eglext.h"
 #include "EglDisplayContext.h"
 #include "EglFramebuffer.h"
-#include "GLES/gl.h"
-#include "GLES2/gl2.h"
-#include "GLES2/gl2ext.h"
+#include "log/log.h"
 
 namespace android {
 namespace services {

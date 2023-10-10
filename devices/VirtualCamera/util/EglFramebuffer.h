@@ -21,7 +21,6 @@
 #define GL_GLEXT_PROTOTYPES
 
 #include <memory>
-#include <tuple>
 
 #include "EGL/egl.h"
 #include "EGL/eglext.h"

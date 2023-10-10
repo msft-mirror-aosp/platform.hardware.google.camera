@@ -18,7 +18,6 @@
 #define ANDROID_SERVICES_VIRTUALCAMERA_VIRTUALCAMERAPROVIDER_H
 
 #include <atomic>
-#include <cstddef>
 #include <map>
 #include <memory>
 #include <mutex>

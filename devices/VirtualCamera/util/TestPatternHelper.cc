@@ -16,9 +16,11 @@
 
 // #define LOG_NDEBUG 0
 #define LOG_TAG "TestPatternHelper"
+
 #include "TestPatternHelper.h"
 
 #include <complex>
+#include <cstdint>
 
 #include "log/log.h"
 #include "utils/Errors.h"
@@ -43,6 +45,27 @@ uint8_t pixelToFractal(const int x, const int y, const std::complex<float> c) {
   return julia(n * 5.f, c);
 }
 
+void renderTestPatternYcbCr420(uint8_t* data_ptr, const int width,
+                               const int height, const int frameNumber) {
+  float time = float(frameNumber) / 120.0f;
+  const std::complex<float> c(std::sin(time), std::cos(time));
+
+  uint8_t* y_data = data_ptr;
+  uint8_t* uv_data = static_cast<uint8_t*>(y_data + width * height);
+
+  for (int i = 0; i < width; ++i) {
+    for (int j = 0; j < height; ++j) {
+      y_data[j * width + i] = pixelToFractal(i, j, c * 0.78f);
+      if ((i & 1) && (j & 1)) {
+        uv_data[((j / 2) * (width / 2) + i / 2) * 2] =
+            uint8_t(c.imag() * 127.f + 127);
+        uv_data[((j / 2) * (width / 2) + i / 2) * 2 + 1] =
+            uint8_t(c.real() * 127.f + 127);
+      }
+    }
+  }
+}
+
 }  // namespace
 
 // This is just to see some meaningfull image in the buffer for testing, only
@@ -65,25 +88,24 @@ void renderTestPatternYCbCr420(const std::shared_ptr<AHardwareBuffer> buffer,
     return;
   }
 
-  float time = float(frameNumber) / 120.0f;
-  const std::complex<float> c(std::sin(time), std::cos(time));
-
-  uint8_t* y_data = static_cast<uint8_t*>(planes_info.planes[0].data);
-  uint8_t* uv_data = static_cast<uint8_t*>(y_data + width * height);
-
-  for (int i = 0; i < width; ++i) {
-    for (int j = 0; j < height; ++j) {
-      y_data[j * width + i] = pixelToFractal(i, j, c * 0.78f);
-      if ((i & 1) && (j & 1)) {
-        uv_data[((j / 2) * (width / 2) + i / 2) * 2] =
-            uint8_t(c.imag() * 127.f + 127);
-        uv_data[((j / 2) * (width / 2) + i / 2) * 2 + 1] =
-            uint8_t(c.real() * 127.f + 127);
-      }
-    }
-  }
+  renderTestPatternYcbCr420(
+      reinterpret_cast<uint8_t*>(planes_info.planes[0].data), width, height,
+      frameNumber);
 
   AHardwareBuffer_unlock(buffer.get(), nullptr);
+}
+
+void renderTestPatternYCbCr420(sp<Surface> surface, int frameNumber) {
+  ANativeWindow_Buffer buffer;
+  surface->lock(&buffer, nullptr);
+
+  ALOGV("buffer: %dx%d stride %d, pixfmt %d", buffer.width, buffer.height,
+        buffer.stride, buffer.format);
+
+  renderTestPatternYcbCr420(reinterpret_cast<uint8_t*>(buffer.bits),
+                            buffer.width, buffer.height, frameNumber);
+
+  surface->unlockAndPost();
 }
 
 }  // namespace virtualcamera

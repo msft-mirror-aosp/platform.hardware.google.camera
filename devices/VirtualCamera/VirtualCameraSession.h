@@ -31,6 +31,7 @@
 #include "android/hardware_buffer.h"
 #include "util/EglDisplayContext.h"
 #include "util/EglProgram.h"
+#include "util/EglSurfaceTexture.h"
 #include "utils/Mutex.h"
 
 namespace android {
@@ -148,6 +149,9 @@ class VirtualCameraSession
 
   std::unique_ptr<EglDisplayContext> mEglDisplayContext;
   std::unique_ptr<EglTestPatternProgram> mEglTestPatternProgram;
+  // Shader program to render external texture pattern.
+  std::unique_ptr<EglTextureProgram> mEglTextureProgram;
+  std::unique_ptr<EglSurfaceTexture> mEglSurfaceTexture;
 };
 
 }  // namespace virtualcamera

@@ -18,16 +18,13 @@
 #define LOG_TAG "VirtualCameraProvider"
 #include "VirtualCameraProvider.h"
 
-#include <algorithm>
 #include <atomic>
-#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <tuple>
 #include <utility>
 
 #include "VirtualCameraDevice.h"
-#include "VirtualCameraSession.h"
 #include "aidl/android/hardware/camera/common/Status.h"
 #include "log/log.h"
 #include "util/Util.h"

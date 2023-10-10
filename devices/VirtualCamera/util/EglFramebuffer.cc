@@ -92,6 +92,8 @@ bool EglFrameBuffer::beforeDraw() {
     return false;
   }
 
+  glViewport(0, 0, mWidth, mHeight);
+
   return true;
 }
 

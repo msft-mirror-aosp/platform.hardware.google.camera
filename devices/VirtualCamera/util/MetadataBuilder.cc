@@ -16,14 +16,13 @@
 
 // #define LOG_NDEBUG 0
 #define LOG_TAG "MetadataBuilder"
+
 #include "MetadataBuilder.h"
 
 #include <algorithm>
-#include <cstddef>
 #include <cstdint>
 #include <iterator>
 #include <memory>
-#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>

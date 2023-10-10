@@ -15,6 +15,7 @@
  */
 
 // #define LOG_NDEBUG 0
+#include "android/native_window.h"
 #define LOG_TAG "VirtualCameraSession"
 #include "VirtualCameraSession.h"
 
@@ -98,6 +99,9 @@ static constexpr size_t kMaxStreamBuffers = 2;
 
 // Whether to use EGL for rendering - will be removed soon.
 static constexpr bool kUseEGL = true;
+// Whether to render through Surface -> EGL Texture -> Camera buffer.
+// // TODO(b/301023410) Will be removed once we expose surface to the client API.
+static constexpr bool kRenderThroughSurfaceTexture = true;
 
 CameraMetadata createDefaultRequestSettings(RequestTemplate type) {
   hardware::camera::common::V1_0::helper::CameraMetadata metadataHelper;
@@ -175,7 +179,12 @@ VirtualCameraSession::VirtualCameraSession(
 
   if (kUseEGL) {
     mEglDisplayContext = std::make_unique<EglDisplayContext>();
-    mEglTestPatternProgram = std::make_unique<EglTestPatternProgram>();
+    if (kRenderThroughSurfaceTexture) {
+      mEglTextureProgram = std::make_unique<EglTextureProgram>();
+      mEglSurfaceTexture = std::make_unique<EglSurfaceTexture>(640, 480);
+    } else {
+      mEglTestPatternProgram = std::make_unique<EglTestPatternProgram>();
+    }
   }
 }
 
@@ -486,10 +495,24 @@ ndk::ScopedAStatus VirtualCameraSession::renderIntoStreamBuffer(
           __func__, streamBuffer.bufferId, streamBuffer.streamId);
       return cameraStatus(Status::ILLEGAL_ARGUMENT);
     }
+
+    if (kRenderThroughSurfaceTexture) {
+      // Since we don't have client API yet to pass Surface to, let's just
+      // render something to the Surface ourselves.
+      renderTestPatternYCbCr420(mEglSurfaceTexture->getSurface(),
+                                request.frameNumber);
+    }
+
     mEglDisplayContext->makeCurrent();
     framebuffer->beforeDraw();
-    mEglTestPatternProgram->draw(framebuffer->getWidth(),
-                                 framebuffer->getHeight(), request.frameNumber);
+
+    if (kRenderThroughSurfaceTexture) {
+      mEglTextureProgram->draw(mEglSurfaceTexture->updateTexture());
+    } else {
+      mEglTestPatternProgram->draw(framebuffer->getWidth(),
+                                   framebuffer->getHeight(),
+                                   request.frameNumber);
+    }
     framebuffer->afterDraw();
   } else {
     // Render test pattern on CPU.

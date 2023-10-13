@@ -735,6 +735,20 @@ status_t EmulatedRequestState::InitializeSensorSettings(
     }
   }
 
+  // Check manual flash strength level
+  ret = request_settings_->Get(ANDROID_FLASH_STRENGTH_LEVEL, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    flash_strength_level_ = entry.data.i32[0];
+    if (ANDROID_FLASH_SINGLE_STRENGTH_MAX_LEVEL > 1 &&
+            ANDROID_FLASH_TORCH_STRENGTH_MAX_LEVEL > 1 && is_flash_supported_) {
+      ALOGI("%s: Device supports manual flash strength control", __FUNCTION__);
+      flash_strength_level_ = entry.data.i32[0];
+    } else {
+        ALOGI("%s: Device does not support manual flash strength control", __FUNCTION__);
+        return BAD_VALUE;
+      }
+    }
+
   // Check video stabilization parameter
   uint8_t edge_mode = ANDROID_EDGE_MODE_OFF;
   ret = request_settings_->Get(ANDROID_EDGE_MODE, &entry);

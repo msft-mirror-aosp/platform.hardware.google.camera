@@ -249,6 +249,7 @@ class EmulatedRequestState {
   // android.flash.*
   bool is_flash_supported_ = false;
   uint8_t flash_state_ = ANDROID_FLASH_STATE_UNAVAILABLE;
+  int32_t flash_strength_level_ = 1;
 
   // android.sensor.*
   std::pair<int32_t, int32_t> sensor_sensitivity_range_;

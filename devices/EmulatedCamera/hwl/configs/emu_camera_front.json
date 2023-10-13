@@ -186,6 +186,18 @@
    "0",
    "3"
   ],
+  "android.flash.singleStrengthMaxLevel" : [
+  "10"
+ ],
+ "android.flash.singleStrengthDefaultLevel": [
+   "2"
+ ],
+ "android.flash.torchStrengthDefaultLevel": [
+   "5"
+ ],
+ "android.flash.torchStrengthMaxLevel" :[
+   "15"
+ ],
   "android.flash.info.available": [
    "TRUE"
   ],
@@ -1688,6 +1700,18 @@
    "0",
    "3"
   ],
+  "android.flash.singleStrengthMaxLevel" : [
+  "10"
+ ],
+ "android.flash.singleStrengthDefaultLevel": [
+   "2"
+ ],
+ "android.flash.torchStrengthDefaultLevel": [
+   "5"
+ ],
+ "android.flash.torchStrengthMaxLevel" :[
+   "15"
+ ],
   "android.flash.info.available": [
    "TRUE"
   ],
@@ -3159,6 +3183,18 @@
    "0",
    "3"
   ],
+  "android.flash.singleStrengthMaxLevel" : [
+  "10"
+ ],
+ "android.flash.singleStrengthDefaultLevel": [
+   "2"
+ ],
+ "android.flash.torchStrengthDefaultLevel": [
+   "5"
+ ],
+ "android.flash.torchStrengthMaxLevel" :[
+   "15"
+ ],
   "android.flash.info.available": [
    "TRUE"
   ],

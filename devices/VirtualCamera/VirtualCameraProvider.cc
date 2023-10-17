@@ -33,6 +33,7 @@ namespace android {
 namespace services {
 namespace virtualcamera {
 
+using ::aidl::android::companion::virtualcamera::IVirtualCameraCallback;
 using ::aidl::android::hardware::camera::common::CameraDeviceStatus;
 using ::aidl::android::hardware::camera::common::Status;
 using ::aidl::android::hardware::camera::common::VendorTagSection;
@@ -152,8 +153,10 @@ ndk::ScopedAStatus VirtualCameraProvider::isConcurrentStreamCombinationSupported
   return ndk::ScopedAStatus::ok();
 }
 
-std::shared_ptr<VirtualCameraDevice> VirtualCameraProvider::createCamera() {
-  auto camera = ndk::SharedRefBase::make<VirtualCameraDevice>(sNextId++);
+std::shared_ptr<VirtualCameraDevice> VirtualCameraProvider::createCamera(
+    std::shared_ptr<IVirtualCameraCallback> virtualCameraClientCallback) {
+  auto camera = ndk::SharedRefBase::make<VirtualCameraDevice>(
+      sNextId++, virtualCameraClientCallback);
   std::shared_ptr<ICameraProviderCallback> callback;
   {
     const std::lock_guard<std::mutex> lock(mLock);
@@ -176,6 +179,13 @@ std::shared_ptr<VirtualCameraDevice> VirtualCameraProvider::createCamera() {
     }
   }
   return camera;
+}
+
+std::shared_ptr<VirtualCameraDevice> VirtualCameraProvider::getCamera(
+    const std::string& cameraName) {
+  const std::lock_guard<std::mutex> lock(mLock);
+  auto it = mCameras.find(cameraName);
+  return it == mCameras.end() ? nullptr : it->second;
 }
 
 bool VirtualCameraProvider::removeCamera(const std::string& name) {

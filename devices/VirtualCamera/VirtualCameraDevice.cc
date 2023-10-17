@@ -36,6 +36,7 @@ namespace android {
 namespace services {
 namespace virtualcamera {
 
+using ::aidl::android::companion::virtualcamera::IVirtualCameraCallback;
 using ::aidl::android::hardware::camera::common::CameraResourceCost;
 using ::aidl::android::hardware::camera::common::Status;
 using ::aidl::android::hardware::camera::device::CameraMetadata;
@@ -112,8 +113,11 @@ CameraMetadata initCameraCharacteristics() {
 
 }  // namespace
 
-VirtualCameraDevice::VirtualCameraDevice(const uint32_t cameraId)
-    : mCameraId(cameraId) {
+VirtualCameraDevice::VirtualCameraDevice(
+    const uint32_t cameraId,
+    std::shared_ptr<IVirtualCameraCallback> virtualCameraClientCallback)
+    : mCameraId(cameraId),
+      mVirtualCameraClientCallback(virtualCameraClientCallback) {
   mCameraCharacteristics = initCameraCharacteristics();
 }
 
@@ -188,7 +192,7 @@ ndk::ScopedAStatus VirtualCameraDevice::open(
   ALOGV("%s", __func__);
 
   *_aidl_return = ndk::SharedRefBase::make<VirtualCameraSession>(
-      in_callback, std::to_string(mCameraId));
+      std::to_string(mCameraId), in_callback, mVirtualCameraClientCallback);
 
   return ndk::ScopedAStatus::ok();
 };

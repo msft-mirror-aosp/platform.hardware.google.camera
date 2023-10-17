@@ -42,6 +42,12 @@ class EglSurfaceTexture {
   // Get Surface backing up the texture.
   sp<Surface> getSurface();
 
+  // Get width of surface / texture.
+  uint32_t getWidth() const;
+
+  // Get height of surface / texture.
+  uint32_t getHeight() const;
+
   // Update the texture with the most recent submitted buffer.
   // Most be called on thread with EGL context.
   //
@@ -54,8 +60,8 @@ class EglSurfaceTexture {
   sp<GLConsumer> mGlConsumer;
   sp<Surface> mSurface;
   GLuint mTextureId;
-  uint32_t mWidth;
-  uint32_t mHeight;
+  const uint32_t mWidth;
+  const uint32_t mHeight;
 };
 
 }  // namespace virtualcamera

@@ -21,6 +21,7 @@
 #include <memory>
 
 #include "VirtualCameraStream.h"
+#include "aidl/android/companion/virtualcamera/IVirtualCameraCallback.h"
 #include "aidl/android/hardware/camera/common/Status.h"
 #include "aidl/android/hardware/camera/device/BnCameraDeviceSession.h"
 #include "aidl/android/hardware/camera/device/BufferRequest.h"
@@ -47,11 +48,17 @@ namespace virtualcamera {
 class VirtualCameraSession
     : public ::aidl::android::hardware::camera::device::BnCameraDeviceSession {
  public:
+  // Construct new virtual camera session.
+  // When virtualCameraClientCallback is null, the input surface will be filled
+  // with test pattern.
   VirtualCameraSession(
+      const std::string& cameraId,
       std::shared_ptr<
           ::aidl::android::hardware::camera::device::ICameraDeviceCallback>
           cameraDeviceCallback,
-      const std::string& cameraId);
+      std::shared_ptr<
+          ::aidl::android::companion::virtualcamera::IVirtualCameraCallback>
+          virtualCameraClientCallback = nullptr);
 
   virtual ~VirtualCameraSession() override = default;
 
@@ -133,6 +140,10 @@ class VirtualCameraSession
 
   std::shared_ptr<::aidl::android::hardware::camera::device::ICameraDeviceCallback>
       mCameraDeviceCallback GUARDED_BY(mLock);
+
+  const std::shared_ptr<
+      ::aidl::android::companion::virtualcamera::IVirtualCameraCallback>
+      mVirtualCameraClientCallback;
 
   // Mapping stream id -> VirtualCameraStream.
   std::map<int, VirtualCameraStream> mStreams GUARDED_BY(mLock);

@@ -15,7 +15,6 @@
  */
 
 // #define LOG_NDEBUG 0
-#include "android/native_window.h"
 #define LOG_TAG "VirtualCameraSession"
 #include "VirtualCameraSession.h"
 
@@ -43,6 +42,8 @@
 #include "aidl/android/hardware/camera/device/StreamRotation.h"
 #include "aidl/android/hardware/graphics/common/BufferUsage.h"
 #include "android/hardware_buffer.h"
+#include "android/native_window.h"
+#include "android/native_window_aidl.h"
 #include "fmq/AidlMessageQueue.h"
 #include "log/log.h"
 #include "system/camera_metadata.h"
@@ -58,6 +59,7 @@ namespace android {
 namespace services {
 namespace virtualcamera {
 
+using ::aidl::android::companion::virtualcamera::IVirtualCameraCallback;
 using ::aidl::android::hardware::camera::common::Status;
 using ::aidl::android::hardware::camera::device::BufferCache;
 using ::aidl::android::hardware::camera::device::BufferStatus;
@@ -162,9 +164,12 @@ NotifyMsg createErrorNotifyMsg(int frameNumber, int streamId, ErrorCode error) {
 }  // namespace
 
 VirtualCameraSession::VirtualCameraSession(
+    const std::string& cameraId,
     std::shared_ptr<ICameraDeviceCallback> cameraDeviceCallback,
-    const std::string& cameraId)
-    : mCameraId(cameraId), mCameraDeviceCallback(cameraDeviceCallback) {
+    std::shared_ptr<IVirtualCameraCallback> virtualCameraClientCallback)
+    : mCameraId(cameraId),
+      mCameraDeviceCallback(cameraDeviceCallback),
+      mVirtualCameraClientCallback(virtualCameraClientCallback) {
   mRequestMetadataQueue = std::make_unique<RequestMetadataQueue>(
       kMetadataMsgQueueSize, false /* non blocking */);
   if (!mRequestMetadataQueue->isValid()) {
@@ -181,6 +186,8 @@ VirtualCameraSession::VirtualCameraSession(
     mEglDisplayContext = std::make_unique<EglDisplayContext>();
     if (kRenderThroughSurfaceTexture) {
       mEglTextureProgram = std::make_unique<EglTextureProgram>();
+      // TODO(b/301023410) Initialize the texture based on supported formats and
+      // formats requested by client in configure call.
       mEglSurfaceTexture = std::make_unique<EglSurfaceTexture>(640, 480);
     } else {
       mEglTestPatternProgram = std::make_unique<EglTestPatternProgram>();
@@ -190,6 +197,11 @@ VirtualCameraSession::VirtualCameraSession(
 
 ndk::ScopedAStatus VirtualCameraSession::close() {
   ALOGV("%s", __func__);
+
+  if (mVirtualCameraClientCallback != nullptr) {
+    mVirtualCameraClientCallback->onStreamClosed(/*streamId=*/0);
+  }
+
   std::lock_guard<std::mutex> lock(mLock);
   mStreams.clear();
   return ndk::ScopedAStatus::ok();
@@ -210,31 +222,43 @@ ndk::ScopedAStatus VirtualCameraSession::configureStreams(
   halStreams.clear();
   halStreams.resize(in_requestedConfiguration.streams.size());
 
-  std::lock_guard<std::mutex> lock(mLock);
+  {
+    std::lock_guard<std::mutex> lock(mLock);
+    for (int i = 0; i < in_requestedConfiguration.streams.size(); ++i) {
+      // TODO(b/301023410) remove hardcoded format checks, verify against configuration.
+      if (streams[i].width != 640 || streams[i].height != 480 ||
+          streams[i].rotation != StreamRotation::ROTATION_0 ||
+          (streams[i].format != PixelFormat::IMPLEMENTATION_DEFINED &&
+           streams[i].format != PixelFormat::YCBCR_420_888 &&
+           streams[i].format != PixelFormat::BLOB)) {
+        mStreams.clear();
+        return cameraStatus(Status::ILLEGAL_ARGUMENT);
+      }
+      memset(&halStreams[i], 0x00, sizeof(HalStream));
+      halStreams[i].id = streams[i].id;
+      halStreams[i].physicalCameraId = streams[i].physicalCameraId;
+      halStreams[i].overrideDataSpace = streams[i].dataSpace;
+      halStreams[i].maxBuffers = kMaxStreamBuffers;
+      halStreams[i].overrideFormat = PixelFormat::YCBCR_420_888;
+      halStreams[i].producerUsage = kUseEGL ? BufferUsage::GPU_RENDER_TARGET
+                                            : BufferUsage::CPU_WRITE_OFTEN;
+      halStreams[i].supportOffline = false;
 
-  for (int i = 0; i < in_requestedConfiguration.streams.size(); ++i) {
-    // TODO(b/301023410) remove hardcoded format checks, verify against configuration.
-    if (streams[i].width != 640 || streams[i].height != 480 ||
-        streams[i].rotation != StreamRotation::ROTATION_0 ||
-        (streams[i].format != PixelFormat::IMPLEMENTATION_DEFINED &&
-         streams[i].format != PixelFormat::YCBCR_420_888 &&
-         streams[i].format != PixelFormat::BLOB)) {
-      mStreams.clear();
-      return cameraStatus(Status::ILLEGAL_ARGUMENT);
+      mStreams.emplace(std::piecewise_construct,
+                       std::forward_as_tuple(streams[i].id),
+                       std::forward_as_tuple(streams[i]));
     }
-    memset(&halStreams[i], 0x00, sizeof(HalStream));
-    halStreams[i].id = streams[i].id;
-    halStreams[i].physicalCameraId = streams[i].physicalCameraId;
-    halStreams[i].overrideDataSpace = streams[i].dataSpace;
-    halStreams[i].maxBuffers = kMaxStreamBuffers;
-    halStreams[i].overrideFormat = PixelFormat::YCBCR_420_888;
-    halStreams[i].producerUsage =
-        kUseEGL ? BufferUsage::GPU_RENDER_TARGET : BufferUsage::CPU_WRITE_OFTEN;
-    halStreams[i].supportOffline = false;
+  }
 
-    mStreams.emplace(std::piecewise_construct,
-                     std::forward_as_tuple(streams[i].id),
-                     std::forward_as_tuple(streams[i]));
+  if (mVirtualCameraClientCallback != nullptr && kUseEGL) {
+    // TODO(b/301023410) Pass streamId based on client input stream id once
+    // support for multiple input streams is implemented. For now we always
+    // create single texture.
+    mVirtualCameraClientCallback->onStreamConfigured(
+        /*streamId=*/0,
+        aidl::android::view::Surface(mEglSurfaceTexture->getSurface().get()),
+        mEglSurfaceTexture->getWidth(), mEglSurfaceTexture->getHeight(),
+        PixelFormat::YCBCR_420_888);
   }
 
   mFirstRequest.store(true);
@@ -496,7 +520,8 @@ ndk::ScopedAStatus VirtualCameraSession::renderIntoStreamBuffer(
       return cameraStatus(Status::ILLEGAL_ARGUMENT);
     }
 
-    if (kRenderThroughSurfaceTexture) {
+    if (kRenderThroughSurfaceTexture &&
+        mVirtualCameraClientCallback == nullptr) {
       // Since we don't have client API yet to pass Surface to, let's just
       // render something to the Surface ourselves.
       renderTestPatternYCbCr420(mEglSurfaceTexture->getSurface(),

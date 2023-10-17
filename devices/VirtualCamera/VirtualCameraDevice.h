@@ -18,7 +18,9 @@
 #define ANDROID_SERVICES_VIRTUALCAMERA_VIRTUALCAMERADEVICE_H
 
 #include <cstdint>
+#include <memory>
 
+#include "aidl/android/companion/virtualcamera/IVirtualCameraCallback.h"
 #include "aidl/android/hardware/camera/device/BnCameraDevice.h"
 
 namespace android {
@@ -30,7 +32,11 @@ namespace virtualcamera {
 class VirtualCameraDevice
     : public ::aidl::android::hardware::camera::device::BnCameraDevice {
  public:
-  explicit VirtualCameraDevice(uint32_t cameraId);
+  explicit VirtualCameraDevice(
+      uint32_t cameraId,
+      std::shared_ptr<
+          ::aidl::android::companion::virtualcamera::IVirtualCameraCallback>
+          virtualCameraClientCallback = nullptr);
 
   virtual ~VirtualCameraDevice() override = default;
 
@@ -83,6 +89,9 @@ class VirtualCameraDevice
 
  private:
   const uint32_t mCameraId;
+  const std::shared_ptr<
+      ::aidl::android::companion::virtualcamera::IVirtualCameraCallback>
+      mVirtualCameraClientCallback;
 
   ::aidl::android::hardware::camera::device::CameraMetadata mCameraCharacteristics;
 };

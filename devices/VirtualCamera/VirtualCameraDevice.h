@@ -24,7 +24,7 @@
 #include "aidl/android/hardware/camera/device/BnCameraDevice.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 // Representation of single virtual camera device, implements
@@ -97,7 +97,7 @@ class VirtualCameraDevice
 };
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android
 
 #endif  // ANDROID_SERVICES_VIRTUALCAMERA_VIRTUALCAMERADEVICE_H

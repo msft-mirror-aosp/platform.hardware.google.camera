@@ -33,7 +33,7 @@
 #include "util/Util.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 using ::aidl::android::companion::virtualcamera::IVirtualCameraCallback;
@@ -238,5 +238,5 @@ std::string VirtualCameraDevice::getCameraName() const {
 }
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android

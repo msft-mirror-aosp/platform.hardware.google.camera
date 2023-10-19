@@ -29,7 +29,7 @@ class IGraphicBufferProducer;
 class IGraphicBufferConsumer;
 class GLConsumer;
 
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 // Encapsulates GLConsumer & Surface for rendering into EGL texture.
@@ -65,7 +65,7 @@ class EglSurfaceTexture {
 };
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android
 
 #endif

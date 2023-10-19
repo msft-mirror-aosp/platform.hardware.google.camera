@@ -28,7 +28,7 @@
 #include "gtest/gtest.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 namespace {
 
@@ -128,5 +128,5 @@ TEST_F(VirtualCameraSessionTest, CloseTriggersClientTerminateCallback) {
 
 }  // namespace
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android

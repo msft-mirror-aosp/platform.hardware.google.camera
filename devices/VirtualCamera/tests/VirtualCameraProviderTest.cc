@@ -28,7 +28,7 @@
 #include "util/Util.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 namespace {
 
@@ -158,5 +158,5 @@ TEST_F(VirtualCameraProviderTest, RemoveNonExistingCamera) {
 
 }  // namespace
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android

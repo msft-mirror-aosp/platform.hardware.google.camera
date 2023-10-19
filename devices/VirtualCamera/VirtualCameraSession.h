@@ -39,7 +39,7 @@ namespace android {
 
 template <typename T, typename U>
 struct AidlMessageQueue;
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 // Implementation of ICameraDeviceSession AIDL interface to allow camera
@@ -166,7 +166,7 @@ class VirtualCameraSession
 };
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android
 
 #endif  // ANDROID_SERVICES_VIRTUAL_CAMERA_VIRTUALCAMERASESSION_H

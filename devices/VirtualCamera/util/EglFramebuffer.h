@@ -27,7 +27,7 @@
 #include "GLES/gl.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 // Encapsulates EGL Framebuffer backed by AHardwareBuffer instance.
@@ -64,7 +64,7 @@ class EglFrameBuffer {
 };
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android
 
 #endif

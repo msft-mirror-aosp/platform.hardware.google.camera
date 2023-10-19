@@ -34,7 +34,7 @@
 #include "vndk/hardware_buffer.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 using ::aidl::android::hardware::camera::device::Stream;
@@ -149,5 +149,5 @@ bool VirtualCameraStream::removeBuffer(int bufferId) {
 }
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android

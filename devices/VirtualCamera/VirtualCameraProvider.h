@@ -33,7 +33,7 @@
 #include "utils/Mutex.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 // Entry point for virtual camera HAL.
@@ -99,7 +99,7 @@ class VirtualCameraProvider
 };
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android
 
 #endif  // ANDROID_SERVICES_VIRTUAL_CAMERA_VIRTUALCAMERAPROVIDER_H

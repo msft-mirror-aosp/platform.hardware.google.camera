@@ -26,7 +26,7 @@
 #include "aidl/android/companion/virtualcamera/BnVirtualCameraService.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 // Implementation of Virtual Camera Service for managing virtual camera devices.
@@ -79,7 +79,7 @@ class VirtualCameraService
 };
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android
 
 #endif  // ANDROID_SERVICES_VIRTUALCAMERA_VIRTUALCAMERASERVICE_H

@@ -33,7 +33,7 @@
 using ::android::binder::Status;
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 using ::aidl::android::companion::virtualcamera::VirtualCameraConfiguration;
@@ -175,5 +175,5 @@ void VirtualCameraService::disableTestCameraCmd(const int out) {
 }
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android

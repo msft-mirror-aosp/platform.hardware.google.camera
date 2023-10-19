@@ -26,7 +26,7 @@
 #include "utils/Errors.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 namespace {
@@ -109,5 +109,5 @@ void renderTestPatternYCbCr420(sp<Surface> surface, int frameNumber) {
 }
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android

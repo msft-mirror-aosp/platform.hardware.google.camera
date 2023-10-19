@@ -28,7 +28,7 @@
 #include "log/log.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 namespace {
@@ -272,5 +272,5 @@ bool EglTextureProgram::draw(GLuint textureId) {
 }
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android

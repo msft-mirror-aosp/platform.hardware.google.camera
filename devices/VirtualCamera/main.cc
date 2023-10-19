@@ -25,8 +25,8 @@
 #include "android/binder_process.h"
 #include "log/log.h"
 
-using ::android::services::virtualcamera::VirtualCameraProvider;
-using ::android::services::virtualcamera::VirtualCameraService;
+using ::android::companion::virtualcamera::VirtualCameraProvider;
+using ::android::companion::virtualcamera::VirtualCameraService;
 
 namespace {
 // Default recommended RPC thread count for camera provider implementations

@@ -22,7 +22,7 @@
 #include "log/log.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 bool checkEglError(const char* operation) {
@@ -35,5 +35,5 @@ bool checkEglError(const char* operation) {
 }
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android

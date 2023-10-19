@@ -34,7 +34,7 @@
 #include "utils/Errors.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 namespace {
@@ -314,5 +314,5 @@ MetadataBuilder::build() const {
 }
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android

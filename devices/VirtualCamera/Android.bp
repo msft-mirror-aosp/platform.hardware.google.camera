@@ -8,6 +8,7 @@ cc_defaults {
     shared_libs: [
         "android.hardware.common-V2-ndk",
         "android.hardware.common.fmq-V1-ndk",
+        "libbinder",
         "libbinder_ndk",
         "libcamera_metadata",
         "liblog",
@@ -30,6 +31,7 @@ cc_defaults {
         "android.hardware.camera.metadata-V2-ndk",
         "android.hardware.camera.provider-V2-ndk",
         "libaidlcommonsupport",
+        "virtual_camera_service_aidl-ndk",
     ],
     cflags: [
         "-Wall",
@@ -63,6 +65,7 @@ cc_library_static {
         "VirtualCameraDevice.cc",
         "VirtualCameraSession.cc",
         "VirtualCameraStream.cc",
+        "VirtualCameraService.cc",
     ],
     defaults: [
         "libvirtualcamera_defaults",

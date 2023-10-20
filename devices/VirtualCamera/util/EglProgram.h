@@ -20,7 +20,7 @@
 #include "GLES/gl.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 // Base class for EGL Shader programs representation.
@@ -56,7 +56,7 @@ class EglTextureProgram : public EglProgram {
 };
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android
 
 #endif

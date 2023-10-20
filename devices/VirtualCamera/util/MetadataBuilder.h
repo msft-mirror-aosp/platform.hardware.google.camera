@@ -28,7 +28,7 @@
 #include "system/camera_metadata.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 // Convenience builder for the
@@ -186,7 +186,7 @@ class MetadataBuilder {
 };
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android
 
 #endif  // ANDROID_SERVICES_VIRTUALCAMERA_METADATABUILDER_H

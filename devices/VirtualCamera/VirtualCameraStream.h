@@ -31,7 +31,7 @@
 #include "utils/Mutex.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 // Encapsulates buffer management for the set of buffers belonging to the single
@@ -84,7 +84,7 @@ class VirtualCameraStream {
 };
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android
 
 #endif  // ANDROID_SERVICES_VIRTUALCAMERA_VIRTUALCAMERASTREAM_H

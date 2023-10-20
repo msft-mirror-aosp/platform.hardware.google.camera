@@ -23,7 +23,7 @@
 #include "log/log.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 using ::aidl::android::hardware::common::NativeHandle;
@@ -41,5 +41,5 @@ sp<Fence> importFence(const NativeHandle& aidlHandle) {
 }
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android

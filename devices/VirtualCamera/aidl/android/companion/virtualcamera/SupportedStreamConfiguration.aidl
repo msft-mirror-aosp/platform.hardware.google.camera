@@ -13,14 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package android.companion.virtualcamera;
 
-namespace android {
-namespace companion {
-namespace virtualcamera {
+import android.hardware.graphics.common.PixelFormat;
 
-// Returns true if the EGL is in an error state and logs the error.
-bool checkEglError(const char* operation = "EGL operation");
-
-}  // namespace virtualcamera
-}  // namespace companion
-}  // namespace android
+/**
+ * Configuration supported by virtual camera owner.
+ *
+ * @hide
+ */
+parcelable SupportedStreamConfiguration {
+    int width;
+    int height;
+    PixelFormat pixelFormat = PixelFormat.UNSPECIFIED;
+}

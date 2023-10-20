@@ -23,6 +23,7 @@
 #include <mutex>
 
 #include "VirtualCameraDevice.h"
+#include "aidl/android/companion/virtualcamera/BnVirtualCameraCallback.h"
 #include "aidl/android/hardware/camera/common/VendorTagSection.h"
 #include "aidl/android/hardware/camera/device/ICameraDevice.h"
 #include "aidl/android/hardware/camera/provider/BnCameraProvider.h"
@@ -32,7 +33,7 @@
 #include "utils/Mutex.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 // Entry point for virtual camera HAL.
@@ -75,7 +76,11 @@ class VirtualCameraProvider
   // Returns nullptr if creation was not successful.
   //
   // TODO(b/301023410) - Add camera configuration.
-  std::shared_ptr<VirtualCameraDevice> createCamera();
+  std::shared_ptr<VirtualCameraDevice> createCamera(
+      std::shared_ptr<aidl::android::companion::virtualcamera::IVirtualCameraCallback>
+          virtualCameraClientCallback = nullptr);
+
+  std::shared_ptr<VirtualCameraDevice> getCamera(const std::string& name);
 
   bool removeCamera(const std::string& name);
 
@@ -94,7 +99,7 @@ class VirtualCameraProvider
 };
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android
 
 #endif  // ANDROID_SERVICES_VIRTUAL_CAMERA_VIRTUALCAMERAPROVIDER_H

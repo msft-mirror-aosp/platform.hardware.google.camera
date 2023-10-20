@@ -27,7 +27,7 @@
 #include "log/log.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 EglDisplayContext::EglDisplayContext()
@@ -108,5 +108,5 @@ bool EglDisplayContext::makeCurrent() {
 }
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android

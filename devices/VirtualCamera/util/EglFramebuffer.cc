@@ -27,7 +27,7 @@
 #include "log/log.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 EglFrameBuffer::EglFrameBuffer(EGLDisplay display,
@@ -113,5 +113,5 @@ int EglFrameBuffer::getHeight() const {
 }
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android

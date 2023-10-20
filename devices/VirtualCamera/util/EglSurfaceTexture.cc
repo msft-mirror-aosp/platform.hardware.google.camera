@@ -29,7 +29,7 @@
 #include "hardware/gralloc.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 EglSurfaceTexture::EglSurfaceTexture(const uint32_t width, const uint32_t height)
@@ -65,6 +65,14 @@ GLuint EglSurfaceTexture::updateTexture() {
   return mTextureId;
 }
 
+uint32_t EglSurfaceTexture::getWidth() const {
+  return mWidth;
+}
+
+uint32_t EglSurfaceTexture::getHeight() const {
+  return mHeight;
+}
+
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android

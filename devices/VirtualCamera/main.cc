@@ -19,16 +19,20 @@
 #include <cstddef>
 
 #include "VirtualCameraProvider.h"
+#include "VirtualCameraService.h"
 #include "android-base/logging.h"
 #include "android/binder_manager.h"
 #include "android/binder_process.h"
 #include "log/log.h"
 
-using ::android::services::virtualcamera::VirtualCameraProvider;
+using ::android::companion::virtualcamera::VirtualCameraProvider;
+using ::android::companion::virtualcamera::VirtualCameraService;
 
 namespace {
 // Default recommended RPC thread count for camera provider implementations
 const int HWBINDER_THREAD_COUNT = 6;
+
+constexpr char kVirtualCameraServiceName[] = "virtualcamera";
 }  // namespace
 
 int main() {
@@ -47,9 +51,12 @@ int main() {
       ret != EX_NONE,
       "Error while registering virtual camera provider service: %d", ret);
 
-  if (defaultProvider->createCamera() == nullptr) {
-    ALOGE("Failed to create virtual camera");
-  };
+  std::shared_ptr<VirtualCameraService> virtualCameraService =
+      ndk::SharedRefBase::make<VirtualCameraService>(defaultProvider);
+  ret = AServiceManager_addService(virtualCameraService->asBinder().get(),
+                                   kVirtualCameraServiceName);
+  LOG_ALWAYS_FATAL_IF(ret != EX_NONE,
+                      "Error while registering virtual camera service: %d", ret);
 
   ABinderProcess_joinThreadPool();
   return EXIT_FAILURE;  // should not reach

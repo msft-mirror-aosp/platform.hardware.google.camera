@@ -25,7 +25,7 @@
 #include "ui/Fence.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 // Converts camera AIDL status to ndk::ScopedAStatus
@@ -43,7 +43,7 @@ sp<Fence> importFence(
     const ::aidl::android::hardware::common::NativeHandle& handle);
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android
 
 #endif  // ANDROID_SERVICES_VIRTUALCAMERA_UTIL_H

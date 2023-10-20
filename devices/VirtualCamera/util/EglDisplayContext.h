@@ -20,7 +20,7 @@
 #include "EGL/egl.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 // Encapsulated EGLDisplay & EGLContext.
@@ -51,7 +51,7 @@ class EglDisplayContext {
 };
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android
 
 #endif  // ANDROID_SERVICES_VIRTUALCAMERA_EGLDISPLAYCONTEXT_H

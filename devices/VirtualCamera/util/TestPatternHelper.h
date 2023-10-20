@@ -23,7 +23,7 @@
 #include "gui/Surface.h"
 
 namespace android {
-namespace services {
+namespace companion {
 namespace virtualcamera {
 
 // Helper function filling hardware buffer with test pattern for debugging /
@@ -35,7 +35,7 @@ void renderTestPatternYCbCr420(std::shared_ptr<AHardwareBuffer> buffer,
 void renderTestPatternYCbCr420(sp<Surface> surface, int frameNumber);
 
 }  // namespace virtualcamera
-}  // namespace services
+}  // namespace companion
 }  // namespace android
 
 #endif  // ANDROID_SERVICES_VIRTUALCAMERA_TESTPATTERNHELPER_H

@@ -38,6 +38,7 @@ cc_defaults {
         "-Werror",
         "-Wformat",
         "-Wthread-safety",
+        "-DLOG_NDEBUG=0"
     ],
 }
 

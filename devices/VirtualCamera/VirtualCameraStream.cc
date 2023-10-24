@@ -40,26 +40,46 @@ namespace virtualcamera {
 using ::aidl::android::hardware::camera::device::Stream;
 using ::aidl::android::hardware::camera::device::StreamBuffer;
 using ::aidl::android::hardware::common::NativeHandle;
+using ::aidl::android::hardware::graphics::common::PixelFormat;
 
 namespace {
 
+AHardwareBuffer_Desc createBufferDescriptorForStream(const Stream& stream) {
+  if (stream.format == PixelFormat::BLOB) {
+    return {// BLOB needs to have width = bufferSize & height = 1.
+            .width = static_cast<uint32_t>(stream.bufferSize),
+            .height = 1,
+            .layers = 1,
+            .format = static_cast<uint32_t>(stream.format),
+            .usage = static_cast<uint32_t>(stream.usage),
+            .stride = 0,
+            .rfu0 = 0,
+            .rfu1 = 0};
+  } else {
+    return {.width = static_cast<uint32_t>(stream.width),
+            .height = static_cast<uint32_t>(stream.height),
+            .layers = 1,
+            .format = static_cast<uint32_t>(stream.format),
+            .usage = static_cast<uint32_t>(stream.usage),
+            // TODO(b/301023410) Verify how stride needs to
+            // be computed for various buffer formats.
+            .stride = static_cast<uint32_t>(stream.width),
+            .rfu0 = 0,
+            .rfu1 = 0};
+  }
+}
+
 std::shared_ptr<AHardwareBuffer> importBuffer(const NativeHandle& aidlHandle,
                                               const Stream& streamConfig) {
+  if (aidlHandle.fds.empty()) {
+    ALOGE("Empty handle - nothing to import");
+    return nullptr;
+  }
   std::unique_ptr<native_handle_t, int (*)(native_handle_t*)> nativeHandle(
       ::android::makeFromAidl(aidlHandle), native_handle_delete);
 
-  const AHardwareBuffer_Desc bufferDesc = {
-      .width = static_cast<uint32_t>(streamConfig.width),
-      .height = static_cast<uint32_t>(streamConfig.height),
-      .layers = static_cast<uint32_t>(1),
-      .format = static_cast<uint32_t>(streamConfig.format),
-      .usage = static_cast<uint32_t>(streamConfig.usage),
-      // TODO(b/301023410) Verify how stride needs to
-      // be computed for various buffer formats.
-      .stride = static_cast<uint32_t>(streamConfig.width),
-      .rfu0 = 0,
-      .rfu1 = 0};
-
+  const AHardwareBuffer_Desc bufferDesc =
+      createBufferDescriptorForStream(streamConfig);
   AHardwareBuffer* hwBufferPtr = nullptr;
 
   int ret = AHardwareBuffer_createFromHandle(
@@ -146,6 +166,10 @@ bool VirtualCameraStream::removeBuffer(int bufferId) {
   std::lock_guard<std::mutex> lock(mLock);
 
   return mBuffers.erase(bufferId) == 1;
+}
+
+Stream VirtualCameraStream::getStreamConfig() const {
+  return mStreamConfig;
 }
 
 }  // namespace virtualcamera

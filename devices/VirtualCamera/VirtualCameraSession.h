@@ -118,25 +118,35 @@ class VirtualCameraSession
  private:
   void removeBufferCaches(
       const std::vector<::aidl::android::hardware::camera::device::BufferCache>&
-          cachesToRemove);
+          cachesToRemove) EXCLUDES(mLock);
+
+  std::optional<::aidl::android::hardware::camera::device::Stream>
+  getStreamConfig(const ::aidl::android::hardware::camera::device::StreamBuffer&
+                      streamBuffer) const EXCLUDES(mLock);
 
   std::shared_ptr<AHardwareBuffer> fetchHardwareBuffer(
-      const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer);
+      const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer)
+      EXCLUDES(mLock);
 
   std::shared_ptr<EglFrameBuffer> fetchEglFramebuffer(
       const EGLDisplay eglDisplay,
-      const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer);
+      const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer)
+      EXCLUDES(mLock);
 
   ndk::ScopedAStatus processCaptureRequest(
       const ::aidl::android::hardware::camera::device::CaptureRequest& request);
 
-  ndk::ScopedAStatus renderIntoStreamBuffer(
+  ndk::ScopedAStatus renderIntoBlobStreamBuffer(
+      const ::aidl::android::hardware::camera::device::CaptureRequest& request,
+      const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer);
+
+  ndk::ScopedAStatus renderIntoImageStreamBuffer(
       const ::aidl::android::hardware::camera::device::CaptureRequest& request,
       const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer);
 
   const std::string mCameraId;
 
-  std::mutex mLock;
+  mutable std::mutex mLock;
 
   std::shared_ptr<::aidl::android::hardware::camera::device::ICameraDeviceCallback>
       mCameraDeviceCallback GUARDED_BY(mLock);

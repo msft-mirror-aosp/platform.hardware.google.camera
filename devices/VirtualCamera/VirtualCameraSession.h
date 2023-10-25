@@ -19,6 +19,7 @@
 
 #include <map>
 #include <memory>
+#include <set>
 
 #include "VirtualCameraStream.h"
 #include "aidl/android/companion/virtualcamera/IVirtualCameraCallback.h"
@@ -115,10 +116,16 @@ class VirtualCameraSession
   ndk::ScopedAStatus repeatingRequestEnd(
       int32_t in_frameNumber, const std::vector<int32_t>& in_streamIds) override;
 
+  std::set<int> getStreamIds() const EXCLUDES(mLock);
+
  private:
   void removeBufferCaches(
       const std::vector<::aidl::android::hardware::camera::device::BufferCache>&
           cachesToRemove) EXCLUDES(mLock);
+
+  void removeStreamsNotInStreamConfiguration(
+      const ::aidl::android::hardware::camera::device::StreamConfiguration&
+          streamConfiguration) EXCLUDES(mLock);
 
   std::optional<::aidl::android::hardware::camera::device::Stream>
   getStreamConfig(const ::aidl::android::hardware::camera::device::StreamBuffer&

@@ -29,8 +29,8 @@ aidl_interface {
             min_sdk_version: "34",
         },
         java: {
-            enabled: false,
-            sdk_version: "module_current",
+            enabled: true,
+            platform_apis: true,
         }
     },
 }

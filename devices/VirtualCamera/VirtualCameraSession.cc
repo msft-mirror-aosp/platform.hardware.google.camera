@@ -18,19 +18,19 @@
 #define LOG_TAG "VirtualCameraSession"
 #include "VirtualCameraSession.h"
 
-#include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <complex>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <iterator>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <tuple>
+#include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "CameraMetadata.h"
 #include "EGL/egl.h"
@@ -47,12 +47,9 @@
 #include "aidl/android/hardware/graphics/common/BufferUsage.h"
 #include "aidl/android/hardware/graphics/common/PixelFormat.h"
 #include "android/hardware_buffer.h"
-#include "android/native_window.h"
 #include "android/native_window_aidl.h"
 #include "fmq/AidlMessageQueue.h"
-#include "log/log.h"
 #include "system/camera_metadata.h"
-#include "system/graphics-sw.h"
 #include "util/EglDisplayContext.h"
 #include "util/EglFramebuffer.h"
 #include "util/EglProgram.h"
@@ -247,6 +244,8 @@ ndk::ScopedAStatus VirtualCameraSession::configureStreams(
     return cameraStatus(Status::ILLEGAL_ARGUMENT);
   }
 
+  removeStreamsNotInStreamConfiguration(in_requestedConfiguration);
+
   auto& streams = in_requestedConfiguration.streams;
   auto& halStreams = *_aidl_return;
   halStreams.clear();
@@ -261,13 +260,16 @@ ndk::ScopedAStatus VirtualCameraSession::configureStreams(
           (streams[i].format != PixelFormat::IMPLEMENTATION_DEFINED &&
            streams[i].format != PixelFormat::YCBCR_420_888 &&
            streams[i].format != PixelFormat::BLOB)) {
-        mStreams.clear();
+        halStreams.clear();
         return cameraStatus(Status::ILLEGAL_ARGUMENT);
       }
       halStreams[i] = getHalStream(streams[i]);
-      mStreams.emplace(std::piecewise_construct,
-                       std::forward_as_tuple(streams[i].id),
-                       std::forward_as_tuple(streams[i]));
+      const auto& [_, newlyInserted] = mStreams.emplace(
+          std::piecewise_construct, std::forward_as_tuple(streams[i].id),
+          std::forward_as_tuple(streams[i]));
+      if (newlyInserted) {
+        ALOGV("Configured new stream: %s", streams[i].toString().c_str());
+      }
     }
   }
 
@@ -288,7 +290,7 @@ ndk::ScopedAStatus VirtualCameraSession::configureStreams(
 
 ndk::ScopedAStatus VirtualCameraSession::constructDefaultRequestSettings(
     RequestTemplate in_type, CameraMetadata* _aidl_return) {
-  ALOGV("%s: type %d", __func__, in_type);
+  ALOGV("%s: type %d", __func__, static_cast<int32_t>(in_type));
 
   switch (in_type) {
     case RequestTemplate::PREVIEW:
@@ -402,6 +404,16 @@ ndk::ScopedAStatus VirtualCameraSession::repeatingRequestEnd(
   return ndk::ScopedAStatus::ok();
 }
 
+std::set<int> VirtualCameraSession::getStreamIds() const {
+  std::set<int> result;
+
+  std::lock_guard<std::mutex> lock(mLock);
+  for (const auto& [streamId, _] : mStreams) {
+    result.insert(streamId);
+  }
+  return result;
+}
+
 void VirtualCameraSession::removeBufferCaches(
     const std::vector<BufferCache>& cachesToRemove) {
   std::lock_guard<std::mutex> lock(mLock);
@@ -419,6 +431,28 @@ void VirtualCameraSession::removeBufferCaches(
     } else {
       ALOGE("%s: Failed to buffer %" PRId64 " from cache of stream %d",
             __func__, bufferCache.bufferId, bufferCache.streamId);
+    }
+  }
+}
+
+void VirtualCameraSession::removeStreamsNotInStreamConfiguration(
+    const StreamConfiguration& streamConfiguration) {
+  std::unordered_set<int> newConfigurationStreamIds;
+  for (const Stream& stream : streamConfiguration.streams) {
+    newConfigurationStreamIds.insert(stream.id);
+  }
+
+  std::lock_guard<std::mutex> lock(mLock);
+  for (auto it = mStreams.begin(); it != mStreams.end();) {
+    if (newConfigurationStreamIds.find(it->first) ==
+        newConfigurationStreamIds.end()) {
+      ALOGV(
+          "Disposing of stream %d, since it is not referenced by new "
+          "configuration.",
+          it->first);
+      it = mStreams.erase(it);
+    } else {
+      ++it;
     }
   }
 }

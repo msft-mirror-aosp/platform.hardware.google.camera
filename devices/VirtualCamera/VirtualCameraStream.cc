@@ -27,11 +27,12 @@
 #include "EGL/egl.h"
 #include "aidl/android/hardware/camera/device/Stream.h"
 #include "aidl/android/hardware/camera/device/StreamBuffer.h"
+#include "aidl/android/hardware/graphics/common/PixelFormat.h"
 #include "aidlcommonsupport/NativeHandle.h"
 #include "android/hardware_buffer.h"
 #include "cutils/native_handle.h"
-#include "log/log.h"
-#include "vndk/hardware_buffer.h"
+#include "ui/GraphicBuffer.h"
+#include "ui/GraphicBufferMapper.h"
 
 namespace android {
 namespace companion {
@@ -44,29 +45,42 @@ using ::aidl::android::hardware::graphics::common::PixelFormat;
 
 namespace {
 
-AHardwareBuffer_Desc createBufferDescriptorForStream(const Stream& stream) {
-  if (stream.format == PixelFormat::BLOB) {
-    return {// BLOB needs to have width = bufferSize & height = 1.
-            .width = static_cast<uint32_t>(stream.bufferSize),
-            .height = 1,
-            .layers = 1,
-            .format = static_cast<uint32_t>(stream.format),
-            .usage = static_cast<uint32_t>(stream.usage),
-            .stride = 0,
-            .rfu0 = 0,
-            .rfu1 = 0};
-  } else {
-    return {.width = static_cast<uint32_t>(stream.width),
-            .height = static_cast<uint32_t>(stream.height),
-            .layers = 1,
-            .format = static_cast<uint32_t>(stream.format),
-            .usage = static_cast<uint32_t>(stream.usage),
-            // TODO(b/301023410) Verify how stride needs to
-            // be computed for various buffer formats.
-            .stride = static_cast<uint32_t>(stream.width),
-            .rfu0 = 0,
-            .rfu1 = 0};
+sp<GraphicBuffer> createBlobGraphicBuffer(GraphicBufferMapper& mapper,
+                                          buffer_handle_t bufferHandle) {
+  uint64_t allocationSize;
+  uint64_t usage;
+  uint64_t layerCount;
+  if (mapper.getAllocationSize(bufferHandle, &allocationSize) != NO_ERROR ||
+      mapper.getUsage(bufferHandle, &usage) != NO_ERROR ||
+      mapper.getLayerCount(bufferHandle, &layerCount) != NO_ERROR) {
+    ALOGE("Error fetching metadata for the imported BLOB buffer handle.");
+    return nullptr;
   }
+
+  return sp<GraphicBuffer>::make(
+      bufferHandle, GraphicBuffer::HandleWrapMethod::TAKE_HANDLE,
+      allocationSize, /*height=*/1, static_cast<int>(ui::PixelFormat::BLOB),
+      layerCount, usage, 0);
+}
+
+sp<GraphicBuffer> createYCbCr420GraphicBuffer(GraphicBufferMapper& mapper,
+                                              buffer_handle_t bufferHandle) {
+  uint64_t width;
+  uint64_t height;
+  uint64_t usage;
+  uint64_t layerCount;
+  if (mapper.getWidth(bufferHandle, &width) != NO_ERROR ||
+      mapper.getHeight(bufferHandle, &height) != NO_ERROR ||
+      mapper.getUsage(bufferHandle, &usage) != NO_ERROR ||
+      mapper.getLayerCount(bufferHandle, &layerCount) != NO_ERROR) {
+    ALOGE("Error fetching metadata for the imported YCbCr420 buffer handle.");
+    return nullptr;
+  }
+
+  return sp<GraphicBuffer>::make(
+      bufferHandle, GraphicBuffer::HandleWrapMethod::TAKE_HANDLE, width, height,
+      static_cast<int>(ui::PixelFormat::YCBCR_420_888), /*layers=*/1, usage,
+      width);
 }
 
 std::shared_ptr<AHardwareBuffer> importBuffer(const NativeHandle& aidlHandle,
@@ -78,21 +92,32 @@ std::shared_ptr<AHardwareBuffer> importBuffer(const NativeHandle& aidlHandle,
   std::unique_ptr<native_handle_t, int (*)(native_handle_t*)> nativeHandle(
       ::android::makeFromAidl(aidlHandle), native_handle_delete);
 
-  const AHardwareBuffer_Desc bufferDesc =
-      createBufferDescriptorForStream(streamConfig);
-  AHardwareBuffer* hwBufferPtr = nullptr;
+  GraphicBufferMapper& mapper = GraphicBufferMapper::get();
 
-  int ret = AHardwareBuffer_createFromHandle(
-      &bufferDesc, nativeHandle.get(),
-      AHARDWAREBUFFER_CREATE_FROM_HANDLE_METHOD_CLONE, &hwBufferPtr);
+  buffer_handle_t bufferHandle;
+  // Use importBufferNoValidate to rely on ground-truth metadata passed along
+  // the buffer.
+  int ret = mapper.importBufferNoValidate(nativeHandle.get(), &bufferHandle);
   if (ret != NO_ERROR) {
-    ALOGE(
-        "%s: Failed to import buffer from native handle, err = %d, Stream = %s",
-        __func__, ret, streamConfig.toString().c_str());
+    ALOGE("Failed to import buffer handle: %d", ret);
     return nullptr;
   }
 
-  return std::shared_ptr<AHardwareBuffer>(hwBufferPtr, AHardwareBuffer_release);
+  sp<GraphicBuffer> buf =
+      streamConfig.format == PixelFormat::BLOB
+          ? createBlobGraphicBuffer(mapper, bufferHandle)
+          : createYCbCr420GraphicBuffer(mapper, bufferHandle);
+
+  if (buf->initCheck() != NO_ERROR) {
+    ALOGE("Imported graphic buffer is not correcly initialized.");
+    return nullptr;
+  }
+
+  AHardwareBuffer* rawPtr = buf->toAHardwareBuffer();
+  AHardwareBuffer_acquire(rawPtr);
+
+  return std::shared_ptr<AHardwareBuffer>(buf->toAHardwareBuffer(),
+                                          AHardwareBuffer_release);
 }
 
 }  // namespace

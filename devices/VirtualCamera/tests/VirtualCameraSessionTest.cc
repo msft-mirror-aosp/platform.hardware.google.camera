@@ -21,6 +21,7 @@
 #include "aidl/android/companion/virtualcamera/BnVirtualCameraCallback.h"
 #include "aidl/android/companion/virtualcamera/IVirtualCameraCallback.h"
 #include "aidl/android/hardware/camera/device/BnCameraDeviceCallback.h"
+#include "aidl/android/hardware/camera/device/StreamConfiguration.h"
 #include "aidl/android/hardware/graphics/common/PixelFormat.h"
 #include "android/binder_auto_utils.h"
 #include "android/binder_interface_utils.h"
@@ -48,6 +49,7 @@ using ::aidl::android::hardware::camera::device::StreamConfiguration;
 using ::aidl::android::hardware::graphics::common::PixelFormat;
 using ::aidl::android::view::Surface;
 using ::testing::_;
+using ::testing::ElementsAre;
 using ::testing::Return;
 using ::testing::SizeIs;
 
@@ -91,6 +93,9 @@ class VirtualCameraSessionTest : public ::testing::Test {
     mVirtualCameraSession = ndk::SharedRefBase::make<VirtualCameraSession>(
         kCameraName, mMockCameraDeviceCallback,
         mMockVirtualCameraClientCallback);
+
+    ON_CALL(*mMockVirtualCameraClientCallback, onStreamConfigured)
+        .WillByDefault(ndk::ScopedAStatus::ok);
   }
 
  protected:
@@ -108,14 +113,40 @@ TEST_F(VirtualCameraSessionTest, ConfigureTriggersClientConfigureCallback) {
   streamConfiguration.streams = {createStream(streamId, width, height, format)};
   std::vector<HalStream> halStreams;
   EXPECT_CALL(*mMockVirtualCameraClientCallback,
-              onStreamConfigured(streamId, _, width, height, format))
-      .WillOnce(Return(ndk::ScopedAStatus::ok()));
+              onStreamConfigured(streamId, _, width, height, format));
 
   ASSERT_TRUE(
       mVirtualCameraSession->configureStreams(streamConfiguration, &halStreams)
           .isOk());
 
   EXPECT_THAT(halStreams, SizeIs(streamConfiguration.streams.size()));
+  EXPECT_THAT(mVirtualCameraSession->getStreamIds(), ElementsAre(0));
+}
+
+TEST_F(VirtualCameraSessionTest, SecondConfigureDropsUnreferencedStreams) {
+  int width = 640;
+  int height = 480;
+  PixelFormat format = PixelFormat::YCBCR_420_888;
+  StreamConfiguration streamConfiguration;
+  std::vector<HalStream> halStreams;
+
+  streamConfiguration.streams = {createStream(0, width, height, format),
+                                 createStream(1, width, height, format),
+                                 createStream(2, width, height, format)};
+  ASSERT_TRUE(
+      mVirtualCameraSession->configureStreams(streamConfiguration, &halStreams)
+          .isOk());
+
+  EXPECT_THAT(mVirtualCameraSession->getStreamIds(), ElementsAre(0, 1, 2));
+
+  streamConfiguration.streams = {createStream(0, width, height, format),
+                                 createStream(2, width, height, format),
+                                 createStream(3, width, height, format)};
+  ASSERT_TRUE(
+      mVirtualCameraSession->configureStreams(streamConfiguration, &halStreams)
+          .isOk());
+
+  EXPECT_THAT(mVirtualCameraSession->getStreamIds(), ElementsAre(0, 2, 3));
 }
 
 TEST_F(VirtualCameraSessionTest, CloseTriggersClientTerminateCallback) {

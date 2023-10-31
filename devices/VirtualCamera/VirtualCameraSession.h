@@ -145,7 +145,8 @@ class VirtualCameraSession
 
   ndk::ScopedAStatus renderIntoBlobStreamBuffer(
       const ::aidl::android::hardware::camera::device::CaptureRequest& request,
-      const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer);
+      const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer,
+      size_t bufferSize);
 
   ndk::ScopedAStatus renderIntoImageStreamBuffer(
       const ::aidl::android::hardware::camera::device::CaptureRequest& request,

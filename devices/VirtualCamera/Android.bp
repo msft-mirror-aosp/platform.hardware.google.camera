@@ -15,6 +15,7 @@ cc_defaults {
         "libfmq",
         "libandroid",
         "libgui",
+        "libjpeg",
         "libnativewindow",
         "libbase",
         "libcutils",
@@ -45,6 +46,7 @@ cc_defaults {
 cc_library_static {
     name: "libvirtualcamera_utils",
     srcs: [
+        "util/JpegUtil.cc",
         "util/MetadataBuilder.cc",
         "util/Util.cc",
         "util/TestPatternHelper.cc",

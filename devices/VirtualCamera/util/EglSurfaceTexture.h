@@ -42,6 +42,9 @@ class EglSurfaceTexture {
   // Get Surface backing up the texture.
   sp<Surface> getSurface();
 
+  // Get GraphicBuffer backing the current texture.
+  sp<GraphicBuffer> getCurrentBuffer();
+
   // Get width of surface / texture.
   uint32_t getWidth() const;
 

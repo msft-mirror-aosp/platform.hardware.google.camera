@@ -58,9 +58,9 @@ void renderTestPatternYcbCr420(uint8_t* data_ptr, const int width,
       y_data[j * width + i] = pixelToFractal(i, j, c * 0.78f);
       if ((i & 1) && (j & 1)) {
         uv_data[((j / 2) * (width / 2) + i / 2) * 2] =
-            uint8_t(c.imag() * 127.f + 127);
+            static_cast<uint8_t>((float(i) / float(width)) * 255.f);
         uv_data[((j / 2) * (width / 2) + i / 2) * 2 + 1] =
-            uint8_t(c.real() * 127.f + 127);
+            static_cast<uint8_t>((float(j) / float(height)) * 255.f);
       }
     }
   }

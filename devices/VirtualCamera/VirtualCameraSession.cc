@@ -50,11 +50,12 @@
 #include "android/native_window_aidl.h"
 #include "fmq/AidlMessageQueue.h"
 #include "system/camera_metadata.h"
+#include "ui/GraphicBuffer.h"
 #include "util/EglDisplayContext.h"
 #include "util/EglFramebuffer.h"
 #include "util/EglProgram.h"
+#include "util/JpegUtil.h"
 #include "util/MetadataBuilder.h"
-#include "util/MysteriousScaryBlob.h"
 #include "util/TestPatternHelper.h"
 #include "util/Util.h"
 
@@ -544,7 +545,8 @@ ndk::ScopedAStatus VirtualCameraSession::processCaptureRequest(
     }
 
     auto status = streamConfig->format == PixelFormat::BLOB
-                      ? renderIntoBlobStreamBuffer(request, reqBuffer)
+                      ? renderIntoBlobStreamBuffer(request, reqBuffer,
+                                                   streamConfig->bufferSize)
                       : renderIntoImageStreamBuffer(request, reqBuffer);
     if (!status.isOk()) {
       resBuffer.status = BufferStatus::ERROR;
@@ -585,30 +587,40 @@ ndk::ScopedAStatus VirtualCameraSession::processCaptureRequest(
 
 ndk::ScopedAStatus VirtualCameraSession::renderIntoBlobStreamBuffer(
     const ::aidl::android::hardware::camera::device::CaptureRequest& request,
-    const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer) {
+    const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer,
+    const size_t bufferSize) {
   ALOGV("%s", __func__);
   (void)request;
   sp<Fence> fence = importFence(streamBuffer.acquireFence);
 
+  sp<GraphicBuffer> gBuffer = mEglSurfaceTexture->getCurrentBuffer();
   std::shared_ptr<AHardwareBuffer> hwBuffer = fetchHardwareBuffer(streamBuffer);
 
   AHardwareBuffer_Planes planes_info;
-
   int result = AHardwareBuffer_lockPlanes(hwBuffer.get(),
                                           AHARDWAREBUFFER_USAGE_CPU_READ_RARELY,
                                           fence->get(), nullptr, &planes_info);
   if (result != OK) {
-    ALOGE("%s: Failed to lock planes: %d", __func__, result);
-    ndk::ScopedAStatus::ok();
+    ALOGE("%s: Failed to lock planes for BLOB buffer: %d", __func__, result);
+    return cameraStatus(Status::INTERNAL_ERROR);
   }
 
-  if (planes_info.planeCount >= 1) {
-    memcpy(planes_info.planes[0].data, mysteriousScaryBlob,
-           sizeof(mysteriousScaryBlob));
+  android_ycbcr ycbcr;
+  status_t status =
+      gBuffer->lockYCbCr(AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN, &ycbcr);
+  if (status != NO_ERROR) {
+    AHardwareBuffer_unlock(hwBuffer.get(), nullptr);
+    ALOGE("%s: Failed to lock graphic buffer: %d", __func__, status);
+    return cameraStatus(Status::INTERNAL_ERROR);
   }
 
+  bool success = compressJpeg(gBuffer->getWidth(), gBuffer->getHeight(), ycbcr,
+                              bufferSize, planes_info.planes[0].data);
+
+  gBuffer->unlock();
   AHardwareBuffer_unlock(hwBuffer.get(), nullptr);
-  return ndk::ScopedAStatus::ok();
+  return success ? ndk::ScopedAStatus::ok()
+                 : cameraStatus(Status::INTERNAL_ERROR);
 }
 
 ndk::ScopedAStatus VirtualCameraSession::renderIntoImageStreamBuffer(

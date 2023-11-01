@@ -60,6 +60,10 @@ sp<Surface> EglSurfaceTexture::getSurface() {
   return mSurface;
 }
 
+sp<GraphicBuffer> EglSurfaceTexture::getCurrentBuffer() {
+  return mGlConsumer->getCurrentBuffer();
+}
+
 GLuint EglSurfaceTexture::updateTexture() {
   mGlConsumer->updateTexImage();
   return mTextureId;

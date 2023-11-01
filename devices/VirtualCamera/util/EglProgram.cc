@@ -65,22 +65,24 @@ constexpr char kJuliaFractalFragmentShader[] = R"(
       gl_FragColor = vec4( juliaVal,uUV.x,uUV.y,0.0);
     })";
 
-constexpr char kExternalTextureVertexShader[] = R"(
-  attribute vec4 aPosition;
-  attribute vec2 aTextureCoord;
-  varying vec2 vTextureCoord;
+constexpr char kExternalTextureVertexShader[] = R"(#version 300 es
+  in vec4 aPosition;
+  in vec2 aTextureCoord;
+  out vec2 vTextureCoord;
   void main() {
     gl_Position = aPosition;
     vTextureCoord = aTextureCoord;
   })";
 
-constexpr char kExternalTextureFragmentShader[] = R"(
-    #extension GL_OES_EGL_image_external : require
+constexpr char kExternalTextureFragmentShader[] = R"(#version 300 es
+    #extension GL_OES_EGL_image_external_essl3 : require
+    #extension GL_EXT_YUV_target : require
     precision mediump float;
-    varying vec2 vTextureCoord;
-    uniform samplerExternalOES uTexture;
+    in vec2 vTextureCoord;
+    out vec4 fragColor;
+    uniform __samplerExternal2DY2YEXT uTexture;
     void main() {
-      gl_FragColor = texture2D(uTexture, vTextureCoord);
+      fragColor = texture(uTexture, vTextureCoord);
     })";
 
 constexpr int kCoordsPerVertex = 3;
@@ -172,7 +174,12 @@ bool EglProgram::initialize(const char* vertexShaderSrc,
 
   mProgram = programId;
 
-  return true;
+  mIsInitialized = true;
+  return mIsInitialized;
+}
+
+bool EglProgram::isInitialized() const {
+  return mIsInitialized;
 }
 
 EglTestPatternProgram::EglTestPatternProgram() {

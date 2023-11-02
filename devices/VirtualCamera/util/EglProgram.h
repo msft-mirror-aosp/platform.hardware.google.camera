@@ -28,10 +28,15 @@ class EglProgram {
  public:
   virtual ~EglProgram();
 
+  // Returns whether the EGL Program was successfully compiled and linked.
+  bool isInitialized() const;
+
  protected:
   // Compile & link program from the vertex & fragment shader source.
   bool initialize(const char* vertexShaderSrc, const char* fragmentShaderSrc);
   GLuint mProgram;
+  // Whether the EGL Program was successfully compiled and linked.
+  bool mIsInitialized = false;
 };
 
 // Shader program to draw Julia Set test pattern.

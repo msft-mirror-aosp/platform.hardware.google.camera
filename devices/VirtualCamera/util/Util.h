@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ANDROID_SERVICES_VIRTUALCAMERA_UTIL_H
-#define ANDROID_SERVICES_VIRTUALCAMERA_UTIL_H
+#ifndef ANDROID_COMPANION_VIRTUALCAMERA_UTIL_H
+#define ANDROID_COMPANION_VIRTUALCAMERA_UTIL_H
 
 #include <cstdint>
 
@@ -46,4 +46,4 @@ sp<Fence> importFence(
 }  // namespace companion
 }  // namespace android
 
-#endif  // ANDROID_SERVICES_VIRTUALCAMERA_UTIL_H
+#endif  // ANDROID_COMPANION_VIRTUALCAMERA_UTIL_H

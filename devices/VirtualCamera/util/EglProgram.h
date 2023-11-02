@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ANDROID_SERVICES_VIRTUALCAMERA_EGLPROGRAM_H
-#define ANDROID_SERVICES_VIRTUALCAMERA_EGLPROGRAM_H
+#ifndef ANDROID_COMPANION_VIRTUALCAMERA_EGLPROGRAM_H
+#define ANDROID_COMPANION_VIRTUALCAMERA_EGLPROGRAM_H
 
 #include "GLES/gl.h"
 
@@ -64,4 +64,4 @@ class EglTextureProgram : public EglProgram {
 }  // namespace companion
 }  // namespace android
 
-#endif
+#endif  // ANDROID_COMPANION_VIRTUALCAMERA_EGLPROGRAM_H

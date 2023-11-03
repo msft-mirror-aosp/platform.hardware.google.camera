@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef ANDROID_SERVICES_VIRTUALCAMERA_VIRTUALCAMERASTREAM_H
-#define ANDROID_SERVICES_VIRTUALCAMERA_VIRTUALCAMERASTREAM_H
+#ifndef ANDROID_COMPANION_VIRTUALCAMERA_VIRTUALCAMERASTREAM_H
+#define ANDROID_COMPANION_VIRTUALCAMERA_VIRTUALCAMERASTREAM_H
 
 #include <cstdint>
 #include <functional>
@@ -90,4 +90,4 @@ class VirtualCameraStream {
 }  // namespace companion
 }  // namespace android
 
-#endif  // ANDROID_SERVICES_VIRTUALCAMERA_VIRTUALCAMERASTREAM_H
+#endif  // ANDROID_COMPANION_VIRTUALCAMERA_VIRTUALCAMERASTREAM_H

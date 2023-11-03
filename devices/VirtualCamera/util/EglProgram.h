@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ANDROID_SERVICES_VIRTUALCAMERA_EGLPROGRAM_H
-#define ANDROID_SERVICES_VIRTUALCAMERA_EGLPROGRAM_H
+#ifndef ANDROID_COMPANION_VIRTUALCAMERA_EGLPROGRAM_H
+#define ANDROID_COMPANION_VIRTUALCAMERA_EGLPROGRAM_H
 
 #include "GLES/gl.h"
 
@@ -28,10 +28,15 @@ class EglProgram {
  public:
   virtual ~EglProgram();
 
+  // Returns whether the EGL Program was successfully compiled and linked.
+  bool isInitialized() const;
+
  protected:
   // Compile & link program from the vertex & fragment shader source.
   bool initialize(const char* vertexShaderSrc, const char* fragmentShaderSrc);
   GLuint mProgram;
+  // Whether the EGL Program was successfully compiled and linked.
+  bool mIsInitialized = false;
 };
 
 // Shader program to draw Julia Set test pattern.
@@ -59,4 +64,4 @@ class EglTextureProgram : public EglProgram {
 }  // namespace companion
 }  // namespace android
 
-#endif
+#endif  // ANDROID_COMPANION_VIRTUALCAMERA_EGLPROGRAM_H

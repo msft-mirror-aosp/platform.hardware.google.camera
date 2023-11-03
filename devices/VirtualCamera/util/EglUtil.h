@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#ifndef ANDROID_COMPANION_VIRTUALCAMERA_EGLUTIL_H
+#define ANDROID_COMPANION_VIRTUALCAMERA_EGLUTIL_H
+
 namespace android {
 namespace companion {
 namespace virtualcamera {
@@ -24,3 +27,5 @@ bool checkEglError(const char* operation = "EGL operation");
 }  // namespace virtualcamera
 }  // namespace companion
 }  // namespace android
+
+#endif  // ANDROID_COMPANION_VIRTUALCAMERA_EGLUTIL_H

@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#ifndef ANDROID_COMPANION_VIRTUALCAMERA_JPEGUTIL_H
+#define ANDROID_COMPANION_VIRTUALCAMERA_JPEGUTIL_H
+
 #include <memory>
 
 #include "android/hardware_buffer.h"
@@ -30,3 +33,5 @@ bool compressJpeg(int width, int height, const android_ycbcr& ycbcr,
 }  // namespace virtualcamera
 }  // namespace companion
 }  // namespace android
+
+#endif  // ANDROID_COMPANION_VIRTUALCAMERA_JPEGUTIL_H

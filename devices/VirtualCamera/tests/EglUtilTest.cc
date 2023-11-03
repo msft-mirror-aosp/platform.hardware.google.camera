@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <unordered_map>
+
 #include "gtest/gtest.h"
 #include "util/EglDisplayContext.h"
 #include "util/EglProgram.h"
@@ -23,27 +25,46 @@ namespace companion {
 namespace virtualcamera {
 namespace {
 
+constexpr char kGlExtYuvTarget[] = "GL_EXT_YUV_target";
+
 TEST(EglDisplayContextTest, SuccessfulInitialization) {
   EglDisplayContext displayContext;
 
   EXPECT_TRUE(displayContext.isInitialized());
 }
 
-TEST(EglTestPatternProgram, SuccessfulInitialization) {
-  EglDisplayContext displayContext;
-  ASSERT_TRUE(displayContext.isInitialized());
-  ASSERT_TRUE(displayContext.makeCurrent());
+class EglProgramTest : public ::testing::Test {
+ public:
+  void SetUp() override {
+    ASSERT_TRUE(mEglDisplayContext.isInitialized());
+    ASSERT_TRUE(mEglDisplayContext.makeCurrent());
+  }
 
+  bool isGlExtensionSupported(const char* extension) {
+    const char* extensions =
+        reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
+    if (extensions == nullptr) {
+      return false;
+    }
+    return strstr(extensions, extension) != nullptr;
+  }
+
+ private:
+  EglDisplayContext mEglDisplayContext;
+};
+
+TEST_F(EglProgramTest, EglTestPatternProgramSuccessfulInit) {
   EglTestPatternProgram eglTestPatternProgram;
 
   // Verify the shaders compiled and linked successfully.
   EXPECT_TRUE(eglTestPatternProgram.isInitialized());
 }
 
-TEST(EglTextureProgram, SuccessfulInitialization) {
-  EglDisplayContext displayContext;
-  ASSERT_TRUE(displayContext.isInitialized());
-  ASSERT_TRUE(displayContext.makeCurrent());
+TEST_F(EglProgramTest, EglTextureProgramSuccessfulInit) {
+  if (!isGlExtensionSupported(kGlExtYuvTarget)) {
+    GTEST_SKIP() << "Skipping test because of missing required GL extension "
+                 << kGlExtYuvTarget;
+  }
 
   EglTextureProgram eglTextureProgram;
 

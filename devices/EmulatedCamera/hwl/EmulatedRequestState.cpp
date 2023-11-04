@@ -995,14 +995,20 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
   if (report_exposure_time_) {
     result->result_metadata->Set(ANDROID_SENSOR_EXPOSURE_TIME,
                                  &sensor_exposure_time_, 1);
+  } else {
+    result->result_metadata->Erase(ANDROID_SENSOR_EXPOSURE_TIME);
   }
   if (report_frame_duration_) {
     result->result_metadata->Set(ANDROID_SENSOR_FRAME_DURATION,
                                  &sensor_frame_duration_, 1);
+  } else {
+    result->result_metadata->Erase(ANDROID_SENSOR_FRAME_DURATION);
   }
   if (report_sensitivity_) {
     result->result_metadata->Set(ANDROID_SENSOR_SENSITIVITY,
                                  &sensor_sensitivity_, 1);
+  } else {
+    result->result_metadata->Erase(ANDROID_SENSOR_SENSITIVITY);
   }
   if (report_rolling_shutter_skew_) {
     result->result_metadata->Set(

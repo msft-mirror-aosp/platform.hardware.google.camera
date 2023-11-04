@@ -812,7 +812,8 @@ status_t ConvertToHalCaptureRequest(
   }
 
   google_camera_hal::StreamBuffer hal_buffer = {};
-  if (!IsAidlNativeHandleNull(aidl_request.inputBuffer.buffer)) {
+
+  if (aidl_request.inputBuffer.streamId != -1) {
     res = ConvertToHalStreamBuffer(aidl_request.inputBuffer, &hal_buffer,
                                    handles_to_delete);
     if (res != OK) {

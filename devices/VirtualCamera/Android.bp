@@ -13,7 +13,6 @@ cc_defaults {
         "libcamera_metadata",
         "liblog",
         "libfmq",
-        "libandroid",
         "libgui",
         "libjpeg",
         "libnativewindow",

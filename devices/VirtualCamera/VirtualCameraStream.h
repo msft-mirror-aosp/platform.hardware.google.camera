@@ -41,19 +41,18 @@ class VirtualCameraStream {
   VirtualCameraStream(
       const ::aidl::android::hardware::camera::device::Stream& stream);
 
-  std::shared_ptr<AHardwareBuffer> importBuffer(
-      const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer);
-
   // Get AHardwareBuffer instance corresponding to StreamBuffer from camera AIDL.
   // In case this is the first occurrence of the buffer, this will perform mapping
   // and stores hardware buffer in cache for further use.
   //
   // Returns nullptr in case buffer cannot be mapped or retrieved from the cache.
-  std::shared_ptr<AHardwareBuffer> getHardwareBuffer(int bufferId)
+  std::shared_ptr<AHardwareBuffer> getHardwareBuffer(
+      const ::aidl::android::hardware::camera::device::StreamBuffer& buffer)
       EXCLUDES(mLock);
 
-  std::shared_ptr<EglFrameBuffer> getEglFrameBuffer(const EGLDisplay eglDisplay,
-                                                    int bufferId)
+  std::shared_ptr<EglFrameBuffer> getEglFrameBuffer(
+      const EGLDisplay eglDisplay,
+      const ::aidl::android::hardware::camera::device::StreamBuffer& buffer)
       EXCLUDES(mLock);
 
   // Un-maps the previously mapped buffer and removes it from the stream cache.
@@ -64,7 +63,8 @@ class VirtualCameraStream {
   ::aidl::android::hardware::camera::device::Stream getStreamConfig() const;
 
  private:
-  std::shared_ptr<AHardwareBuffer> getHardwareBufferLocked(int bufferId)
+  std::shared_ptr<AHardwareBuffer> getHardwareBufferLocked(
+      const ::aidl::android::hardware::camera::device::StreamBuffer& buffer)
       REQUIRES(mLock);
 
   const ::aidl::android::hardware::camera::device::Stream mStreamConfig;

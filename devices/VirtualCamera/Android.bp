@@ -69,8 +69,6 @@ cc_library_static {
         "VirtualCameraSession.cc",
         "VirtualCameraStream.cc",
         "VirtualCameraService.cc",
-        "VirtualCameraSessionContext.cc",
-        "VirtualCameraRenderThread.cc",
     ],
     defaults: [
         "libvirtualcamera_defaults",

@@ -25,6 +25,7 @@
 #include "android/binder_auto_utils.h"
 #include "android/binder_interface_utils.h"
 #include "android/binder_libbinder.h"
+#include "android/binder_status.h"
 #include "binder/Binder.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -45,8 +46,10 @@ using ::aidl::android::view::Surface;
 using ::testing::_;
 using ::testing::Eq;
 using ::testing::Ge;
+using ::testing::IsEmpty;
 using ::testing::IsNull;
 using ::testing::Not;
+using ::testing::SizeIs;
 
 const VirtualCameraConfiguration kEmptyVirtualCameraConfiguration;
 
@@ -158,6 +161,31 @@ TEST_F(VirtualCameraServiceTest, UnregisterCamera) {
   mCameraService->unregisterCamera(mNdkOwnerToken);
 
   EXPECT_THAT(mCameraService->getCamera(mNdkOwnerToken), IsNull());
+}
+
+TEST_F(VirtualCameraServiceTest, ShellCmdWithNullArgs) {
+  EXPECT_EQ(mCameraService->handleShellCommand(
+                /*in=*/mDevNullFd, /*out=*/mDevNullFd, /*err=*/mDevNullFd,
+                /*args=*/nullptr, /*numArgs=*/1),
+            STATUS_BAD_VALUE);
+
+  std::array<const char*, 1> args{nullptr};
+  EXPECT_EQ(mCameraService->handleShellCommand(
+                /*in=*/mDevNullFd, /*out=*/mDevNullFd, /*err=*/mDevNullFd,
+                args.data(), /*numArgs=*/1),
+            STATUS_BAD_VALUE);
+}
+
+TEST_F(VirtualCameraServiceTest, TestCameraShellCmd) {
+  execute_shell_command("enable_test_camera");
+
+  std::vector<std::string> cameraIds;
+  EXPECT_TRUE(mCameraProvider->getCameraIdList(&cameraIds).isOk());
+  EXPECT_THAT(cameraIds, SizeIs(1));
+
+  execute_shell_command("disable_test_camera");
+  EXPECT_TRUE(mCameraProvider->getCameraIdList(&cameraIds).isOk());
+  EXPECT_THAT(cameraIds, IsEmpty());
 }
 
 }  // namespace

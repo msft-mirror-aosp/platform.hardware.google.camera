@@ -15,6 +15,7 @@
  */
 
 // #define LOG_NDEBUG 0
+#include "android/binder_status.h"
 #define LOG_TAG "VirtualCameraService"
 #include "VirtualCameraService.h"
 
@@ -127,12 +128,13 @@ binder_status_t VirtualCameraService::handleShellCommand(int in, int out,
                                                          int err,
                                                          const char** args,
                                                          uint32_t numArgs) {
-  ALOGV("%s: in %d out %d err %d numArgs %d", __func__, in, out, err, numArgs);
-
   if (numArgs <= 0) {
     dprintf(out, kShellCmdHelp);
   }
 
+  if (args == nullptr || args[0] == nullptr) {
+    return STATUS_BAD_VALUE;
+  }
   const char* const cmd = args[0];
   if (strcmp(kEnableTestCameraCmd, cmd) == 0) {
     enableTestCameraCmd(in, err);

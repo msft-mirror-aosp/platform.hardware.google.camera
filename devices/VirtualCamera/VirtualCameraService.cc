@@ -101,7 +101,7 @@ ndk::ScopedAStatus VirtualCameraService::unregisterCamera(
         "Attempt to unregister camera corresponding to unknown binder token: "
         "0x%" PRIxPTR,
         reinterpret_cast<uintptr_t>(token.get()));
-    ndk::ScopedAStatus::ok();
+    return ndk::ScopedAStatus::ok();
   }
 
   mVirtualCameraProvider->removeCamera(it->second);

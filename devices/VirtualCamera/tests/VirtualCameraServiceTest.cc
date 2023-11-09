@@ -163,6 +163,18 @@ TEST_F(VirtualCameraServiceTest, UnregisterCamera) {
   EXPECT_THAT(mCameraService->getCamera(mNdkOwnerToken), IsNull());
 }
 
+TEST_F(VirtualCameraServiceTest, UnregisterCameraWithUnknownToken) {
+  createCamera();
+
+  EXPECT_THAT(mCameraService->getCamera(mNdkOwnerToken), Not(IsNull()));
+
+  auto otherToken = sp<BBinder>::make();
+  ndk::SpAIBinder ndkOtherToken(AIBinder_fromPlatformBinder(otherToken));
+  mCameraService->unregisterCamera(ndkOtherToken);
+
+  EXPECT_THAT(mCameraService->getCamera(mNdkOwnerToken), Not(IsNull()));
+}
+
 TEST_F(VirtualCameraServiceTest, ShellCmdWithNullArgs) {
   EXPECT_EQ(mCameraService->handleShellCommand(
                 /*in=*/mDevNullFd, /*out=*/mDevNullFd, /*err=*/mDevNullFd,

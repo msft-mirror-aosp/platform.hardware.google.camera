@@ -33,6 +33,8 @@ namespace virtualcamera {
 
 namespace {
 
+constexpr char kGlExtYuvTarget[] = "GL_EXT_YUV_target";
+
 constexpr char kIdentityVertexShader[] = R"(
     attribute vec4 vPosition;
     void main() {
@@ -236,6 +238,13 @@ bool EglTestPatternProgram::draw(int width, int height, int frameNumber) {
 }
 
 EglTextureProgram::EglTextureProgram() {
+  if (!isGlExtensionSupported(kGlExtYuvTarget)) {
+    ALOGE(
+        "Cannot initialize external texture program due to missing "
+        "GL_EXT_YUV_target extension");
+    return;
+  }
+
   if (initialize(kExternalTextureVertexShader, kExternalTextureFragmentShader)) {
     ALOGV("Successfully initialized EGL shaders for external texture program.");
   } else {

@@ -18,6 +18,8 @@
 #define LOG_TAG "EglUtil"
 #include "EglUtil.h"
 
+#include <cstring>
+
 #include "GLES/gl.h"
 #include "log/log.h"
 
@@ -32,6 +34,15 @@ bool checkEglError(const char* operation) {
   }
   ALOGE("%s failed: %d", operation, err);
   return true;
+}
+
+bool isGlExtensionSupported(const char* extension) {
+  const char* extensions =
+      reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
+  if (extension == nullptr || extensions == nullptr) {
+    return false;
+  }
+  return strstr(extensions, extension) != nullptr;
 }
 
 }  // namespace virtualcamera

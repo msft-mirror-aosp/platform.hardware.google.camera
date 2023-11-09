@@ -83,8 +83,8 @@ sp<GraphicBuffer> createYCbCr420GraphicBuffer(GraphicBufferMapper& mapper,
       width);
 }
 
-std::shared_ptr<AHardwareBuffer> importBuffer(const NativeHandle& aidlHandle,
-                                              const Stream& streamConfig) {
+std::shared_ptr<AHardwareBuffer> importBufferInternal(
+    const NativeHandle& aidlHandle, const Stream& streamConfig) {
   if (aidlHandle.fds.empty()) {
     ALOGE("Empty handle - nothing to import");
     return nullptr;
@@ -126,28 +126,27 @@ VirtualCameraStream::VirtualCameraStream(const Stream& stream)
     : mStreamConfig(stream) {
 }
 
-std::shared_ptr<AHardwareBuffer> VirtualCameraStream::getHardwareBuffer(
-    const StreamBuffer& buffer) {
-  if (buffer.streamId != mStreamConfig.id) {
-    ALOGE("%s: Caller requesting buffer belonging to stream %d from stream %d",
-          __func__, buffer.streamId, mStreamConfig.id);
-    return nullptr;
+std::shared_ptr<AHardwareBuffer> VirtualCameraStream::importBuffer(
+    const ::aidl::android::hardware::camera::device::StreamBuffer& buffer) {
+  auto hwBufferPtr = importBufferInternal(buffer.buffer, mStreamConfig);
+  if (hwBufferPtr != nullptr) {
+    std::lock_guard<std::mutex> lock(mLock);
+    mBuffers.emplace(std::piecewise_construct,
+                     std::forward_as_tuple(buffer.bufferId),
+                     std::forward_as_tuple(hwBufferPtr));
   }
+  return hwBufferPtr;
+}
 
+std::shared_ptr<AHardwareBuffer> VirtualCameraStream::getHardwareBuffer(
+    const int bufferId) {
   std::lock_guard<std::mutex> lock(mLock);
-  return getHardwareBufferLocked(buffer);
+  return getHardwareBufferLocked(bufferId);
 }
 
 std::shared_ptr<EglFrameBuffer> VirtualCameraStream::getEglFrameBuffer(
-    const EGLDisplay eglDisplay,
-    const ::aidl::android::hardware::camera::device::StreamBuffer& buffer) {
-  if (buffer.streamId != mStreamConfig.id) {
-    ALOGE("%s: Caller requesting buffer belonging to stream %d from stream %d",
-          __func__, buffer.streamId, mStreamConfig.id);
-    return nullptr;
-  }
-
-  const FramebufferMapKey key(buffer.bufferId, eglDisplay);
+    const EGLDisplay eglDisplay, const int bufferId) {
+  const FramebufferMapKey key(bufferId, eglDisplay);
 
   std::lock_guard<std::mutex> lock(mLock);
 
@@ -156,7 +155,8 @@ std::shared_ptr<EglFrameBuffer> VirtualCameraStream::getEglFrameBuffer(
     return it->second;
   }
 
-  std::shared_ptr<AHardwareBuffer> hwBufferPtr = getHardwareBufferLocked(buffer);
+  std::shared_ptr<AHardwareBuffer> hwBufferPtr =
+      getHardwareBufferLocked(bufferId);
   if (hwBufferPtr == nullptr) {
     return nullptr;
   }
@@ -169,22 +169,9 @@ std::shared_ptr<EglFrameBuffer> VirtualCameraStream::getEglFrameBuffer(
 }
 
 std::shared_ptr<AHardwareBuffer> VirtualCameraStream::getHardwareBufferLocked(
-    const StreamBuffer& buffer) {
-  auto it = mBuffers.find(buffer.bufferId);
-  if (it != mBuffers.end()) {
-    return it->second;
-  }
-
-  ALOGV("%s: Importing buffer %" PRId64 " for stream %d", __func__,
-        buffer.bufferId, buffer.streamId);
-
-  auto hwBufferPtr = importBuffer(buffer.buffer, mStreamConfig);
-  if (hwBufferPtr != nullptr) {
-    mBuffers.emplace(std::piecewise_construct,
-                     std::forward_as_tuple(buffer.bufferId),
-                     std::forward_as_tuple(hwBufferPtr));
-  }
-  return hwBufferPtr;
+    const int bufferId) {
+  auto it = mBuffers.find(bufferId);
+  return it != mBuffers.end() ? it->second : nullptr;
 }
 
 bool VirtualCameraStream::removeBuffer(int bufferId) {

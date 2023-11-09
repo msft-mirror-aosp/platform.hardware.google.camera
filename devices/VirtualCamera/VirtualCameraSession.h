@@ -21,6 +21,8 @@
 #include <memory>
 #include <set>
 
+#include "VirtualCameraRenderThread.h"
+#include "VirtualCameraSessionContext.h"
 #include "VirtualCameraStream.h"
 #include "aidl/android/companion/virtualcamera/IVirtualCameraCallback.h"
 #include "aidl/android/hardware/camera/common/Status.h"
@@ -119,38 +121,8 @@ class VirtualCameraSession
   std::set<int> getStreamIds() const EXCLUDES(mLock);
 
  private:
-  void removeBufferCaches(
-      const std::vector<::aidl::android::hardware::camera::device::BufferCache>&
-          cachesToRemove) EXCLUDES(mLock);
-
-  void removeStreamsNotInStreamConfiguration(
-      const ::aidl::android::hardware::camera::device::StreamConfiguration&
-          streamConfiguration) EXCLUDES(mLock);
-
-  std::optional<::aidl::android::hardware::camera::device::Stream>
-  getStreamConfig(const ::aidl::android::hardware::camera::device::StreamBuffer&
-                      streamBuffer) const EXCLUDES(mLock);
-
-  std::shared_ptr<AHardwareBuffer> fetchHardwareBuffer(
-      const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer)
-      EXCLUDES(mLock);
-
-  std::shared_ptr<EglFrameBuffer> fetchEglFramebuffer(
-      const EGLDisplay eglDisplay,
-      const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer)
-      EXCLUDES(mLock);
-
   ndk::ScopedAStatus processCaptureRequest(
       const ::aidl::android::hardware::camera::device::CaptureRequest& request);
-
-  ndk::ScopedAStatus renderIntoBlobStreamBuffer(
-      const ::aidl::android::hardware::camera::device::CaptureRequest& request,
-      const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer,
-      size_t bufferSize);
-
-  ndk::ScopedAStatus renderIntoImageStreamBuffer(
-      const ::aidl::android::hardware::camera::device::CaptureRequest& request,
-      const ::aidl::android::hardware::camera::device::StreamBuffer& streamBuffer);
 
   const std::string mCameraId;
 
@@ -163,8 +135,7 @@ class VirtualCameraSession
       ::aidl::android::companion::virtualcamera::IVirtualCameraCallback>
       mVirtualCameraClientCallback;
 
-  // Mapping stream id -> VirtualCameraStream.
-  std::map<int, VirtualCameraStream> mStreams GUARDED_BY(mLock);
+  VirtualCameraSessionContext mSessionContext;
 
   using RequestMetadataQueue = AidlMessageQueue<
       int8_t, ::aidl::android::hardware::common::fmq::SynchronizedReadWrite>;
@@ -176,11 +147,7 @@ class VirtualCameraSession
 
   std::atomic_bool mFirstRequest{true};
 
-  std::unique_ptr<EglDisplayContext> mEglDisplayContext;
-  std::unique_ptr<EglTestPatternProgram> mEglTestPatternProgram;
-  // Shader program to render external texture pattern.
-  std::unique_ptr<EglTextureProgram> mEglTextureProgram;
-  std::unique_ptr<EglSurfaceTexture> mEglSurfaceTexture;
+  std::unique_ptr<VirtualCameraRenderThread> mRenderThread GUARDED_BY(mLock);
 };
 
 }  // namespace virtualcamera

@@ -13,7 +13,6 @@ cc_defaults {
         "libcamera_metadata",
         "liblog",
         "libfmq",
-        "libandroid",
         "libgui",
         "libjpeg",
         "libnativewindow",
@@ -69,6 +68,8 @@ cc_library_static {
         "VirtualCameraSession.cc",
         "VirtualCameraStream.cc",
         "VirtualCameraService.cc",
+        "VirtualCameraSessionContext.cc",
+        "VirtualCameraRenderThread.cc",
     ],
     defaults: [
         "libvirtualcamera_defaults",

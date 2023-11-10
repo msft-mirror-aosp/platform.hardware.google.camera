@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-#include <unordered_map>
-
 #include "gtest/gtest.h"
 #include "util/EglDisplayContext.h"
 #include "util/EglProgram.h"
+#include "util/EglUtil.h"
 
 namespace android {
 namespace companion {
@@ -38,15 +37,6 @@ class EglProgramTest : public ::testing::Test {
   void SetUp() override {
     ASSERT_TRUE(mEglDisplayContext.isInitialized());
     ASSERT_TRUE(mEglDisplayContext.makeCurrent());
-  }
-
-  bool isGlExtensionSupported(const char* extension) {
-    const char* extensions =
-        reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
-    if (extensions == nullptr) {
-      return false;
-    }
-    return strstr(extensions, extension) != nullptr;
   }
 
  private:

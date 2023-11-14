@@ -34,7 +34,7 @@ namespace {
 // Default recommended RPC thread count for camera provider implementations
 const int HWBINDER_THREAD_COUNT = 6;
 
-constexpr char kVirtualCameraServiceName[] = "virtualcamera";
+constexpr char kVirtualCameraServiceName[] = "virtual_camera";
 }  // namespace
 
 int main() {

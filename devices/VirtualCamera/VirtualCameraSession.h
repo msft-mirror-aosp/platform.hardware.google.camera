@@ -17,25 +17,14 @@
 #ifndef ANDROID_COMPANION_VIRTUALCAMERA_VIRTUALCAMERASESSION_H
 #define ANDROID_COMPANION_VIRTUALCAMERA_VIRTUALCAMERASESSION_H
 
-#include <map>
 #include <memory>
 #include <set>
 
 #include "VirtualCameraRenderThread.h"
 #include "VirtualCameraSessionContext.h"
-#include "VirtualCameraStream.h"
 #include "aidl/android/companion/virtualcamera/IVirtualCameraCallback.h"
-#include "aidl/android/hardware/camera/common/Status.h"
 #include "aidl/android/hardware/camera/device/BnCameraDeviceSession.h"
-#include "aidl/android/hardware/camera/device/BufferRequest.h"
 #include "aidl/android/hardware/camera/device/ICameraDeviceCallback.h"
-#include "aidl/android/hardware/camera/device/Stream.h"
-#include "aidl/android/hardware/camera/device/StreamBuffer.h"
-#include "android-base/unique_fd.h"
-#include "android/hardware_buffer.h"
-#include "util/EglDisplayContext.h"
-#include "util/EglProgram.h"
-#include "util/EglSurfaceTexture.h"
 #include "utils/Mutex.h"
 
 namespace android {
@@ -71,14 +60,14 @@ class VirtualCameraSession
       const ::aidl::android::hardware::camera::device::StreamConfiguration&
           in_requestedConfiguration,
       std::vector<::aidl::android::hardware::camera::device::HalStream>*
-          _aidl_return) override;
+          _aidl_return) override EXCLUDES(mLock);
 
   ndk::ScopedAStatus constructDefaultRequestSettings(
       ::aidl::android::hardware::camera::device::RequestTemplate in_type,
       ::aidl::android::hardware::camera::device::CameraMetadata* _aidl_return)
       override;
 
-  ndk::ScopedAStatus flush() override;
+  ndk::ScopedAStatus flush() override EXCLUDES(mLock);
 
   ndk::ScopedAStatus getCaptureRequestMetadataQueue(
       ::aidl::android::hardware::common::fmq::MQDescriptor<
@@ -122,7 +111,8 @@ class VirtualCameraSession
 
  private:
   ndk::ScopedAStatus processCaptureRequest(
-      const ::aidl::android::hardware::camera::device::CaptureRequest& request);
+      const ::aidl::android::hardware::camera::device::CaptureRequest& request)
+      EXCLUDES(mLock);
 
   const std::string mCameraId;
 

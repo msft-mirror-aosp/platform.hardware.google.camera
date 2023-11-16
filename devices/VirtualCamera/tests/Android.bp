@@ -19,6 +19,7 @@ cc_test {
     ],
     srcs: ["EglUtilTest.cc",
            "VirtualCameraProviderTest.cc",
+           "VirtualCameraRenderThreadTest.cc",
            "VirtualCameraServiceTest.cc",
            "VirtualCameraSessionTest.cc"],
     test_suites: ["device-tests"],

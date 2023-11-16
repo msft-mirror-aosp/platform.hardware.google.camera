@@ -31,6 +31,7 @@
 #include "aidl/android/hardware/camera/device/CaptureResult.h"
 #include "aidl/android/hardware/camera/device/ErrorCode.h"
 #include "aidl/android/hardware/camera/device/ICameraDeviceCallback.h"
+#include "aidl/android/hardware/camera/device/NotifyMsg.h"
 #include "aidl/android/hardware/camera/device/ShutterMsg.h"
 #include "aidl/android/hardware/camera/device/StreamBuffer.h"
 #include "android-base/thread_annotations.h"
@@ -88,11 +89,18 @@ NotifyMsg createShutterNotifyMsg(int frameNumber,
   return msg;
 }
 
-NotifyMsg createErrorNotifyMsg(int frameNumber, int streamId, ErrorCode error) {
+NotifyMsg createBufferErrorNotifyMsg(int frameNumber, int streamId) {
   NotifyMsg msg;
   msg.set<NotifyMsg::Tag::error>(ErrorMsg{.frameNumber = frameNumber,
                                           .errorStreamId = streamId,
-                                          .errorCode = error});
+                                          .errorCode = ErrorCode::ERROR_BUFFER});
+  return msg;
+}
+
+NotifyMsg createRequestErrorNotifyMsg(int frameNumber) {
+  NotifyMsg msg;
+  msg.set<NotifyMsg::Tag::error>(ErrorMsg{
+      .frameNumber = frameNumber, .errorCode = ErrorCode::ERROR_REQUEST});
   return msg;
 }
 
@@ -152,6 +160,14 @@ void VirtualCameraRenderThread::enqueueTask(
   std::lock_guard<std::mutex> lock(mLock);
   mQueue.emplace_back(std::move(task));
   mCondVar.notify_one();
+}
+
+void VirtualCameraRenderThread::flush() {
+  std::lock_guard<std::mutex> lock(mLock);
+  for (auto task = std::move(mQueue.front()); !mQueue.empty();
+       mQueue.pop_front()) {
+    flushCaptureRequest(*task);
+  }
 }
 
 void VirtualCameraRenderThread::start() {
@@ -264,9 +280,8 @@ void VirtualCameraRenderThread::processCaptureRequest(
       createShutterNotifyMsg(request.getFrameNumber(), timestamp)};
   for (const StreamBuffer& resBuffer : captureResult.outputBuffers) {
     if (resBuffer.status != BufferStatus::OK) {
-      notifyMsg.push_back(createErrorNotifyMsg(request.getFrameNumber(),
-                                               resBuffer.streamId,
-                                               ErrorCode::ERROR_BUFFER));
+      notifyMsg.push_back(createBufferErrorNotifyMsg(request.getFrameNumber(),
+                                                     resBuffer.streamId));
     }
   }
 
@@ -289,6 +304,52 @@ void VirtualCameraRenderThread::processCaptureRequest(
   }
 
   ALOGD("%s: Successfully called processCaptureResult", __func__);
+}
+
+void VirtualCameraRenderThread::flushCaptureRequest(
+    const ProcessCaptureRequestTask& request) {
+  const std::chrono::nanoseconds timestamp =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now().time_since_epoch());
+
+  CaptureResult captureResult;
+  captureResult.fmqResultSize = 0;
+  captureResult.frameNumber = request.getFrameNumber();
+  captureResult.inputBuffer.streamId = -1;
+  captureResult.result = createCaptureResultMetadata(timestamp);
+
+  const std::vector<CaptureRequestBuffer>& buffers = request.getBuffers();
+  captureResult.outputBuffers.resize(buffers.size());
+
+  for (int i = 0; i < buffers.size(); ++i) {
+    const CaptureRequestBuffer& reqBuffer = buffers[i];
+    StreamBuffer& resBuffer = captureResult.outputBuffers[i];
+    resBuffer.streamId = reqBuffer.getStreamId();
+    resBuffer.bufferId = reqBuffer.getBufferId();
+    resBuffer.status = BufferStatus::ERROR;
+    sp<Fence> fence = reqBuffer.getFence();
+    if (fence != nullptr && fence->isValid()) {
+      resBuffer.releaseFence.fds.emplace_back(fence->dup());
+    }
+  }
+
+  auto status = mCameraDeviceCallback->notify(
+      {createRequestErrorNotifyMsg(request.getFrameNumber())});
+  if (!status.isOk()) {
+    ALOGE("%s: notify call failed: %s", __func__,
+          status.getDescription().c_str());
+    return;
+  }
+
+  std::vector<::aidl::android::hardware::camera::device::CaptureResult>
+      captureResults(1);
+  captureResults[0] = std::move(captureResult);
+
+  status = mCameraDeviceCallback->processCaptureResult(captureResults);
+  if (!status.isOk()) {
+    ALOGE("%s: processCaptureResult call failed: %s", __func__,
+          status.getDescription().c_str());
+  }
 }
 
 ndk::ScopedAStatus VirtualCameraRenderThread::renderIntoBlobStreamBuffer(

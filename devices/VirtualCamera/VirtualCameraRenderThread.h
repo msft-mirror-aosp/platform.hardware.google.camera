@@ -23,9 +23,7 @@
 #include <thread>
 
 #include "VirtualCameraSessionContext.h"
-#include "aidl/android/hardware/camera/device/CaptureRequest.h"
 #include "aidl/android/hardware/camera/device/ICameraDeviceCallback.h"
-#include "android/hardware_buffer.h"
 #include "util/EglDisplayContext.h"
 #include "util/EglProgram.h"
 #include "util/EglSurfaceTexture.h"
@@ -98,19 +96,26 @@ class VirtualCameraRenderThread {
   void stop();
 
   // Equeue capture task for processing on render thread.
-  void enqueueTask(std::unique_ptr<ProcessCaptureRequestTask> task);
+  void enqueueTask(std::unique_ptr<ProcessCaptureRequestTask> task)
+      EXCLUDES(mLock);
+
+  // Flush all in-flight requests.
+  void flush() EXCLUDES(mLock);
 
   // Returns input surface corresponding to "virtual camera sensor".
   sp<Surface> getInputSurface();
 
  private:
-  std::unique_ptr<ProcessCaptureRequestTask> dequeueTask();
+  std::unique_ptr<ProcessCaptureRequestTask> dequeueTask() EXCLUDES(mLock);
 
   // Rendering thread entry point.
   void threadLoop();
 
   // Process single capture request task (always called on render thread).
   void processCaptureRequest(const ProcessCaptureRequestTask& captureRequestTask);
+
+  // Flush single capture request task returning the error status immediately.
+  void flushCaptureRequest(const ProcessCaptureRequestTask& captureRequestTask);
 
   // TODO(b/301023410) - Refactor the actual rendering logic off this class for
   // easier testability.

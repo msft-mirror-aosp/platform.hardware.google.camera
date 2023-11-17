@@ -95,8 +95,5 @@ cc_binary {
     // We don't want the service to be started and discovered
     // yet - remove comments on the lines below in order to
     // test locally.
-    // vintf_fragments: [
-    //    "android.hardware.camera.provider-virtual.xml",
-    // ],
     // init_rc: ["virtual_camera.hal.rc"],
 }

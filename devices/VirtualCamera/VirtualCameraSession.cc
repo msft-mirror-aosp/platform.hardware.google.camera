@@ -276,6 +276,8 @@ ndk::ScopedAStatus VirtualCameraSession::constructDefaultRequestSettings(
 
 ndk::ScopedAStatus VirtualCameraSession::flush() {
   ALOGV("%s", __func__);
+  std::lock_guard<std::mutex> lock(mLock);
+  mRenderThread->flush();
   return ndk::ScopedAStatus::ok();
 }
 

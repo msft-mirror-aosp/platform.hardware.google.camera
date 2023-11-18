@@ -16,8 +16,8 @@
 
 package android.companion.virtualcamera;
 
+import android.companion.virtualcamera.Format;
 import android.view.Surface;
-import android.hardware.graphics.common.PixelFormat;
 
 /**
  * AIDL Interface to receive callbacks from virtual camera instance.
@@ -31,12 +31,12 @@ oneway interface IVirtualCameraCallback {
      * terminateStream call is received.
      *
      * @param streamId - id of the video stream.
-     * @param surface - Surface representing virtual camera sensor.
+     * @param surface - Surface representing the virtual camera sensor.
      * @param width - width of the surface.
      * @param height - height of the surface.
      * @param pixelFormat - pixel format of the surface.
      */
-    void onStreamConfigured(int streamId, in Surface surface, int width, int height,in PixelFormat pixelFormat);
+    void onStreamConfigured(int streamId, in Surface surface, int width, int height, in Format pixelFormat);
 
     /**
      * Called when the corresponding stream is no longer in use. Implementation should dispose of

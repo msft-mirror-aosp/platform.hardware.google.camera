@@ -36,6 +36,7 @@ namespace {
 const std::string kCameraName = "virtual_camera";
 
 using ::aidl::android::companion::virtualcamera::BnVirtualCameraCallback;
+using ::aidl::android::companion::virtualcamera::Format;
 using ::aidl::android::hardware::camera::device::BnCameraDeviceCallback;
 using ::aidl::android::hardware::camera::device::BufferRequest;
 using ::aidl::android::hardware::camera::device::BufferRequestStatus;
@@ -79,7 +80,7 @@ class MockCameraDeviceCallback : public BnCameraDeviceCallback {
 class MockVirtualCameraCallback : public BnVirtualCameraCallback {
  public:
   MOCK_METHOD(ndk::ScopedAStatus, onStreamConfigured,
-              (int, const Surface&, int32_t, int32_t, PixelFormat), (override));
+              (int, const Surface&, int32_t, int32_t, Format), (override));
   MOCK_METHOD(ndk::ScopedAStatus, onStreamClosed, (int), (override));
 };
 
@@ -112,8 +113,9 @@ TEST_F(VirtualCameraSessionTest, ConfigureTriggersClientConfigureCallback) {
   StreamConfiguration streamConfiguration;
   streamConfiguration.streams = {createStream(streamId, width, height, format)};
   std::vector<HalStream> halStreams;
-  EXPECT_CALL(*mMockVirtualCameraClientCallback,
-              onStreamConfigured(streamId, _, width, height, format));
+  EXPECT_CALL(
+      *mMockVirtualCameraClientCallback,
+      onStreamConfigured(streamId, _, width, height, Format::YUV_420_888));
 
   ASSERT_TRUE(
       mVirtualCameraSession->configureStreams(streamConfiguration, &halStreams)

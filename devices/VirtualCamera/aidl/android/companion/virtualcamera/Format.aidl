@@ -13,17 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package android.companion.virtualcamera;
 
-import android.companion.virtualcamera.Format;
-
 /**
- * Configuration supported by virtual camera owner.
+ * Pixel format supported by a virtual camera stream.
  *
  * @hide
  */
-parcelable SupportedStreamConfiguration {
-    int width;
-    int height;
-    Format pixelFormat = Format.UNKNOWN;
+@Backing(type="int")
+enum Format {
+    UNKNOWN = 0,
+    YUV_420_888 = 0x23,
 }

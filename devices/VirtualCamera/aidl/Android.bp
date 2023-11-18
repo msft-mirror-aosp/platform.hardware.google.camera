@@ -7,12 +7,12 @@ aidl_interface {
     name: "virtual_camera_service_aidl",
     unstable: true,
     srcs: [
+        "android/companion/virtualcamera/Format.aidl",
         "android/companion/virtualcamera/IVirtualCameraCallback.aidl",
         "android/companion/virtualcamera/IVirtualCameraService.aidl",
         "android/companion/virtualcamera/VirtualCameraConfiguration.aidl",
         "android/companion/virtualcamera/SupportedStreamConfiguration.aidl",
     ],
-    imports: ["android.hardware.graphics.common-V5"],
     local_include_dir: ".",
     include_dirs: [
         "frameworks/native/aidl/gui",

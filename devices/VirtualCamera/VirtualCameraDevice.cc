@@ -81,6 +81,12 @@ CameraMetadata initCameraCharacteristics() {
                        ANDROID_SCALER_AVAILABLE_FORMATS_IMPLEMENTATION_DEFINED,
                    .minFrameDuration = kMinFrameDuration30Fps,
                    .minStallDuration = 0s},
+               MetadataBuilder::StreamConfiguration{
+                   .width = kVgaWidth,
+                   .height = kVgaHeight,
+                   .format = ANDROID_SCALER_AVAILABLE_FORMATS_YCbCr_420_888,
+                   .minFrameDuration = kMinFrameDuration30Fps,
+                   .minStallDuration = 0s},
                {MetadataBuilder::StreamConfiguration{
                    .width = kVgaWidth,
                    .height = kVgaHeight,

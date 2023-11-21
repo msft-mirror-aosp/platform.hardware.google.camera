@@ -27,12 +27,16 @@
 #include "android/binder_interface_utils.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "util/MetadataBuilder.h"
 
 namespace android {
 namespace companion {
 namespace virtualcamera {
 namespace {
 
+constexpr int kWidth = 640;
+constexpr int kHeight = 480;
+constexpr int kStreamId = 0;
 const std::string kCameraName = "virtual_camera";
 
 using ::aidl::android::companion::virtualcamera::BnVirtualCameraCallback;
@@ -40,6 +44,7 @@ using ::aidl::android::companion::virtualcamera::Format;
 using ::aidl::android::hardware::camera::device::BnCameraDeviceCallback;
 using ::aidl::android::hardware::camera::device::BufferRequest;
 using ::aidl::android::hardware::camera::device::BufferRequestStatus;
+using ::aidl::android::hardware::camera::device::CaptureRequest;
 using ::aidl::android::hardware::camera::device::CaptureResult;
 using ::aidl::android::hardware::camera::device::HalStream;
 using ::aidl::android::hardware::camera::device::NotifyMsg;
@@ -51,6 +56,7 @@ using ::aidl::android::hardware::graphics::common::PixelFormat;
 using ::aidl::android::view::Surface;
 using ::testing::_;
 using ::testing::ElementsAre;
+using ::testing::Eq;
 using ::testing::Return;
 using ::testing::SizeIs;
 
@@ -81,6 +87,8 @@ class MockVirtualCameraCallback : public BnVirtualCameraCallback {
  public:
   MOCK_METHOD(ndk::ScopedAStatus, onStreamConfigured,
               (int, const Surface&, int32_t, int32_t, Format), (override));
+  MOCK_METHOD(ndk::ScopedAStatus, onProcessCaptureRequest, (int, int),
+              (override));
   MOCK_METHOD(ndk::ScopedAStatus, onStreamClosed, (int), (override));
 };
 
@@ -97,6 +105,8 @@ class VirtualCameraSessionTest : public ::testing::Test {
 
     ON_CALL(*mMockVirtualCameraClientCallback, onStreamConfigured)
         .WillByDefault(ndk::ScopedAStatus::ok);
+    ON_CALL(*mMockVirtualCameraClientCallback, onProcessCaptureRequest)
+        .WillByDefault(ndk::ScopedAStatus::ok);
   }
 
  protected:
@@ -106,16 +116,14 @@ class VirtualCameraSessionTest : public ::testing::Test {
 };
 
 TEST_F(VirtualCameraSessionTest, ConfigureTriggersClientConfigureCallback) {
-  int streamId = 0;
-  int width = 640;
-  int height = 480;
   PixelFormat format = PixelFormat::YCBCR_420_888;
   StreamConfiguration streamConfiguration;
-  streamConfiguration.streams = {createStream(streamId, width, height, format)};
+  streamConfiguration.streams = {
+      createStream(kStreamId, kWidth, kHeight, format)};
   std::vector<HalStream> halStreams;
   EXPECT_CALL(
       *mMockVirtualCameraClientCallback,
-      onStreamConfigured(streamId, _, width, height, Format::YUV_420_888));
+      onStreamConfigured(kStreamId, _, kWidth, kHeight, Format::YUV_420_888));
 
   ASSERT_TRUE(
       mVirtualCameraSession->configureStreams(streamConfiguration, &halStreams)
@@ -126,24 +134,22 @@ TEST_F(VirtualCameraSessionTest, ConfigureTriggersClientConfigureCallback) {
 }
 
 TEST_F(VirtualCameraSessionTest, SecondConfigureDropsUnreferencedStreams) {
-  int width = 640;
-  int height = 480;
   PixelFormat format = PixelFormat::YCBCR_420_888;
   StreamConfiguration streamConfiguration;
   std::vector<HalStream> halStreams;
 
-  streamConfiguration.streams = {createStream(0, width, height, format),
-                                 createStream(1, width, height, format),
-                                 createStream(2, width, height, format)};
+  streamConfiguration.streams = {createStream(0, kWidth, kHeight, format),
+                                 createStream(1, kWidth, kHeight, format),
+                                 createStream(2, kWidth, kHeight, format)};
   ASSERT_TRUE(
       mVirtualCameraSession->configureStreams(streamConfiguration, &halStreams)
           .isOk());
 
   EXPECT_THAT(mVirtualCameraSession->getStreamIds(), ElementsAre(0, 1, 2));
 
-  streamConfiguration.streams = {createStream(0, width, height, format),
-                                 createStream(2, width, height, format),
-                                 createStream(3, width, height, format)};
+  streamConfiguration.streams = {createStream(0, kWidth, kHeight, format),
+                                 createStream(2, kWidth, kHeight, format),
+                                 createStream(3, kWidth, kHeight, format)};
   ASSERT_TRUE(
       mVirtualCameraSession->configureStreams(streamConfiguration, &halStreams)
           .isOk());
@@ -152,11 +158,35 @@ TEST_F(VirtualCameraSessionTest, SecondConfigureDropsUnreferencedStreams) {
 }
 
 TEST_F(VirtualCameraSessionTest, CloseTriggersClientTerminateCallback) {
-  int streamId = 0;
-  EXPECT_CALL(*mMockVirtualCameraClientCallback, onStreamClosed(streamId))
+  EXPECT_CALL(*mMockVirtualCameraClientCallback, onStreamClosed(kStreamId))
       .WillOnce(Return(ndk::ScopedAStatus::ok()));
 
   ASSERT_TRUE(mVirtualCameraSession->close().isOk());
+}
+
+TEST_F(VirtualCameraSessionTest, onProcessCaptureRequestTriggersClientCallback) {
+  StreamConfiguration streamConfiguration;
+  streamConfiguration.streams = {
+      createStream(kStreamId, kWidth, kHeight, PixelFormat::YCBCR_420_888)};
+  std::vector<CaptureRequest> requests(1);
+  requests[0].frameNumber = 42;
+  requests[0].settings = *(
+      MetadataBuilder().setControlAfMode(ANDROID_CONTROL_AF_MODE_AUTO).build());
+
+  std::vector<HalStream> halStreams;
+  ASSERT_TRUE(
+      mVirtualCameraSession->configureStreams(streamConfiguration, &halStreams)
+          .isOk());
+
+  EXPECT_CALL(*mMockVirtualCameraClientCallback,
+              onProcessCaptureRequest(kStreamId, requests[0].frameNumber))
+      .WillOnce(Return(ndk::ScopedAStatus::ok()));
+  int32_t aidlReturn = 0;
+  ASSERT_TRUE(mVirtualCameraSession
+                  ->processCaptureRequest(requests, /*in_cachesToRemove=*/{},
+                                          &aidlReturn)
+                  .isOk());
+  EXPECT_THAT(aidlReturn, Eq(requests.size()));
 }
 
 }  // namespace

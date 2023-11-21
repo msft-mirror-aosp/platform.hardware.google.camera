@@ -406,9 +406,28 @@ ndk::ScopedAStatus VirtualCameraSession::processCaptureRequest(
 
   {
     std::lock_guard<std::mutex> lock(mLock);
+    if (mRenderThread == nullptr) {
+      ALOGE(
+          "%s: processCaptureRequest (frameNumber %d)called before configure "
+          "(render thread not initialized)",
+          __func__, request.frameNumber);
+      return cameraStatus(Status::INTERNAL_ERROR);
+    }
     mRenderThread->enqueueTask(std::make_unique<ProcessCaptureRequestTask>(
         request.frameNumber, taskBuffers));
   }
+
+  if (mVirtualCameraClientCallback != nullptr) {
+    auto status = mVirtualCameraClientCallback->onProcessCaptureRequest(
+        /*streamId=*/0, request.frameNumber);
+    if (!status.isOk()) {
+      ALOGE(
+          "Failed to invoke onProcessCaptureRequest client callback for frame "
+          "%d",
+          request.frameNumber);
+    }
+  }
+
   return ndk::ScopedAStatus::ok();
 }
 

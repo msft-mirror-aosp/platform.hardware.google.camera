@@ -103,6 +103,13 @@ MetadataBuilder& MetadataBuilder::setControlAfAvailableModes(
   return *this;
 }
 
+MetadataBuilder& MetadataBuilder::setControlAfMode(
+    const camera_metadata_enum_android_control_af_mode_t mode) {
+  mEntryMap[ANDROID_CONTROL_AF_MODE] =
+      std::vector<uint8_t>({static_cast<uint8_t>(mode)});
+  return *this;
+}
+
 MetadataBuilder& MetadataBuilder::setControlAeAvailableFpsRange(
     const int32_t minFps, const int32_t maxFps) {
   mEntryMap[ANDROID_CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES] =

@@ -110,6 +110,10 @@ class MetadataBuilder {
       const std::vector<camera_metadata_enum_android_control_af_mode_t>&
           availableModes);
 
+  // See ANDROID_CONTROL_AF_MODE in CameraMetadataTag.aidl.
+  MetadataBuilder& setControlAfMode(
+      const camera_metadata_enum_android_control_af_mode_t mode);
+
   // See ANDROID_CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES in CameraMetadataTag.aidl.
   MetadataBuilder& setControlAeAvailableFpsRange(int32_t min, int32_t max);
 

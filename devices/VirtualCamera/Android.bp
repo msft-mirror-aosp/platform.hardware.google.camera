@@ -91,5 +91,9 @@ cc_binary {
         "libvirtualcamera",
         "libvirtualcamera_utils",
     ],
-    init_rc: ["virtual_camera.hal.rc"],
+    // Remove before flight.
+    // We don't want the service to be started and discovered
+    // yet - remove comments on the lines below in order to
+    // test locally.
+    // init_rc: ["virtual_camera.hal.rc"],
 }

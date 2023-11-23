@@ -39,6 +39,16 @@ oneway interface IVirtualCameraCallback {
     void onStreamConfigured(int streamId, in Surface surface, int width, int height, in Format pixelFormat);
 
     /**
+     * Called when framework requests capture. This can be used by the client as a hint
+     * to render another frame into input surface.
+     *
+     * @param streamId - id of the stream corresponding to the Surface for which next
+     *     frame is requested.
+     * @param frameId - id of the requested frame.
+     */
+    void onProcessCaptureRequest(int streamId, int frameId);
+
+    /**
      * Called when the corresponding stream is no longer in use. Implementation should dispose of
      * corresponding Surface upon receiving this call and no longer interact with it.
      *

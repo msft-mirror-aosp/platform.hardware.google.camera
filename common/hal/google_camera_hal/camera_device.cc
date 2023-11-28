@@ -240,6 +240,13 @@ status_t CameraDevice::GetTorchStrengthLevel(int32_t& torch_strength) const {
   return res;
 }
 
+status_t CameraDevice::ConstructDefaultRequestSettings(
+    RequestTemplate type, std::unique_ptr<HalCameraMetadata>* request_settings) {
+  ATRACE_CALL();
+  return camera_device_hwl_->ConstructDefaultRequestSettings(type,
+                                                             request_settings);
+}
+
 status_t CameraDevice::DumpState(int fd) {
   ATRACE_CALL();
   return camera_device_hwl_->DumpState(fd);
@@ -278,8 +285,19 @@ status_t CameraDevice::CreateCameraDeviceSession(
 }
 
 bool CameraDevice::IsStreamCombinationSupported(
-    const StreamConfiguration& stream_config) {
+    const StreamConfiguration& stream_config, bool check_settings) {
   if (!utils::IsStreamUseCaseSupported(stream_config, stream_use_cases_)) {
+    return false;
+  }
+  if (check_settings && stream_config.session_params == nullptr) {
+    ALOGE("%s: session_params must not be null if check_settings is true",
+          __FUNCTION__);
+    return false;
+  }
+  if (!check_settings && stream_config.session_params != nullptr &&
+      stream_config.session_params->GetEntryCount() > 0) {
+    ALOGW("%s: session parameters is not empty but check_settings is false",
+          __FUNCTION__);
     return false;
   }
 

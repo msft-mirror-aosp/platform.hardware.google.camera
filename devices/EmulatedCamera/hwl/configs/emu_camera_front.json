@@ -1502,7 +1502,7 @@
    "10"
   ],
   "android.info.supportedBufferManagementVersion" : [
-    "HIDL_DEVICE_3_5"
+    "SESSION_CONFIGURABLE"
   ],
   "android.sync.maxLatency": [
    "PER_FRAME_CONTROL"
@@ -2985,7 +2985,7 @@
    "10"
   ],
   "android.info.supportedBufferManagementVersion" : [
-    "HIDL_DEVICE_3_5"
+    "SESSION_CONFIGURABLE"
   ],
   "android.sync.maxLatency": [
    "PER_FRAME_CONTROL"
@@ -4513,7 +4513,7 @@
    "10"
   ],
   "android.info.supportedBufferManagementVersion" : [
-    "HIDL_DEVICE_3_5"
+    "SESSION_CONFIGURABLE"
   ],
   "android.sync.maxLatency": [
    "PER_FRAME_CONTROL"

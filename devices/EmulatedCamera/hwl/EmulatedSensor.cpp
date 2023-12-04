@@ -1251,6 +1251,15 @@ void EmulatedSensor::ReturnResults(
     }
     result->result_metadata->Set(ANDROID_SENSOR_TIMESTAMP, &next_capture_time_,
                                  1);
+
+    camera_metadata_ro_entry_t lensEntry;
+    auto lensRet = result->result_metadata->Get(
+        ANDROID_STATISTICS_LENS_INTRINSIC_SAMPLES, &lensEntry);
+    if ((lensRet == OK) && (lensEntry.count > 0)) {
+      result->result_metadata->Set(ANDROID_STATISTICS_LENS_INTRINSIC_TIMESTAMPS,
+                                   &next_capture_time_, 1);
+    }
+
     uint8_t raw_binned_factor_used = false;
     if (sensor_binning_factor_info_.find(logical_camera_id_) !=
         sensor_binning_factor_info_.end()) {

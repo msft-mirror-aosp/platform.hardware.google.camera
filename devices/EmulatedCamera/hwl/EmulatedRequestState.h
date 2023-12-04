@@ -316,6 +316,8 @@ class EmulatedRequestState {
   bool report_pose_translation_ = false;
   bool report_distortion_ = false;
   bool report_intrinsic_calibration_ = false;
+  bool report_active_sensor_crop_ = false;
+  bool report_lens_intrinsics_samples_ = false;
   int32_t shading_map_size_[2] = {0};
 
   unsigned int rand_seed_ = 1;

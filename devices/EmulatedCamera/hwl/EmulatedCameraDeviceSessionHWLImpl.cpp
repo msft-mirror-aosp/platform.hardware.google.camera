@@ -169,6 +169,14 @@ status_t EmulatedCameraDeviceSessionHwlImpl::Initialize(
     return ret;
   }
 
+  ret = SupportsSessionHalBufManager(static_metadata_.get(),
+                                     &supports_session_hal_buf_manager_);
+  if (ret != OK) {
+    ALOGE("%s: Unable to get sensor hal buffer manager support %s (%d)",
+          __FUNCTION__, strerror(-ret), ret);
+    return ret;
+  }
+
   logical_chars_.emplace(camera_id_, sensor_chars_);
   for (const auto& it : *physical_device_map_) {
     SensorCharacteristics physical_chars;
@@ -370,6 +378,27 @@ status_t EmulatedCameraDeviceSessionHwlImpl::BuildPipelines() {
     pipelines_built_ = true;
   }
 
+  return OK;
+}
+
+status_t EmulatedCameraDeviceSessionHwlImpl::ShouldUseHalBufferManager(
+    bool* result) {
+  if (result == nullptr) {
+    ALOGE("%s result is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+  *result = false;
+  if (!pipelines_built_) {
+    ALOGE("%s: Pipelines haven't been built yet", __FUNCTION__);
+    return INVALID_OPERATION;
+  }
+  if (!supports_session_hal_buf_manager_) {
+    return OK;
+  }
+  // Heuristic which doesn't necessarily correspond to real scenarios
+  if (pipelines_.size() >= 1 && pipelines_[0].streams.size() >= 2) {
+    *result = true;
+  }
   return OK;
 }
 

@@ -73,6 +73,21 @@ class CameraDeviceSessionHwl {
   // NO_INIT.
   virtual status_t BuildPipelines() = 0;
 
+  // If the HAL buffer manager should be used for this session configuration.
+  // This should only be called after the pipelines have been configured.
+  // Otherwise this method will return NO_INIT. If the operation is not
+  // supported INVALID_OPERATION is returned.
+  // This is an hwl level method since the hwl layer can make the best decision
+  // about whether to use hal buffer manager for the session  configured - since
+  // it has device specific context.
+  virtual status_t ShouldUseHalBufferManager(bool* result) {
+    if (result == nullptr) {
+      return BAD_VALUE;
+    }
+    *result = false;
+    return INVALID_OPERATION;
+  }
+
   // Warm up pipeline to ready for taking request, this can be a NoOp for
   // implementation which doesn't support to put pipeline in standby mode
   // This call is optional for capture session before sending request. only
@@ -189,6 +204,17 @@ class CameraDeviceSessionHwl {
   // caching of file descriptors done by the HWL.
   virtual void RemoveCachedBuffers(const native_handle_t* /*handle*/) {
   }
+
+  void setConfigureStreamsV2(bool set) {
+    configure_streams_v2_ = set;
+  }
+
+  bool configure_streams_v2() const {
+    return configure_streams_v2_;
+  }
+
+ private:
+  bool configure_streams_v2_ = false;
 };
 
 }  // namespace google_camera_hal

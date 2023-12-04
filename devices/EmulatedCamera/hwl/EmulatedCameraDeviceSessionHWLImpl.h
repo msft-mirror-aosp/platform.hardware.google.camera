@@ -103,6 +103,8 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
 
   status_t BuildPipelines() override;
 
+  status_t ShouldUseHalBufferManager(bool* result) override;
+
   status_t PreparePipeline(uint32_t /*pipeline_id*/,
                            uint32_t /*frame_number*/) override {
     return OK;
@@ -202,6 +204,7 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
   bool error_state_ = false;
   bool pipelines_built_ = false;
   bool has_raw_stream_ = false;
+  bool supports_session_hal_buf_manager_ = false;
   std::unique_ptr<HalCameraMetadata> static_metadata_;
   std::vector<EmulatedPipeline> pipelines_;
   std::shared_ptr<EmulatedRequestProcessor> request_processor_;

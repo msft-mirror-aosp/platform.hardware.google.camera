@@ -45,6 +45,29 @@ static int64_t GetLastStreamUseCase(const HalCameraMetadata* metadata) {
   }
   return video_call_use_case;
 }
+status_t SupportsSessionHalBufManager(const HalCameraMetadata* metadata,
+                                      bool* result /*out*/) {
+  if ((metadata == nullptr) || (result == nullptr)) {
+    return BAD_VALUE;
+  }
+
+  status_t ret = OK;
+  camera_metadata_ro_entry_t entry;
+  *result = false;
+  ret = metadata->Get(ANDROID_INFO_SUPPORTED_BUFFER_MANAGEMENT_VERSION, &entry);
+  if (ret != OK) {
+    return OK;
+  }
+  if ((ret == OK) && (entry.count != 1)) {
+    ALOGE("%s: Invalid ANDROID_INFO_SUPPORTED_BUFFER_MANAGEMENT_VERSION!",
+          __FUNCTION__);
+    return BAD_VALUE;
+  }
+  *result =
+      (entry.data.u8[0] ==
+       ANDROID_INFO_SUPPORTED_BUFFER_MANAGEMENT_VERSION_SESSION_CONFIGURABLE);
+  return OK;
+}
 
 status_t GetSensorCharacteristics(const HalCameraMetadata* metadata,
                                   SensorCharacteristics* sensor_chars /*out*/) {

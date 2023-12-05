@@ -48,6 +48,7 @@ using ::aidl::android::hardware::camera::device::CameraMetadata;
 using ::aidl::android::hardware::camera::device::CameraOfflineSessionInfo;
 using ::aidl::android::hardware::camera::device::CaptureRequest;
 using ::aidl::android::hardware::camera::device::CaptureResult;
+using ::aidl::android::hardware::camera::device::ConfigureStreamsRet;
 using ::aidl::android::hardware::camera::device::HalStream;
 using ::aidl::android::hardware::camera::device::ICameraDeviceCallback;
 using ::aidl::android::hardware::camera::device::ICameraDeviceSession;
@@ -560,15 +561,25 @@ ndk::ScopedAStatus AidlCameraDeviceSession::constructDefaultRequestSettings(
   return ndk::ScopedAStatus::ok();
 }
 
-ndk::ScopedAStatus AidlCameraDeviceSession::configureStreams(
+ndk::ScopedAStatus AidlCameraDeviceSession::configureStreamsV2(
     const StreamConfiguration& requestedConfiguration,
-    std::vector<HalStream>* aidl_return) {
-  ATRACE_NAME("AidlCameraDeviceSession::configureStreams");
+    ConfigureStreamsRet* aidl_return) {
   if (aidl_return == nullptr) {
     return ndk::ScopedAStatus::fromServiceSpecificError(
         static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
   }
-  aidl_return->clear();
+  return configureStreamsImpl(requestedConfiguration, /*v2=*/true, aidl_return);
+}
+
+ndk::ScopedAStatus AidlCameraDeviceSession::configureStreamsImpl(
+    const StreamConfiguration& requestedConfiguration, bool v2,
+    ConfigureStreamsRet* aidl_return) {
+  ATRACE_NAME("AidlCameraDeviceSession::configureStreamsV2");
+  if (aidl_return == nullptr) {
+    return ndk::ScopedAStatus::fromServiceSpecificError(
+        static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
+  }
+  aidl_return->halStreams.clear();
   if (device_session_ == nullptr) {
     return ndk::ScopedAStatus::fromServiceSpecificError(
         static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
@@ -596,8 +607,8 @@ ndk::ScopedAStatus AidlCameraDeviceSession::configureStreams(
         static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
   }
 
-  std::vector<google_camera_hal::HalStream> hal_configured_streams;
-  res = device_session_->ConfigureStreams(hal_stream_config,
+  google_camera_hal::ConfigureStreamsReturn hal_configured_streams;
+  res = device_session_->ConfigureStreams(hal_stream_config, v2,
                                           &hal_configured_streams);
   if (res != OK) {
     ALOGE("%s: Configuring streams failed: %s(%d)", __FUNCTION__,
@@ -610,6 +621,24 @@ ndk::ScopedAStatus AidlCameraDeviceSession::configureStreams(
   if (res != OK) {
     return aidl_utils::ConvertToAidlReturn(res);
   }
+  return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus AidlCameraDeviceSession::configureStreams(
+    const StreamConfiguration& requestedConfiguration,
+    std::vector<HalStream>* aidl_return) {
+  ATRACE_NAME("AidlCameraDeviceSession::configureStreams");
+  if (aidl_return == nullptr) {
+    return ndk::ScopedAStatus::fromServiceSpecificError(
+        static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
+  }
+  ConfigureStreamsRet aidl_config;
+  auto err = configureStreamsImpl(requestedConfiguration,
+                                  /*v2=*/false, &aidl_config);
+  if (!err.isOk()) {
+    return err;
+  }
+  *aidl_return = std::move(aidl_config.halStreams);
   return ndk::ScopedAStatus::ok();
 }
 

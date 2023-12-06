@@ -99,9 +99,11 @@ class CameraDeviceSession {
 
   // Configure streams.
   // stream_config is the requested stream configuration.
+  // v2 is whether the ConfigureStreams call is made by the configureStreamsV2
+  //    AIDL call or not.
   // hal_configured_streams is filled by this method with configured stream.
-  status_t ConfigureStreams(const StreamConfiguration& stream_config,
-                            std::vector<HalStream>* hal_configured_streams);
+  status_t ConfigureStreams(const StreamConfiguration& stream_config, bool v2,
+                            ConfigureStreamsReturn* configured_streams);
 
   // Process a capture request.
   // num_processed_requests is filled by this method with the number of
@@ -365,8 +367,11 @@ class CameraDeviceSession {
   // hwl allocator
   CameraBufferAllocatorHwl* camera_allocator_hwl_ = nullptr;
 
-  // If buffer management API support.
-  bool buffer_management_supported_ = false;
+  // If buffer management API support is used for the session configured
+  bool buffer_management_used_ = false;
+
+  // If session specific hal buffer manager is supported by the HAL
+  bool session_buffer_management_supported_ = false;
 
   // Pending requests tracker used when buffer management API is enabled.
   // Protected by session_lock_.

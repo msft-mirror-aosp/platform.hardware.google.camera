@@ -162,6 +162,26 @@ ScopedAStatus AidlCameraDevice::getTorchStrengthLevel(int32_t* strength_level) {
   return ScopedAStatus::ok();
 }
 
+ScopedAStatus AidlCameraDevice::constructDefaultRequestSettings(
+    RequestTemplate /*requestTemplate*/, CameraMetadata* requestSettings) {
+  if (requestSettings == nullptr) {
+    return ScopedAStatus::fromServiceSpecificError(
+        static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
+  }
+  return ScopedAStatus::fromServiceSpecificError(
+      static_cast<int32_t>(Status::OPERATION_NOT_SUPPORTED));
+}
+
+ScopedAStatus AidlCameraDevice::isStreamCombinationWithSettingsSupported(
+    const StreamConfiguration& /*streamConfiguration*/, bool* supported) {
+  if (supported == nullptr) {
+    return ScopedAStatus::fromServiceSpecificError(
+        static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
+  }
+  return ScopedAStatus::fromServiceSpecificError(
+      static_cast<int32_t>(Status::OPERATION_NOT_SUPPORTED));
+}
+
 ScopedAStatus AidlCameraDevice::getPhysicalCameraCharacteristics(
     const std::string& physicalCameraId, CameraMetadata* characteristics_ret) {
   if (characteristics_ret == nullptr) {

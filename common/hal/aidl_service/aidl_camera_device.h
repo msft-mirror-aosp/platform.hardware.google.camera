@@ -93,6 +93,10 @@ class AidlCameraDevice : public BnCameraDevice {
   ScopedAStatus isStreamCombinationWithSettingsSupported(
       const StreamConfiguration& streamConfiguration, bool* supported) override;
 
+  ScopedAStatus getSessionCharacteristics(
+      const StreamConfiguration& session_config,
+      CameraMetadata* characteristics) override;
+
   // End of override functions in ICameraDevice
   AidlCameraDevice() = default;
 

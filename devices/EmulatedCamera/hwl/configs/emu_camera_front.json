@@ -642,7 +642,8 @@
    "1703938",
    "917530",
    "851985",
-   "917536"
+   "917536",
+   "1703939"
   ],
   "android.request.maxNumOutputStreams": [
    "1",
@@ -1502,7 +1503,7 @@
    "10"
   ],
   "android.info.supportedBufferManagementVersion" : [
-    "HIDL_DEVICE_3_5"
+    "SESSION_CONFIGURABLE"
   ],
   "android.sync.maxLatency": [
    "PER_FRAME_CONTROL"
@@ -2985,7 +2986,7 @@
    "10"
   ],
   "android.info.supportedBufferManagementVersion" : [
-    "HIDL_DEVICE_3_5"
+    "SESSION_CONFIGURABLE"
   ],
   "android.sync.maxLatency": [
    "PER_FRAME_CONTROL"
@@ -4513,7 +4514,7 @@
    "10"
   ],
   "android.info.supportedBufferManagementVersion" : [
-    "HIDL_DEVICE_3_5"
+    "SESSION_CONFIGURABLE"
   ],
   "android.sync.maxLatency": [
    "PER_FRAME_CONTROL"

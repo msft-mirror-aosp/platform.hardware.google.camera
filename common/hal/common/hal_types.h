@@ -173,6 +173,14 @@ struct HalStream {
   uint32_t physical_camera_id = 0;
 };
 
+// Corresponds to the definition of ConfigureStreamsRet
+// parcelable in ConfigureStreamsRet.aidl. That is used as the
+// return type for ICameraDeviceSession.configureStreamsV2
+struct ConfigureStreamsReturn {
+  std::vector<HalStream> hal_streams;
+  bool use_hal_buf_manager = false;
+};
+
 // See the definition of
 // ::android::hardware::camera::device::V3_2::BufferCache
 struct BufferCache {

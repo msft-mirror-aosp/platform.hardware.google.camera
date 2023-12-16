@@ -430,9 +430,9 @@ bool IsSessionParameterCompatible(const HalCameraMetadata* old_session,
       if (old_max_fps == new_max_fps || ignore_fps_range_diff) {
         ALOGI(
             "%s: Ignore fps (%d, %d) to (%d, %d). "
-            "video_60_to_30fps_thermal_throttle: %u",
+            "video_60_to_30fps_thermal_throttle: %u. video_fps_throttle: %u.",
             __FUNCTION__, old_min_fps, old_max_fps, new_min_fps, new_max_fps,
-            video_60_to_30fps_thermal_throttle);
+            video_60_to_30fps_thermal_throttle, video_fps_throttle);
         continue;
       }
 

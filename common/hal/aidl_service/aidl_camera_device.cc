@@ -162,6 +162,43 @@ ScopedAStatus AidlCameraDevice::getTorchStrengthLevel(int32_t* strength_level) {
   return ScopedAStatus::ok();
 }
 
+ScopedAStatus AidlCameraDevice::constructDefaultRequestSettings(
+    RequestTemplate /*requestTemplate*/, CameraMetadata* requestSettings) {
+  if (requestSettings == nullptr) {
+    return ScopedAStatus::fromServiceSpecificError(
+        static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
+  }
+  return ScopedAStatus::fromServiceSpecificError(
+      static_cast<int32_t>(Status::OPERATION_NOT_SUPPORTED));
+}
+
+ScopedAStatus AidlCameraDevice::isStreamCombinationWithSettingsSupported(
+    const StreamConfiguration& /*streamConfiguration*/, bool* supported) {
+  if (supported == nullptr) {
+    return ScopedAStatus::fromServiceSpecificError(
+        static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
+  }
+  return ScopedAStatus::fromServiceSpecificError(
+      static_cast<int32_t>(Status::OPERATION_NOT_SUPPORTED));
+}
+
+ScopedAStatus AidlCameraDevice::getSessionCharacteristics(
+    const StreamConfiguration& session_config,
+    CameraMetadata* characteristics_ret) {
+  // Temporary check to make sure session configuration is valid.
+  // As a mock implementation, we are just returning the camera characteristics
+  // for now.
+  google_camera_hal::StreamConfiguration stream_config;
+  status_t res =
+      aidl_utils::ConvertToHalStreamConfig(session_config, &stream_config);
+  if (res != OK) {
+    ALOGE("%s: ConvertToHalStreamConfig fail", __FUNCTION__);
+    return ScopedAStatus::fromServiceSpecificError(
+        static_cast<int32_t>(Status::INTERNAL_ERROR));
+  }
+  return getCameraCharacteristics(characteristics_ret);
+}
+
 ScopedAStatus AidlCameraDevice::getPhysicalCameraCharacteristics(
     const std::string& physicalCameraId, CameraMetadata* characteristics_ret) {
   if (characteristics_ret == nullptr) {
@@ -255,7 +292,7 @@ ScopedAStatus AidlCameraDevice::isStreamCombinationSupported(
   google_camera_hal::StreamConfiguration stream_config;
   status_t res = aidl_utils::ConvertToHalStreamConfig(streams, &stream_config);
   if (res != OK) {
-    ALOGE("%s: ConverToHalStreamConfig fail", __FUNCTION__);
+    ALOGE("%s: ConvertToHalStreamConfig fail", __FUNCTION__);
     return ScopedAStatus::fromServiceSpecificError(
         static_cast<int32_t>(Status::INTERNAL_ERROR));
   }

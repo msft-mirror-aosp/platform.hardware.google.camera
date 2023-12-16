@@ -87,7 +87,7 @@ std::unique_ptr<DepthProcessBlock> DepthProcessBlock::Create(
   // rt_request_processor and result_request_processor.
   block->rgb_ir_auto_cal_enabled_ =
       property_get_bool("vendor.camera.frontdepth.enableautocal", true);
-
+  block->device_session_hwl_ = device_session_hwl;
   return block;
 }
 
@@ -106,9 +106,12 @@ status_t DepthProcessBlock::InitializeBufferManagementStatus(
   res = characteristics->Get(ANDROID_INFO_SUPPORTED_BUFFER_MANAGEMENT_VERSION,
                              &entry);
   if (res == OK && entry.count > 0) {
-    buffer_management_supported_ =
-        (entry.data.u8[0] >=
+    buffer_management_used_ =
+        (entry.data.u8[0] ==
          ANDROID_INFO_SUPPORTED_BUFFER_MANAGEMENT_VERSION_HIDL_DEVICE_3_5);
+    session_buffer_management_supported_ =
+        (entry.data.u8[0] ==
+         ANDROID_INFO_SUPPORTED_BUFFER_MANAGEMENT_VERSION_SESSION_CONFIGURABLE);
   }
 
   return OK;
@@ -250,7 +253,17 @@ status_t DepthProcessBlock::ConfigureStreams(
       depth_generator_->SetResultCallback(nullptr);
     }
   }
-
+  if (session_buffer_management_supported_ &&
+      device_session_hwl_->configure_streams_v2()) {
+    bool use_buf_manager = false;
+    auto ret = device_session_hwl_->ShouldUseHalBufferManager(&use_buf_manager);
+    if (ret != OK) {
+      ALOGE("%s: shouldUseHalBufManager() failed", __FUNCTION__);
+      return ret;
+    } else {
+      buffer_management_used_ = use_buf_manager;
+    }
+  }
   is_configured_ = true;
   return OK;
 }
@@ -549,7 +562,7 @@ status_t DepthProcessBlock::UnmapBuffersForDepthGenerator(
 
 status_t DepthProcessBlock::RequestDepthStreamBuffer(
     StreamBuffer* incomplete_buffer, uint32_t frame_number) {
-  if (!buffer_management_supported_) {
+  if (!buffer_management_used_) {
     return OK;
   }
 
@@ -693,7 +706,7 @@ status_t DepthProcessBlock::PrepareDepthRequestInfo(
     return BAD_VALUE;
   }
 
-  if (buffer_management_supported_) {
+  if (buffer_management_used_) {
     res = RequestDepthStreamBuffer(
         &(const_cast<CaptureRequest&>(request).output_buffers[0]),
         request.frame_number);

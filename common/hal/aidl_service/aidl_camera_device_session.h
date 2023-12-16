@@ -114,6 +114,9 @@ class AidlCameraDeviceSession
     return ndk::ScopedAStatus::ok();
   };
 
+  ndk::ScopedAStatus configureStreamsV2(
+      const aidl::android::hardware::camera::device::StreamConfiguration&,
+      aidl::android::hardware::camera::device::ConfigureStreamsRet*) override;
   AidlCameraDeviceSession() = default;
 
  protected:
@@ -156,6 +159,15 @@ class AidlCameraDeviceSession
   void ProcessBatchCaptureResult(
       std::vector<std::unique_ptr<google_camera_hal::CaptureResult>> hal_results);
 
+  // TODO b/311263114: Remove this method once the feature flag is enabled.
+  // This is needed since the framework has the feature support flagged. The HAL
+  // should not switch HAL buffer on / off is the framework doesn't support them
+  // (flag is off). Since aconfig flags are not shared between the framework and
+  // the HAL - the HAL can know about framework support through knowing whether
+  // configureStreamsV2 was called or not.
+  ndk::ScopedAStatus configureStreamsImpl(
+      const aidl::android::hardware::camera::device::StreamConfiguration&,
+      bool v2, aidl::android::hardware::camera::device::ConfigureStreamsRet*);
   // Invoked when receiving a message from HAL.
   void NotifyHalMessage(const google_camera_hal::NotifyMessage& hal_message);
 

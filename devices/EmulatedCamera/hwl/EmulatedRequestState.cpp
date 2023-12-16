@@ -1064,6 +1064,11 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
                                  intrinsic_calibration_,
                                  ARRAY_SIZE(intrinsic_calibration_));
   }
+  if (report_lens_intrinsics_samples_) {
+    result->result_metadata->Set(ANDROID_STATISTICS_LENS_INTRINSIC_SAMPLES,
+                                 intrinsic_calibration_,
+                                 ARRAY_SIZE(intrinsic_calibration_));
+  }
   if (report_distortion_) {
     result->result_metadata->Set(ANDROID_LENS_DISTORTION, distortion_,
                                  ARRAY_SIZE(distortion_));
@@ -1084,6 +1089,11 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
     }
     result->result_metadata->Set(ANDROID_SCALER_CROP_REGION, chosen_crop_region,
                                  ARRAY_SIZE(scaler_crop_region_default_));
+    if (report_active_sensor_crop_) {
+      result->result_metadata->Set(
+          ANDROID_LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_SENSOR_CROP_REGION,
+          chosen_crop_region, ARRAY_SIZE(scaler_crop_region_default_));
+    }
   }
   if (report_extended_scene_mode_) {
     result->result_metadata->Set(ANDROID_CONTROL_EXTENDED_SCENE_MODE,
@@ -1340,6 +1350,11 @@ status_t EmulatedRequestState::InitializeStatisticsDefaults() {
     return BAD_VALUE;
   }
 
+  report_lens_intrinsics_samples_ =
+      (available_results_.find(ANDROID_STATISTICS_LENS_INTRINSIC_SAMPLES) !=
+       available_results_.end()) &&
+      (available_results_.find(ANDROID_STATISTICS_LENS_INTRINSIC_TIMESTAMPS) !=
+       available_results_.end());
   report_scene_flicker_ =
       available_results_.find(ANDROID_STATISTICS_SCENE_FLICKER) !=
       available_results_.end();
@@ -2431,6 +2446,12 @@ status_t EmulatedRequestState::InitializeScalerDefaults() {
       ALOGE("%s: Scaler crop must reported on backward compatible devices!",
             __FUNCTION__);
       return BAD_VALUE;
+    }
+
+    if (available_requests_.find(
+            ANDROID_LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_SENSOR_CROP_REGION) !=
+        available_results_.end()) {
+      report_active_sensor_crop_ = true;
     }
     ret = static_metadata_->Get(ANDROID_SCALER_AVAILABLE_ROTATE_AND_CROP_MODES,
                                 &entry);

@@ -324,7 +324,8 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
       }
       sensor_buffer->plane.img_y_crcb.bytesPerPixel = isP010 ? 2 : 1;
     } else {
-      ALOGE("%s: Failed to lock output buffer!", __FUNCTION__);
+      ALOGE("%s: Failed to lock output buffer for stream id %d !", __FUNCTION__,
+            stream.id);
       return BAD_VALUE;
     }
   } else {

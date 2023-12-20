@@ -544,10 +544,10 @@ void EmulatedRequestProcessor::RequestProcessorLoop() {
 }
 
 status_t EmulatedRequestProcessor::Initialize(
-    std::unique_ptr<HalCameraMetadata> static_meta,
+    std::unique_ptr<EmulatedCameraDeviceInfo> device_info,
     PhysicalDeviceMapPtr physical_devices) {
   std::lock_guard<std::mutex> lock(process_mutex_);
-  return request_state_->Initialize(std::move(static_meta),
+  return request_state_->Initialize(std::move(device_info),
                                     std::move(physical_devices));
 }
 

@@ -60,7 +60,7 @@ class EmulatedLogicalRequestState {
   EmulatedLogicalRequestState(uint32_t camera_id);
   virtual ~EmulatedLogicalRequestState();
 
-  status_t Initialize(std::unique_ptr<EmulatedCameraDeviceInfo> device_info,
+  status_t Initialize(std::unique_ptr<HalCameraMetadata> static_meta,
                       PhysicalDeviceMapPtr physical_device_map);
 
   status_t GetDefaultRequest(

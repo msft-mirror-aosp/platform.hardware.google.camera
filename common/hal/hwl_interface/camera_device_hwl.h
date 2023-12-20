@@ -69,11 +69,6 @@ class CameraDeviceHwl {
     return UNKNOWN_TRANSACTION;
   }
 
-  // Construct default request settings
-  virtual status_t ConstructDefaultRequestSettings(
-      RequestTemplate type,
-      std::unique_ptr<HalCameraMetadata>* request_settings) = 0;
-
   // Dump the camera device states in fd, using dprintf() or write().
   virtual status_t DumpState(int fd) = 0;
 

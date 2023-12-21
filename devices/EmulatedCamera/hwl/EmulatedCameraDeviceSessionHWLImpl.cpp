@@ -76,11 +76,11 @@ bool EmulatedCameraZoomRatioMapperHwlImpl::GetActiveArrayDimensionToBeUsed(
 
 std::unique_ptr<EmulatedCameraDeviceSessionHwlImpl>
 EmulatedCameraDeviceSessionHwlImpl::Create(
-    uint32_t camera_id, std::unique_ptr<EmulatedCameraDeviceInfo> device_info,
+    uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta,
     PhysicalDeviceMapPtr physical_devices,
     std::shared_ptr<EmulatedTorchState> torch_state) {
   ATRACE_CALL();
-  if (device_info.get() == nullptr) {
+  if (static_meta.get() == nullptr) {
     return nullptr;
   }
 
@@ -93,7 +93,7 @@ EmulatedCameraDeviceSessionHwlImpl::Create(
     return nullptr;
   }
 
-  status_t res = session->Initialize(camera_id, std::move(device_info));
+  status_t res = session->Initialize(camera_id, std::move(static_meta));
   if (res != OK) {
     ALOGE("%s: Initializing EmulatedCameraDeviceSessionHwlImpl failed: %s(%d)",
           __FUNCTION__, strerror(-res), res);
@@ -140,17 +140,15 @@ static std::pair<Dimension, Dimension> GetArrayDimensions(
 }
 
 status_t EmulatedCameraDeviceSessionHwlImpl::Initialize(
-    uint32_t camera_id, std::unique_ptr<EmulatedCameraDeviceInfo> device_info) {
+    uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta) {
   camera_id_ = camera_id;
-  device_info_ = std::move(device_info);
-  stream_configuration_map_ = std::make_unique<StreamConfigurationMap>(
-      *(device_info_->static_metadata_));
+  static_metadata_ = std::move(static_meta);
+  stream_configuration_map_ =
+      std::make_unique<StreamConfigurationMap>(*static_metadata_);
   stream_configuration_map_max_resolution_ =
-      std::make_unique<StreamConfigurationMap>(
-          *(device_info_->static_metadata_), true);
+      std::make_unique<StreamConfigurationMap>(*static_metadata_, true);
   camera_metadata_ro_entry_t entry;
-  auto ret = device_info_->static_metadata_->Get(
-      ANDROID_REQUEST_PIPELINE_MAX_DEPTH, &entry);
+  auto ret = static_metadata_->Get(ANDROID_REQUEST_PIPELINE_MAX_DEPTH, &entry);
   if (ret != OK) {
     ALOGE("%s: Unable to extract ANDROID_REQUEST_PIPELINE_MAX_DEPTH, %s (%d)",
           __FUNCTION__, strerror(-ret), ret);
@@ -162,17 +160,16 @@ status_t EmulatedCameraDeviceSessionHwlImpl::Initialize(
   std::unordered_map<uint32_t, std::pair<Dimension, Dimension>>
       camera_ids_to_dimensions;
   camera_ids_to_dimensions[camera_id] =
-      GetArrayDimensions(camera_id, device_info_->static_metadata_.get());
+      GetArrayDimensions(camera_id, static_metadata_.get());
 
-  ret = GetSensorCharacteristics(device_info_->static_metadata_.get(),
-                                 &sensor_chars_);
+  ret = GetSensorCharacteristics(static_metadata_.get(), &sensor_chars_);
   if (ret != OK) {
     ALOGE("%s: Unable to extract sensor characteristics %s (%d)", __FUNCTION__,
           strerror(-ret), ret);
     return ret;
   }
 
-  ret = SupportsSessionHalBufManager(device_info_->static_metadata_.get(),
+  ret = SupportsSessionHalBufManager(static_metadata_.get(),
                                      &supports_session_hal_buf_manager_);
   if (ret != OK) {
     ALOGE("%s: Unable to get sensor hal buffer manager support %s (%d)",
@@ -222,7 +219,7 @@ status_t EmulatedCameraDeviceSessionHwlImpl::InitializeRequestProcessor() {
   request_processor_->InitializeSensorQueue(request_processor_);
 
   return request_processor_->Initialize(
-      EmulatedCameraDeviceInfo::Clone(*device_info_),
+      HalCameraMetadata::Clone(static_metadata_.get()),
       ClonePhysicalDeviceMap(physical_device_map_));
 }
 
@@ -509,8 +506,7 @@ status_t EmulatedCameraDeviceSessionHwlImpl::GetCameraCharacteristics(
     return BAD_VALUE;
   }
 
-  (*characteristics) =
-      HalCameraMetadata::Clone(device_info_->static_metadata_.get());
+  (*characteristics) = HalCameraMetadata::Clone(static_metadata_.get());
 
   if (*characteristics == nullptr) {
     ALOGE("%s metadata clone failed", __FUNCTION__);

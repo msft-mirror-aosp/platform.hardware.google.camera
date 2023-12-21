@@ -624,9 +624,6 @@ bool EmulatedSensor::IsStreamCombinationSupported(
     return false;
   }
 
-  // TODO: Check session parameters. For now assuming all combinations
-  // are supported.
-
   return true;
 }
 

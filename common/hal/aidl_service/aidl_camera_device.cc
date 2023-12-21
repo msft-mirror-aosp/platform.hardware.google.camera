@@ -163,48 +163,23 @@ ScopedAStatus AidlCameraDevice::getTorchStrengthLevel(int32_t* strength_level) {
 }
 
 ScopedAStatus AidlCameraDevice::constructDefaultRequestSettings(
-    RequestTemplate type, CameraMetadata* request_settings) {
-  if (request_settings == nullptr) {
+    RequestTemplate /*requestTemplate*/, CameraMetadata* requestSettings) {
+  if (requestSettings == nullptr) {
     return ScopedAStatus::fromServiceSpecificError(
         static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
   }
-
-  request_settings->metadata.clear();
-
-  google_camera_hal::RequestTemplate hal_type;
-  status_t res = aidl_utils::ConvertToHalTemplateType(type, &hal_type);
-  if (res != OK) {
-    return ndk::ScopedAStatus::fromServiceSpecificError(
-        static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
-  }
-
-  std::unique_ptr<HalCameraMetadata> settings;
-  res = google_camera_device_->ConstructDefaultRequestSettings(hal_type,
-                                                               &settings);
-  if (res != OK) {
-    ALOGE("%s: Getting camera characteristics for camera %u failed: %s(%d)",
-          __FUNCTION__, camera_id_, strerror(-res), res);
-    return ScopedAStatus::fromServiceSpecificError(
-        static_cast<int32_t>(Status::INTERNAL_ERROR));
-  }
-  if (settings == nullptr) {
-    ALOGE("%s: Default request settings for camera %u is nullptr.",
-          __FUNCTION__, camera_id_);
-    return ScopedAStatus::fromServiceSpecificError(
-        static_cast<int32_t>(Status::INTERNAL_ERROR));
-  }
-
-  uint32_t metadata_size = settings->GetCameraMetadataSize();
-  uint8_t* chars_p = (uint8_t*)settings->GetRawCameraMetadata();
-  request_settings->metadata.assign(chars_p, chars_p + metadata_size);
-
-  return ScopedAStatus::ok();
+  return ScopedAStatus::fromServiceSpecificError(
+      static_cast<int32_t>(Status::OPERATION_NOT_SUPPORTED));
 }
 
 ScopedAStatus AidlCameraDevice::isStreamCombinationWithSettingsSupported(
-    const StreamConfiguration& streamConfiguration, bool* supported) {
-  return isStreamCombinationSupportedInternal(streamConfiguration, supported,
-                                              /*checkSettings*/ true);
+    const StreamConfiguration& /*streamConfiguration*/, bool* supported) {
+  if (supported == nullptr) {
+    return ScopedAStatus::fromServiceSpecificError(
+        static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
+  }
+  return ScopedAStatus::fromServiceSpecificError(
+      static_cast<int32_t>(Status::OPERATION_NOT_SUPPORTED));
 }
 
 ScopedAStatus AidlCameraDevice::getSessionCharacteristics(
@@ -309,12 +284,6 @@ binder_status_t AidlCameraDevice::dump(int fd, const char** /*args*/,
 
 ScopedAStatus AidlCameraDevice::isStreamCombinationSupported(
     const StreamConfiguration& streams, bool* supported) {
-  return isStreamCombinationSupportedInternal(streams, supported,
-                                              /*checkSettings*/ false);
-}
-
-ScopedAStatus AidlCameraDevice::isStreamCombinationSupportedInternal(
-    const StreamConfiguration& streams, bool* supported, bool checkSettings) {
   if (supported == nullptr) {
     return ScopedAStatus::fromServiceSpecificError(
         static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
@@ -327,8 +296,8 @@ ScopedAStatus AidlCameraDevice::isStreamCombinationSupportedInternal(
     return ScopedAStatus::fromServiceSpecificError(
         static_cast<int32_t>(Status::INTERNAL_ERROR));
   }
-  *supported = google_camera_device_->IsStreamCombinationSupported(
-      stream_config, checkSettings);
+  *supported =
+      google_camera_device_->IsStreamCombinationSupported(stream_config);
   return ScopedAStatus::ok();
 }
 

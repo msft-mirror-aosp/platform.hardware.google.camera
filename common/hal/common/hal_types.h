@@ -250,12 +250,6 @@ enum class RequestTemplate : uint32_t {
   kVendorTemplateStart = 0x40000000,
 };
 
-static constexpr size_t kTemplateCount =
-    static_cast<size_t>(RequestTemplate::kManual) + 1;
-
-typedef std::array<std::unique_ptr<HalCameraMetadata>, kTemplateCount>
-    DefaultRequestsType;
-
 // See the definition of
 // ::android::hardware::camera::device::V3_2::MsgType
 enum class MessageType : uint32_t {

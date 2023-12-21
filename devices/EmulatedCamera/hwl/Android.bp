@@ -9,7 +9,6 @@ cc_defaults {
     proprietary: true,
     srcs: [
         "EmulatedCameraProviderHWLImpl.cpp",
-        "EmulatedCameraDeviceInfo.cpp",
         "EmulatedCameraDeviceHWLImpl.cpp",
         "EmulatedCameraDeviceSessionHWLImpl.cpp",
         "EmulatedLogicalRequestState.cpp",

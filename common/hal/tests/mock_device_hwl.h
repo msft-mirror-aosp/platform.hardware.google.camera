@@ -97,12 +97,6 @@ class MockDeviceHwl : public CameraDeviceHwl {
     return OK;
   }
 
-  status_t ConstructDefaultRequestSettings(
-      RequestTemplate /*type*/,
-      std::unique_ptr<HalCameraMetadata>* /*request_settings*/) {
-    return OK;
-  }
-
   // Dump the camera device states in fd, using dprintf() or write().
   status_t DumpState(int fd) {
     if (fd < 0) {

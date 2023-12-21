@@ -78,7 +78,7 @@ class EmulatedRequestProcessor {
 
   status_t Flush();
 
-  status_t Initialize(std::unique_ptr<HalCameraMetadata> static_meta,
+  status_t Initialize(std::unique_ptr<EmulatedCameraDeviceInfo> device_info,
                       PhysicalDeviceMapPtr physical_devices);
   void InitializeSensorQueue(std::weak_ptr<EmulatedRequestProcessor> processor);
 

@@ -35,11 +35,11 @@ EmulatedLogicalRequestState::~EmulatedLogicalRequestState() {
 }
 
 status_t EmulatedLogicalRequestState::Initialize(
-    std::unique_ptr<HalCameraMetadata> static_meta,
+    std::unique_ptr<EmulatedCameraDeviceInfo> device_info,
     PhysicalDeviceMapPtr physical_devices) {
   if ((physical_devices.get() != nullptr) && (!physical_devices->empty())) {
     zoom_ratio_physical_camera_info_ = GetZoomRatioPhysicalCameraInfo(
-        static_meta.get(), physical_devices.get());
+        device_info->static_metadata_.get(), physical_devices.get());
 
     physical_device_map_ = std::move(physical_devices);
 
@@ -59,8 +59,9 @@ status_t EmulatedLogicalRequestState::Initialize(
       for (const auto& it : *physical_device_map_) {
         std::unique_ptr<EmulatedRequestState> physical_request_state =
             std::make_unique<EmulatedRequestState>(it.first);
-        auto ret = physical_request_state->Initialize(
-            HalCameraMetadata::Clone(it.second.second.get()));
+        auto ret =
+            physical_request_state->Initialize(EmulatedCameraDeviceInfo::Create(
+                HalCameraMetadata::Clone(it.second.second.get())));
         if (ret != OK) {
           ALOGE("%s: Physical device: %u request state initialization failed!",
                 __FUNCTION__, it.first);
@@ -72,7 +73,7 @@ status_t EmulatedLogicalRequestState::Initialize(
     }
   }
 
-  return logical_request_state_->Initialize(std::move(static_meta));
+  return logical_request_state_->Initialize(std::move(device_info));
 }
 
 status_t EmulatedLogicalRequestState::GetDefaultRequest(

@@ -285,19 +285,8 @@ status_t CameraDevice::CreateCameraDeviceSession(
 }
 
 bool CameraDevice::IsStreamCombinationSupported(
-    const StreamConfiguration& stream_config, bool check_settings) {
+    const StreamConfiguration& stream_config, bool /*check_settings*/) {
   if (!utils::IsStreamUseCaseSupported(stream_config, stream_use_cases_)) {
-    return false;
-  }
-  if (check_settings && stream_config.session_params == nullptr) {
-    ALOGE("%s: session_params must not be null if check_settings is true",
-          __FUNCTION__);
-    return false;
-  }
-  if (!check_settings && stream_config.session_params != nullptr &&
-      stream_config.session_params->GetEntryCount() > 0) {
-    ALOGW("%s: session parameters is not empty but check_settings is false",
-          __FUNCTION__);
     return false;
   }
 

@@ -78,6 +78,9 @@ enum class SmoothyMode : uint32_t {
 
   // Indicates macro video mode.
   kMacroVideoMode,
+
+  // Tracks an object of interest with hal touch tracker without frame delay.
+  kHalTouchTrackingMode,
 };
 
 // Logical camera vendor tags

@@ -103,7 +103,8 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
 
   status_t BuildPipelines() override;
 
-  status_t ShouldUseHalBufferManager(bool* result) override;
+  std::set<int32_t> GetHalBufferManagedStreams(
+      const StreamConfiguration& config) override;
 
   status_t PreparePipeline(uint32_t /*pipeline_id*/,
                            uint32_t /*frame_number*/) override {

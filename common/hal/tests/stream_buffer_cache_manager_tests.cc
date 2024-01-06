@@ -100,8 +100,9 @@ class StreamBufferCacheManagerTests : public ::testing::Test {
     if (!product_support_test) {
       GTEST_SKIP();
     }
-
-    cache_manager_ = StreamBufferCacheManager::Create();
+    hal_buffer_managed_stream_ids_.insert(kDummyCacheRegInfo.stream_id);
+    cache_manager_ =
+        StreamBufferCacheManager::Create(hal_buffer_managed_stream_ids_);
     ASSERT_NE(cache_manager_, nullptr)
         << " Creating StreamBufferCacheManager failed";
   }
@@ -127,6 +128,9 @@ class StreamBufferCacheManagerTests : public ::testing::Test {
 
   // Number of times the ReturnBufferFunc is called.
   int32_t num_return_buffer_func_called = 0;
+
+  // Set of hal buffer managed stream ids
+  std::set<int32_t> hal_buffer_managed_stream_ids_;
 };
 
 // Test RegisterStream

@@ -171,6 +171,7 @@ struct HalStream {
   android_dataspace_t override_data_space = HAL_DATASPACE_UNKNOWN;
   bool is_physical_camera_stream = false;
   uint32_t physical_camera_id = 0;
+  bool is_hal_buffer_managed = false;
 };
 
 // Corresponds to the definition of ConfigureStreamsRet
@@ -178,7 +179,6 @@ struct HalStream {
 // return type for ICameraDeviceSession.configureStreamsV2
 struct ConfigureStreamsReturn {
   std::vector<HalStream> hal_streams;
-  bool use_hal_buf_manager = false;
 };
 
 // See the definition of

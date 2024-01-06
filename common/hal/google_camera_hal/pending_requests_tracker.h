@@ -18,6 +18,7 @@
 #define HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_PENDING_REQUESTS_TRACKER_H_
 
 #include <memory>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -33,7 +34,8 @@ class PendingRequestsTracker {
  public:
   static std::unique_ptr<PendingRequestsTracker> Create(
       const std::vector<HalStream>& hal_configured_streams,
-      const std::unordered_map<int32_t, int32_t>& grouped_stream_id_map);
+      const std::unordered_map<int32_t, int32_t>& grouped_stream_id_map,
+      const std::set<int32_t>& hal_buffer_managed_stream_ids);
 
   // Wait until the requested streams have enough buffers and track
   // the requested buffers.
@@ -81,7 +83,8 @@ class PendingRequestsTracker {
   // Initialize the tracker.
   status_t Initialize(
       const std::vector<HalStream>& hal_configured_streams,
-      const std::unordered_map<int32_t, int32_t>& grouped_stream_id_map);
+      const std::unordered_map<int32_t, int32_t>& grouped_stream_id_map,
+      const std::set<int32_t>& hal_buffer_managed_stream_ids);
 
   // Return if all the buffers' streams have enough buffers to be requested.
   // Must be protected with pending_requests_mutex_.
@@ -144,6 +147,8 @@ class PendingRequestsTracker {
   // purposes. For multi-resolution output, the HWL gets to decide which stream
   // within a stream group outputs images.
   std::unordered_map<int32_t, int32_t> grouped_stream_id_map_;
+
+  std::set<int32_t> hal_buffer_managed_stream_ids_;
 };
 
 }  // namespace google_camera_hal

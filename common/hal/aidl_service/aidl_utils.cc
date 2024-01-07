@@ -222,8 +222,8 @@ status_t ConvertToAidlHalStreamConfig(
             hal_config.hal_streams[i].consumer_usage);
 
     dst.maxBuffers = hal_config.hal_streams[i].max_buffers;
+    dst.enableHalBufferManager = hal_config.hal_streams[i].is_hal_buffer_managed;
   }
-  aidl_config->enableHalBufferManager = hal_config.use_hal_buf_manager;
   return OK;
 }
 

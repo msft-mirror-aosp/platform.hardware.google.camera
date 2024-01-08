@@ -696,7 +696,6 @@ status_t CameraDeviceSession::ConfigureStreams(
 
   hal_utils::DumpStreamConfiguration(stream_config, "App stream configuration");
 
-  operation_mode_ = stream_config.operation_mode;
   multi_res_reprocess_ = stream_config.multi_resolution_input_image;
 
   // TODO: We would ideally want this to be a part of CreateCaptureSession,

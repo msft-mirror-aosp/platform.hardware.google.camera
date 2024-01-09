@@ -418,9 +418,6 @@ class CameraDeviceSession {
   // after stream configuration.
   int64_t last_timestamp_ns_for_trace_ = 0;
 
-  // Operation mode of stream configuration
-  StreamConfigurationMode operation_mode_ = StreamConfigurationMode::kNormal;
-
   // Whether this stream configuration is a multi-res reprocessing configuration
   bool multi_res_reprocess_ = false;
 

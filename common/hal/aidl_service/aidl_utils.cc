@@ -186,44 +186,44 @@ status_t ConvertToHalTemplateType(
 }
 
 status_t ConvertToAidlHalStreamConfig(
-    const std::vector<google_camera_hal::HalStream>& hal_configured_streams,
-    std::vector<HalStream>* aidl_hal_streams) {
-  if (aidl_hal_streams == nullptr) {
-    ALOGE("%s: aidl_hal_streams is nullptr.", __FUNCTION__);
+    const google_camera_hal::ConfigureStreamsReturn& hal_config,
+    ConfigureStreamsRet* aidl_config) {
+  if (aidl_config == nullptr) {
+    ALOGE("%s: aidl_config is nullptr.", __FUNCTION__);
     return BAD_VALUE;
   }
 
-  aidl_hal_streams->resize(hal_configured_streams.size());
+  aidl_config->halStreams.resize(hal_config.hal_streams.size());
 
-  for (uint32_t i = 0; i < hal_configured_streams.size(); i++) {
-    auto& dst = (*aidl_hal_streams)[i];
+  for (uint32_t i = 0; i < hal_config.hal_streams.size(); i++) {
+    auto& dst = aidl_config->halStreams[i];
     dst.supportOffline = false;
-    if (hal_configured_streams[i].is_physical_camera_stream) {
+    if (hal_config.hal_streams[i].is_physical_camera_stream) {
       dst.physicalCameraId =
-          std::to_string(hal_configured_streams[i].physical_camera_id);
+          std::to_string(hal_config.hal_streams[i].physical_camera_id);
     }
 
     dst.overrideDataSpace =
         static_cast<aidl::android::hardware::graphics::common::Dataspace>(
-            hal_configured_streams[i].override_data_space);
+            hal_config.hal_streams[i].override_data_space);
 
-    dst.id = hal_configured_streams[i].id;
+    dst.id = hal_config.hal_streams[i].id;
 
     dst.overrideFormat =
         static_cast<aidl::android::hardware::graphics::common::PixelFormat>(
-            hal_configured_streams[i].override_format);
+            hal_config.hal_streams[i].override_format);
 
     dst.producerUsage =
         static_cast<aidl::android::hardware::graphics::common::BufferUsage>(
-            hal_configured_streams[i].producer_usage);
+            hal_config.hal_streams[i].producer_usage);
 
     dst.consumerUsage =
         static_cast<aidl::android::hardware::graphics::common::BufferUsage>(
-            hal_configured_streams[i].consumer_usage);
+            hal_config.hal_streams[i].consumer_usage);
 
-    dst.maxBuffers = hal_configured_streams[i].max_buffers;
+    dst.maxBuffers = hal_config.hal_streams[i].max_buffers;
   }
-
+  aidl_config->enableHalBufferManager = hal_config.use_hal_buf_manager;
   return OK;
 }
 
@@ -812,7 +812,8 @@ status_t ConvertToHalCaptureRequest(
   }
 
   google_camera_hal::StreamBuffer hal_buffer = {};
-  if (!IsAidlNativeHandleNull(aidl_request.inputBuffer.buffer)) {
+
+  if (aidl_request.inputBuffer.streamId != -1) {
     res = ConvertToHalStreamBuffer(aidl_request.inputBuffer, &hal_buffer,
                                    handles_to_delete);
     if (res != OK) {

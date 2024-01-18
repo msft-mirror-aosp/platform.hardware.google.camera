@@ -682,6 +682,7 @@ status_t EmulatedSensor::ShutDown() {
 void EmulatedSensor::SetCurrentRequest(
     std::unique_ptr<LogicalCameraSettings> logical_settings,
     std::unique_ptr<HwlPipelineResult> result,
+    std::unique_ptr<HwlPipelineResult> partial_result,
     std::unique_ptr<Buffers> input_buffers,
     std::unique_ptr<Buffers> output_buffers) {
   Mutex::Autolock lock(control_mutex_);
@@ -689,6 +690,7 @@ void EmulatedSensor::SetCurrentRequest(
   current_result_ = std::move(result);
   current_input_buffers_ = std::move(input_buffers);
   current_output_buffers_ = std::move(output_buffers);
+  partial_result_ = std::move(partial_result);
 }
 
 bool EmulatedSensor::WaitForVSyncLocked(nsecs_t reltime) {
@@ -751,6 +753,13 @@ status_t EmulatedSensor::Flush() {
   return ret ? OK : TIMED_OUT;
 }
 
+nsecs_t EmulatedSensor::getSystemTimeWithSource(uint32_t timestamp_source) {
+  if (timestamp_source == ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME) {
+    return systemTime(SYSTEM_TIME_BOOTTIME);
+  }
+  return systemTime(SYSTEM_TIME_MONOTONIC);
+}
+
 bool EmulatedSensor::threadLoop() {
   ATRACE_CALL();
   /**
@@ -764,14 +773,20 @@ bool EmulatedSensor::threadLoop() {
   std::unique_ptr<Buffers> next_buffers;
   std::unique_ptr<Buffers> next_input_buffer;
   std::unique_ptr<HwlPipelineResult> next_result;
+  std::unique_ptr<HwlPipelineResult> partial_result;
   std::unique_ptr<LogicalCameraSettings> settings;
-  HwlPipelineCallback callback = {nullptr, nullptr};
+  HwlPipelineCallback callback = {
+      .process_pipeline_result = nullptr,
+      .process_pipeline_batch_result = nullptr,
+      .notify = nullptr,
+  };
   {
     Mutex::Autolock lock(control_mutex_);
     std::swap(settings, current_settings_);
     std::swap(next_buffers, current_output_buffers_);
     std::swap(next_input_buffer, current_input_buffers_);
     std::swap(next_result, current_result_);
+    std::swap(partial_result, partial_result_);
 
     // Signal VSync for start of readout
     ALOGVV("Sensor VSync");
@@ -781,13 +796,15 @@ bool EmulatedSensor::threadLoop() {
 
   auto frame_duration = EmulatedSensor::kSupportedFrameDurationRange[0];
   auto exposure_time = EmulatedSensor::kSupportedExposureTimeRange[0];
+  uint32_t timestamp_source = ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_UNKNOWN;
   // Frame duration must always be the same among all physical devices
   if ((settings.get() != nullptr) && (!settings->empty())) {
     frame_duration = settings->begin()->second.frame_duration;
     exposure_time = settings->begin()->second.exposure_time;
+    timestamp_source = settings->begin()->second.timestamp_source;
   }
 
-  nsecs_t start_real_time = systemTime();
+  nsecs_t start_real_time = getSystemTimeWithSource(timestamp_source);
   // Stagefright cares about system time for timestamps, so base simulated
   // time on that.
   nsecs_t frame_end_real_time = start_real_time + frame_duration;
@@ -1175,7 +1192,7 @@ bool EmulatedSensor::threadLoop() {
     next_input_buffer->clear();
   }
 
-  nsecs_t work_done_real_time = systemTime();
+  nsecs_t work_done_real_time = getSystemTimeWithSource(timestamp_source);
   // Returning the results at this point is not entirely correct from timing
   // perspective. Under ideal conditions where 'ReturnResults' completes
   // in less than 'time_accuracy' we need to return the results after the
@@ -1190,10 +1207,10 @@ bool EmulatedSensor::threadLoop() {
   // noticeable effect.
   if ((work_done_real_time + kReturnResultThreshod) > frame_end_real_time) {
     ReturnResults(callback, std::move(settings), std::move(next_result),
-                  reprocess_request);
+                  reprocess_request, std::move(partial_result));
   }
 
-  work_done_real_time = systemTime();
+  work_done_real_time = getSystemTimeWithSource(timestamp_source);
   ALOGVV("Sensor vertical blanking interval");
   const nsecs_t time_accuracy = 2e6;  // 2 ms of imprecision is ok
   if (work_done_real_time < frame_end_real_time - time_accuracy) {
@@ -1208,7 +1225,7 @@ bool EmulatedSensor::threadLoop() {
   }
 
   ReturnResults(callback, std::move(settings), std::move(next_result),
-                reprocess_request);
+                reprocess_request, std::move(partial_result));
 
   return true;
 };
@@ -1216,7 +1233,8 @@ bool EmulatedSensor::threadLoop() {
 void EmulatedSensor::ReturnResults(
     HwlPipelineCallback callback,
     std::unique_ptr<LogicalCameraSettings> settings,
-    std::unique_ptr<HwlPipelineResult> result, bool reprocess_request) {
+    std::unique_ptr<HwlPipelineResult> result, bool reprocess_request,
+    std::unique_ptr<HwlPipelineResult> partial_result) {
   if ((callback.process_pipeline_result != nullptr) &&
       (result.get() != nullptr) && (result->result_metadata.get() != nullptr)) {
     auto logical_settings = settings->find(logical_camera_id_);
@@ -1233,6 +1251,15 @@ void EmulatedSensor::ReturnResults(
     }
     result->result_metadata->Set(ANDROID_SENSOR_TIMESTAMP, &next_capture_time_,
                                  1);
+
+    camera_metadata_ro_entry_t lensEntry;
+    auto lensRet = result->result_metadata->Get(
+        ANDROID_STATISTICS_LENS_INTRINSIC_SAMPLES, &lensEntry);
+    if ((lensRet == OK) && (lensEntry.count > 0)) {
+      result->result_metadata->Set(ANDROID_STATISTICS_LENS_INTRINSIC_TIMESTAMPS,
+                                   &next_capture_time_, 1);
+    }
+
     uint8_t raw_binned_factor_used = false;
     if (sensor_binning_factor_info_.find(logical_camera_id_) !=
         sensor_binning_factor_info_.end()) {
@@ -1343,6 +1370,11 @@ void EmulatedSensor::ReturnResults(
       }
     }
 
+    // Partial result count for partial result is set to a value
+    // only when partial results are supported
+    if (partial_result->partial_result != 0) {
+      callback.process_pipeline_result(std::move(partial_result));
+    }
     callback.process_pipeline_result(std::move(result));
   }
 }

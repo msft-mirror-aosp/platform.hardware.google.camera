@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_BasicCaptureSession"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
+#include "basic_capture_session.h"
+
 #include <log/log.h>
 #include <utils/Trace.h>
 
-#include "basic_capture_session.h"
 #include "basic_request_processor.h"
 #include "basic_result_processor.h"
 #include "realtime_process_block.h"
@@ -44,8 +45,9 @@ bool BasicCaptureSession::IsStreamConfigurationSupported(
 std::unique_ptr<CaptureSession> BasicCaptureSession::Create(
     CameraDeviceSessionHwl* device_session_hwl,
     const StreamConfiguration& stream_config,
-    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-    HwlSessionCallback /*session_callback*/,
+    ProcessCaptureResultFunc process_capture_result,
+    ProcessBatchCaptureResultFunc process_batch_capture_result,
+    NotifyFunc notify, HwlSessionCallback /*session_callback*/,
     std::vector<HalStream>* hal_configured_streams,
     CameraBufferAllocatorHwl* /*camera_allocator_hwl*/) {
   ATRACE_CALL();
@@ -55,9 +57,9 @@ std::unique_ptr<CaptureSession> BasicCaptureSession::Create(
     return nullptr;
   }
 
-  status_t res = session->Initialize(device_session_hwl, stream_config,
-                                     process_capture_result, notify,
-                                     hal_configured_streams);
+  status_t res = session->Initialize(
+      device_session_hwl, stream_config, process_capture_result,
+      process_batch_capture_result, notify, hal_configured_streams);
   if (res != OK) {
     ALOGE("%s: Initializing BasicCaptureSession failed: %s (%d).", __FUNCTION__,
           strerror(-res), res);
@@ -185,8 +187,9 @@ status_t BasicCaptureSession::ConnectProcessChain(
 status_t BasicCaptureSession::Initialize(
     CameraDeviceSessionHwl* device_session_hwl,
     const StreamConfiguration& stream_config,
-    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-    std::vector<HalStream>* hal_configured_streams) {
+    ProcessCaptureResultFunc process_capture_result,
+    ProcessBatchCaptureResultFunc process_batch_capture_result,
+    NotifyFunc notify, std::vector<HalStream>* hal_configured_streams) {
   ATRACE_CALL();
   if (!IsStreamConfigurationSupported(device_session_hwl, stream_config)) {
     ALOGE("%s: stream configuration is not supported.", __FUNCTION__);
@@ -207,7 +210,8 @@ status_t BasicCaptureSession::Initialize(
     return UNKNOWN_ERROR;
   }
 
-  result_processor->SetResultCallback(process_capture_result, notify);
+  result_processor->SetResultCallback(process_capture_result, notify,
+                                      process_batch_capture_result);
 
   // Create process block.
   auto process_block = RealtimeProcessBlock::Create(device_session_hwl_);

@@ -99,9 +99,15 @@ void EmulatedLogicalRequestState::UpdateActivePhysicalId(
 
 std::unique_ptr<HwlPipelineResult>
 EmulatedLogicalRequestState::InitializeLogicalResult(uint32_t pipeline_id,
-                                                     uint32_t frame_number) {
-  auto ret = logical_request_state_->InitializeResult(pipeline_id, frame_number);
-  if (is_logical_device_) {
+                                                     uint32_t frame_number,
+                                                     bool is_partial_result) {
+  auto ret =
+      is_partial_result
+          ? logical_request_state_->InitializePartialResult(pipeline_id,
+                                                            frame_number)
+          : logical_request_state_->InitializeResult(pipeline_id, frame_number);
+
+  if (is_logical_device_ && !is_partial_result) {
     if ((physical_camera_output_ids_.get() != nullptr) &&
         (!physical_camera_output_ids_->empty())) {
       ret->physical_camera_results.reserve(physical_camera_output_ids_->size());

@@ -80,9 +80,6 @@ cc_library_shared {
         "zsl_snapshot_capture_session.cc",
     ],
     shared_libs: [
-        "android.hardware.graphics.mapper@2.0",
-        "android.hardware.graphics.mapper@3.0",
-        "android.hardware.graphics.mapper@4.0",
         "lib_profiler",
         "libbase",
         "libcamera_metadata",
@@ -91,6 +88,7 @@ cc_library_shared {
         "libhidlbase",
         "liblog",
         "libmeminfo",
+        "libui",
         "libutils",
         "libsync",
     ],

@@ -1426,7 +1426,7 @@ status_t EmulatedCameraDeviceInfo::InitializeScalerDefaults() {
             __FUNCTION__);
       return BAD_VALUE;
     }
-    if (available_requests_.find(
+    if (available_results_.find(
             ANDROID_LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_SENSOR_CROP_REGION) !=
         available_results_.end()) {
       report_active_sensor_crop_ = true;

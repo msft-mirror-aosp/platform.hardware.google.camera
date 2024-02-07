@@ -1072,9 +1072,22 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
     result->result_metadata->Set(ANDROID_SCALER_CROP_REGION, chosen_crop_region,
                                  ARRAY_SIZE(info.scaler_crop_region_default_));
     if (info.report_active_sensor_crop_) {
+      int32_t active_crop_region[4];
+      // width
+      active_crop_region[2] =
+          (info.scaler_crop_region_default_[2] / info.zoom_ratio_);
+      // height
+      active_crop_region[3] =
+          (info.scaler_crop_region_default_[3] / info.zoom_ratio_);
+      // left
+      active_crop_region[0] =
+          (info.scaler_crop_region_default_[2] - active_crop_region[2]) / 2;
+      // top
+      active_crop_region[1] =
+          (info.scaler_crop_region_default_[3] - active_crop_region[3]) / 2;
       result->result_metadata->Set(
           ANDROID_LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_SENSOR_CROP_REGION,
-          chosen_crop_region, ARRAY_SIZE(info.scaler_crop_region_default_));
+          active_crop_region, ARRAY_SIZE(info.scaler_crop_region_default_));
     }
   }
   if (info.report_extended_scene_mode_) {

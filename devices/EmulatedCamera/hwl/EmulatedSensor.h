@@ -184,6 +184,7 @@ struct SensorCharacteristics {
   ColorSpaceProfileMap color_space_profiles;
   int32_t raw_crop_region_zoomed[4] = {0};
   int32_t raw_crop_region_unzoomed[4] = {0};
+  int32_t timestamp_source = ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_UNKNOWN;
 };
 
 // Maps logical/physical camera ids to sensor characteristics
@@ -278,6 +279,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
     uint8_t test_pattern_mode = ANDROID_SENSOR_TEST_PATTERN_MODE_OFF;
     uint32_t test_pattern_data[4] = {0, 0, 0, 0};
     uint32_t screen_rotation = 0;
+    uint32_t timestamp_source = ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_UNKNOWN;
   };
 
   // Maps physical and logical camera ids to individual device settings
@@ -285,6 +287,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
 
   void SetCurrentRequest(std::unique_ptr<LogicalCameraSettings> logical_settings,
                          std::unique_ptr<HwlPipelineResult> result,
+                         std::unique_ptr<HwlPipelineResult> partial_result,
                          std::unique_ptr<Buffers> input_buffers,
                          std::unique_ptr<Buffers> output_buffers);
 
@@ -362,6 +365,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   bool got_vsync_;
   std::unique_ptr<LogicalCameraSettings> current_settings_;
   std::unique_ptr<HwlPipelineResult> current_result_;
+  std::unique_ptr<HwlPipelineResult> partial_result_;
   std::unique_ptr<Buffers> current_output_buffers_;
   std::unique_ptr<Buffers> current_input_buffers_;
   std::unique_ptr<JpegCompressor> jpeg_compressor_;
@@ -455,11 +459,14 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   void ReturnResults(HwlPipelineCallback callback,
                      std::unique_ptr<LogicalCameraSettings> settings,
                      std::unique_ptr<HwlPipelineResult> result,
-                     bool reprocess_request);
+                     bool reprocess_request,
+                     std::unique_ptr<HwlPipelineResult> partial_result);
 
   static float GetBaseGainFactor(float max_raw_value) {
     return max_raw_value / EmulatedSensor::kSaturationElectrons;
   }
+
+  nsecs_t getSystemTimeWithSource(uint32_t timestamp_source);
 };
 
 }  // namespace android

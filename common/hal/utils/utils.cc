@@ -15,6 +15,7 @@
  */
 
 //#define LOG_NDEBUG 0
+#include <cassert>
 #include <cstdint>
 #define LOG_TAG "GCH_Utils"
 
@@ -24,12 +25,39 @@
 #include <hardware/gralloc.h>
 #include <sys/stat.h>
 
+#include <array>
+
 #include "utils.h"
 #include "vendor_tag_defs.h"
 
 namespace android {
 namespace google_camera_hal {
 namespace utils {
+
+namespace {
+
+using FpsRange = std::pair<int32_t, int32_t>;
+
+static const std::vector<std::pair<FpsRange, FpsRange>> kAcceptableTransitions = {
+    std::make_pair<FpsRange, FpsRange>({2, 2}, {12, 12}),
+    std::make_pair<FpsRange, FpsRange>({12, 12}, {30, 30}),
+    std::make_pair<FpsRange, FpsRange>({30, 30}, {60, 60}),
+    std::make_pair<FpsRange, FpsRange>({24, 24}, {24, 30}),
+    std::make_pair<FpsRange, FpsRange>({24, 24}, {30, 30}),
+};
+
+bool IsAcceptableThrottledFpsChange(const FpsRange& old_fps,
+                                    const FpsRange& new_fps) {
+  for (const std::pair<FpsRange, FpsRange>& range : kAcceptableTransitions) {
+    // We don't care about the direction of the transition.
+    if ((old_fps == range.first && new_fps == range.second) ||
+        (new_fps == range.first && old_fps == range.second)) {
+      return true;
+    }
+  }
+  return false;
+}
+}  // namespace
 
 constexpr char kRealtimeThreadSetProp[] =
     "persist.vendor.camera.realtimethread";
@@ -185,11 +213,6 @@ status_t GetSensorActiveArraySize(const HalCameraMetadata* characteristics,
   camera_metadata_ro_entry entry;
   status_t res = characteristics->Get(active_array_tag, &entry);
   if (res != OK || entry.count != 4) {
-    ALOGE(
-        "%s: Getting ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE failed: %s(%d) "
-        "count: %zu max resolution ? %s",
-        __FUNCTION__, strerror(-res), res, entry.count,
-        maximum_resolution ? "true" : "false");
     return res;
   }
 
@@ -379,6 +402,10 @@ bool IsSessionParameterCompatible(const HalCameraMetadata* old_session,
       // the special case that AE FPS is throttling [60, 60] to [30, 30] or
       // restored from [30, 30] to [60, 60] from GCA side when session parameter
       // kVideo60to30FPSThermalThrottle is enabled.
+      // Added kVideoFpsThrottle more generic transitions such
+      // as between [24,24] and [24,30]. kVideoFpsThrottle should be used
+      // over kVideo60to30FPSThermalThrottle going forth. They are functionally
+      // the same, but kVideoFpsThrottle is more generically named.
       uint8_t video_60_to_30fps_thermal_throttle = 0;
       camera_metadata_ro_entry_t video_60_to_30fps_throttle_entry;
       if (new_session->Get(kVideo60to30FPSThermalThrottle,
@@ -387,22 +414,25 @@ bool IsSessionParameterCompatible(const HalCameraMetadata* old_session,
             video_60_to_30fps_throttle_entry.data.u8[0];
       }
 
+      uint8_t video_fps_throttle = 0;
+      camera_metadata_ro_entry_t video_fps_throttle_entry;
+      if (new_session->Get(kVideoFpsThrottle, &video_fps_throttle_entry) == OK) {
+        video_fps_throttle = video_fps_throttle_entry.data.u8[0];
+      }
+
       bool ignore_fps_range_diff = false;
-      if (video_60_to_30fps_thermal_throttle) {
-        if (((old_min_fps == 60) && (old_max_fps == 60) &&
-             (new_min_fps == 30) && (new_max_fps == 30)) ||
-            ((old_min_fps == 30) && (old_max_fps == 30) &&
-             (new_min_fps == 60) && (new_max_fps == 60))) {
-          ignore_fps_range_diff = true;
-        }
+      if (video_60_to_30fps_thermal_throttle || video_fps_throttle) {
+        ignore_fps_range_diff = IsAcceptableThrottledFpsChange(
+            /*old_fps=*/{old_min_fps, old_max_fps},
+            /*new_fps=*/{new_min_fps, new_max_fps});
       }
 
       if (old_max_fps == new_max_fps || ignore_fps_range_diff) {
         ALOGI(
             "%s: Ignore fps (%d, %d) to (%d, %d). "
-            "video_60_to_30fps_thermal_throttle: %u",
+            "video_60_to_30fps_thermal_throttle: %u. video_fps_throttle: %u.",
             __FUNCTION__, old_min_fps, old_max_fps, new_min_fps, new_max_fps,
-            video_60_to_30fps_thermal_throttle);
+            video_60_to_30fps_thermal_throttle, video_fps_throttle);
         continue;
       }
 

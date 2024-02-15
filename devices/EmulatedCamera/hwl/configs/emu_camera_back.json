@@ -118,6 +118,18 @@
   "2",
   "3"
  ],
+ "android.flash.singleStrengthMaxLevel" : [
+  "10"
+ ],
+ "android.flash.singleStrengthDefaultLevel": [
+   "2"
+ ],
+ "android.flash.torchStrengthDefaultLevel": [
+   "5"
+ ],
+ "android.flash.torchStrengthMaxLevel" :[
+   "15"
+ ],
  "android.flash.info.available": [
   "TRUE"
  ],
@@ -485,6 +497,9 @@
   "917523",
   "917526",
   "851985",
+  "1114133",
+  "1114134",
+  "1703939",
   "-2080374783",
   "-2080374782"
  ],
@@ -498,7 +513,7 @@
   "1"
  ],
  "android.request.partialResultCount": [
-  "1"
+  "2"
  ],
  "android.request.pipelineMaxDepth": [
   "8"

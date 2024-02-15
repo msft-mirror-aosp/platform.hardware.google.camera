@@ -19,6 +19,8 @@
 
 #include <utils/Errors.h>
 
+#include <set>
+
 #include "hal_camera_metadata.h"
 #include "hwl_types.h"
 #include "multicam_coordinator_hwl.h"
@@ -72,6 +74,19 @@ class CameraDeviceSessionHwl {
   // there is no successfully configured pipeline, this method will return
   // NO_INIT.
   virtual status_t BuildPipelines() = 0;
+
+  // Get the stream ids that should be HAL buffer managed.
+  // This is an hwl level method since the hwl layer can make the best decision
+  // about whether to use hal buffer manager for the session  configured - since
+  // it has device specific context.
+  virtual std::set<int32_t> GetHalBufferManagedStreams(
+      const StreamConfiguration& config) {
+    std::set<int32_t> ret;
+    for (const auto& stream : config.streams) {
+      ret.insert(stream.id);
+    }
+    return ret;
+  }
 
   // Warm up pipeline to ready for taking request, this can be a NoOp for
   // implementation which doesn't support to put pipeline in standby mode
@@ -189,6 +204,17 @@ class CameraDeviceSessionHwl {
   // caching of file descriptors done by the HWL.
   virtual void RemoveCachedBuffers(const native_handle_t* /*handle*/) {
   }
+
+  void setConfigureStreamsV2(bool set) {
+    configure_streams_v2_ = set;
+  }
+
+  bool configure_streams_v2() const {
+    return configure_streams_v2_;
+  }
+
+ private:
+  bool configure_streams_v2_ = false;
 };
 
 }  // namespace google_camera_hal

@@ -186,6 +186,18 @@
    "0",
    "3"
   ],
+  "android.flash.singleStrengthMaxLevel" : [
+  "10"
+ ],
+ "android.flash.singleStrengthDefaultLevel": [
+   "2"
+ ],
+ "android.flash.torchStrengthDefaultLevel": [
+   "5"
+ ],
+ "android.flash.torchStrengthMaxLevel" :[
+   "15"
+ ],
   "android.flash.info.available": [
    "TRUE"
   ],
@@ -641,7 +653,7 @@
    "0"
   ],
   "android.request.partialResultCount": [
-   "1"
+   "2"
   ],
   "android.request.pipelineMaxDepth": [
    "8"
@@ -1490,7 +1502,7 @@
    "10"
   ],
   "android.info.supportedBufferManagementVersion" : [
-    "HIDL_DEVICE_3_5"
+    "SESSION_CONFIGURABLE"
   ],
   "android.sync.maxLatency": [
    "PER_FRAME_CONTROL"
@@ -1688,6 +1700,18 @@
    "0",
    "3"
   ],
+  "android.flash.singleStrengthMaxLevel" : [
+  "10"
+ ],
+ "android.flash.singleStrengthDefaultLevel": [
+   "2"
+ ],
+ "android.flash.torchStrengthDefaultLevel": [
+   "5"
+ ],
+ "android.flash.torchStrengthMaxLevel" :[
+   "15"
+ ],
   "android.flash.info.available": [
    "TRUE"
   ],
@@ -2089,7 +2113,7 @@
    "0"
   ],
   "android.request.partialResultCount": [
-   "1"
+   "2"
   ],
   "android.request.pipelineMaxDepth": [
    "8"
@@ -2961,7 +2985,7 @@
    "10"
   ],
   "android.info.supportedBufferManagementVersion" : [
-    "HIDL_DEVICE_3_5"
+    "SESSION_CONFIGURABLE"
   ],
   "android.sync.maxLatency": [
    "PER_FRAME_CONTROL"
@@ -3159,6 +3183,18 @@
    "0",
    "3"
   ],
+  "android.flash.singleStrengthMaxLevel" : [
+  "10"
+ ],
+ "android.flash.singleStrengthDefaultLevel": [
+   "2"
+ ],
+ "android.flash.torchStrengthDefaultLevel": [
+   "5"
+ ],
+ "android.flash.torchStrengthMaxLevel" :[
+   "15"
+ ],
   "android.flash.info.available": [
    "TRUE"
   ],
@@ -3561,7 +3597,7 @@
    "0"
   ],
   "android.request.partialResultCount": [
-   "1"
+   "2"
   ],
   "android.request.pipelineMaxDepth": [
    "8"
@@ -4477,7 +4513,7 @@
    "10"
   ],
   "android.info.supportedBufferManagementVersion" : [
-    "HIDL_DEVICE_3_5"
+    "SESSION_CONFIGURABLE"
   ],
   "android.sync.maxLatency": [
    "PER_FRAME_CONTROL"

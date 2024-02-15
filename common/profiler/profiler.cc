@@ -21,7 +21,6 @@
 #include <sys/stat.h>
 
 #include <fstream>
-#include <list>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
@@ -95,7 +94,7 @@ class ProfilerImpl : public Profiler {
   void SetFpsPrintInterval(int32_t interval_seconds) override final;
 
   // Get the latency associated with the name
-  std::list<std::pair<std::string, float>> GetLatencyData() override final;
+  std::vector<LatencyEvent> GetLatencyData() override final;
 
   std::string GetUseCase() const override final {
     return use_case_;
@@ -109,6 +108,11 @@ class ProfilerImpl : public Profiler {
     int64_t end = 0;
     int32_t count = 0;
     int32_t request_id = 0;
+  };
+
+  struct TimeSlotEvent {
+    std::string name;
+    TimeSlot slot;
   };
 
   // A structure to store node's profiling result.
@@ -499,9 +503,9 @@ void ProfilerImpl::DumpPb(std::string_view filepath) {
 }
 
 // Get the latency associated with the name
-std::list<std::pair<std::string, float>> ProfilerImpl::GetLatencyData() {
-  std::list<std::pair<std::string, TimeSlot>> time_results;
-  std::list<std::pair<std::string, float>> latency_data;
+std::vector<Profiler::LatencyEvent> ProfilerImpl::GetLatencyData() {
+  std::vector<TimeSlotEvent> time_results;
+  std::vector<LatencyEvent> latency_data;
   for (const auto& [node_name, time_series] : timing_map_) {
     for (const auto& slot : time_series) {
       if (slot.count > 0 && time_results.size() < time_results.max_size()) {
@@ -509,8 +513,9 @@ std::list<std::pair<std::string, float>> ProfilerImpl::GetLatencyData() {
       }
     }
   }
-  time_results.sort(
-      [](const auto& a, const auto& b) { return a.second.end < b.second.end; });
+  std::sort(
+      time_results.begin(), time_results.end(),
+      [](const auto& a, const auto& b) { return a.slot.end < b.slot.end; });
 
   for (const auto& [node_name, slot] : time_results) {
     if (slot.count > 0) {
@@ -549,7 +554,7 @@ class ProfilerStopwatchImpl : public ProfilerImpl {
     ALOGI("Profiling Case: %s", use_case_.c_str());
 
     // Sort by end time.
-    std::list<std::pair<std::string, TimeSlot>> time_results;
+    std::vector<TimeSlotEvent> time_results;
     for (const auto& [node_name, time_series] : timing_map_) {
       for (const auto& slot : time_series) {
         if (slot.count > 0 && time_results.size() < time_results.max_size()) {
@@ -557,9 +562,9 @@ class ProfilerStopwatchImpl : public ProfilerImpl {
         }
       }
     }
-    time_results.sort([](const auto& a, const auto& b) {
-      return a.second.end < b.second.end;
-    });
+    std::sort(
+        time_results.begin(), time_results.end(),
+        [](const auto& a, const auto& b) { return a.slot.end < b.slot.end; });
 
     for (const auto& [node_name, slot] : time_results) {
       if (slot.count > 0) {
@@ -598,7 +603,7 @@ class ProfilerDummy : public Profiler {
   void PrintResult() override final{};
   void ProfileFrameRate(const std::string&) override final{};
   void SetFpsPrintInterval(int32_t) override final{};
-  std::list<std::pair<std::string, float>> GetLatencyData() override final {
+  std::vector<LatencyEvent> GetLatencyData() override final {
     return {};
   }
   std::string GetUseCase() const override final {

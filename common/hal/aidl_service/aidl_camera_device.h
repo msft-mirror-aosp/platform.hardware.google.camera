@@ -36,6 +36,7 @@ using aidl::android::hardware::camera::device::ICameraDevice;
 using aidl::android::hardware::camera::device::ICameraDeviceCallback;
 using aidl::android::hardware::camera::device::ICameraDeviceSession;
 using aidl::android::hardware::camera::device::ICameraInjectionSession;
+using aidl::android::hardware::camera::device::RequestTemplate;
 using aidl::android::hardware::camera::device::StreamConfiguration;
 using ::android::hardware::camera::implementation::AidlProfiler;
 using ndk::ScopedAStatus;
@@ -86,6 +87,16 @@ class AidlCameraDevice : public BnCameraDevice {
 
   ScopedAStatus getTorchStrengthLevel(int32_t* strength_level) override;
 
+  ScopedAStatus constructDefaultRequestSettings(
+      RequestTemplate type, CameraMetadata* request_settings) override;
+
+  ScopedAStatus isStreamCombinationWithSettingsSupported(
+      const StreamConfiguration& streamConfiguration, bool* supported) override;
+
+  ScopedAStatus getSessionCharacteristics(
+      const StreamConfiguration& session_config,
+      CameraMetadata* characteristics) override;
+
   // End of override functions in ICameraDevice
   AidlCameraDevice() = default;
 
@@ -95,6 +106,10 @@ class AidlCameraDevice : public BnCameraDevice {
   std::unique_ptr<CameraDevice> google_camera_device_;
   uint32_t camera_id_ = 0;
   std::shared_ptr<AidlProfiler> aidl_profiler_;
+
+  ScopedAStatus isStreamCombinationSupportedInternal(
+      const StreamConfiguration& streamConfiguration, bool* supported,
+      bool checkSettings);
 };
 
 }  // namespace implementation

@@ -211,7 +211,7 @@ bool ZslSnapshotCaptureSession::IsStreamConfigurationSupported(
   camera_metadata_ro_entry entry;
   res = characteristics->Get(VendorTagIds::kSwDenoiseEnabled, &entry);
   if (res != OK || entry.data.u8[0] != 1) {
-    ALOGE("%s: Software denoised not enabled", __FUNCTION__);
+    ALOGI("%s: Software denoised not enabled", __FUNCTION__);
     return false;
   }
 
@@ -220,11 +220,11 @@ bool ZslSnapshotCaptureSession::IsStreamConfigurationSupported(
   bool has_hdr_preview_stream = false;
   for (const auto& stream : stream_config.streams) {
     if (stream.is_physical_camera_stream) {
-      ALOGE("%s: support logical stream only", __FUNCTION__);
+      ALOGI("%s: support logical stream only", __FUNCTION__);
       return false;
     }
     if (utils::IsSecuredStream(stream)) {
-      ALOGE("%s: don't support secured stream", __FUNCTION__);
+      ALOGI("%s: don't support secured stream", __FUNCTION__);
       return false;
     }
     if (utils::IsJPEGSnapshotStream(stream) ||
@@ -238,27 +238,27 @@ bool ZslSnapshotCaptureSession::IsStreamConfigurationSupported(
         has_hdr_preview_stream = true;
       }
     } else {
-      ALOGE("%s: only support preview + (snapshot and/or YUV) streams",
+      ALOGI("%s: only support preview + (snapshot and/or YUV) streams",
             __FUNCTION__);
       return false;
     }
   }
   if (!has_eligible_snapshot_stream) {
-    ALOGE("%s: no eligible JPEG or YUV stream", __FUNCTION__);
+    ALOGI("%s: no eligible JPEG or YUV stream", __FUNCTION__);
     return false;
   }
 
   if (!has_preview_stream) {
-    ALOGE("%s: no preview stream", __FUNCTION__);
+    ALOGI("%s: no preview stream", __FUNCTION__);
     return false;
   }
   if (has_hdr_preview_stream) {
-    ALOGE("%s: 10-bit HDR preview stream does not support ZSL snapshot",
+    ALOGI("%s: 10-bit HDR preview stream does not support ZSL snapshot",
           __FUNCTION__);
     return false;
   }
 
-  ALOGD("%s: ZslSnapshotCaptureSession supports the stream config",
+  ALOGI("%s: ZslSnapshotCaptureSession supports the stream config",
         __FUNCTION__);
   return true;
 }
@@ -442,7 +442,8 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
         __FUNCTION__);
     return UNKNOWN_ERROR;
   }
-  realtime_result_processor->SetResultCallback(process_capture_result, notify);
+  realtime_result_processor->SetResultCallback(
+      process_capture_result, notify, /*process_batch_capture_result=*/nullptr);
 
   res = process_block->SetResultProcessor(std::move(realtime_result_processor));
   if (res != OK) {
@@ -490,7 +491,9 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
       return UNKNOWN_ERROR;
     }
     basic_result_processor_ = basic_result_processor.get();
-    basic_result_processor->SetResultCallback(process_capture_result, notify);
+    basic_result_processor->SetResultCallback(
+        process_capture_result, notify,
+        /*process_batch_capture_result=*/nullptr);
 
     res =
         denoise_processor->SetResultProcessor(std::move(basic_result_processor));
@@ -603,7 +606,8 @@ status_t ZslSnapshotCaptureSession::SetupSnapshotProcessChain(
   res = snapshot_process_block_->SetResultProcessor(
       std::move(snapshot_result_processor));
 
-  snapshot_result_processor_->SetResultCallback(process_capture_result, notify);
+  snapshot_result_processor_->SetResultCallback(
+      process_capture_result, notify, /*process_batch_capture_result=*/nullptr);
   res = ConfigureSnapshotStreams(stream_config);
   if (res != OK) {
     ALOGE("%s: Configuring snapshot stream failed: %s(%d)", __FUNCTION__,

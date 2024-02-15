@@ -240,6 +240,13 @@ status_t CameraDevice::GetTorchStrengthLevel(int32_t& torch_strength) const {
   return res;
 }
 
+status_t CameraDevice::ConstructDefaultRequestSettings(
+    RequestTemplate type, std::unique_ptr<HalCameraMetadata>* request_settings) {
+  ATRACE_CALL();
+  return camera_device_hwl_->ConstructDefaultRequestSettings(type,
+                                                             request_settings);
+}
+
 status_t CameraDevice::DumpState(int fd) {
   ATRACE_CALL();
   return camera_device_hwl_->DumpState(fd);
@@ -278,7 +285,7 @@ status_t CameraDevice::CreateCameraDeviceSession(
 }
 
 bool CameraDevice::IsStreamCombinationSupported(
-    const StreamConfiguration& stream_config) {
+    const StreamConfiguration& stream_config, bool /*check_settings*/) {
   if (!utils::IsStreamUseCaseSupported(stream_config, stream_use_cases_)) {
     return false;
   }

@@ -298,7 +298,7 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
   bool isP010 = static_cast<android_pixel_format_v1_1_t>(
                     stream.override_format) == HAL_PIXEL_FORMAT_YCBCR_P010;
   if ((isYUV_420_888) || (isP010)) {
-    IMapper::Rect map_rect = {0, 0, width, height};
+    android::Rect map_rect = {0, 0, width, height};
     auto yuv_layout = importer_->lockYCbCr(buffer, usage, map_rect);
     if ((yuv_layout.y != nullptr) && (yuv_layout.cb != nullptr) &&
         (yuv_layout.cr != nullptr)) {
@@ -308,22 +308,24 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
           static_cast<uint8_t*>(yuv_layout.cb);
       sensor_buffer->plane.img_y_crcb.img_cr =
           static_cast<uint8_t*>(yuv_layout.cr);
-      sensor_buffer->plane.img_y_crcb.y_stride = yuv_layout.yStride;
-      sensor_buffer->plane.img_y_crcb.cbcr_stride = yuv_layout.cStride;
-      sensor_buffer->plane.img_y_crcb.cbcr_step = yuv_layout.chromaStep;
-      if (isYUV_420_888 && (yuv_layout.chromaStep == 2) &&
+      sensor_buffer->plane.img_y_crcb.y_stride = yuv_layout.ystride;
+      sensor_buffer->plane.img_y_crcb.cbcr_stride = yuv_layout.cstride;
+      sensor_buffer->plane.img_y_crcb.cbcr_step = yuv_layout.chroma_step;
+      if (isYUV_420_888 && (yuv_layout.chroma_step == 2) &&
           std::abs(sensor_buffer->plane.img_y_crcb.img_cb -
                    sensor_buffer->plane.img_y_crcb.img_cr) != 1) {
-        ALOGE("%s: Unsupported YUV layout, chroma step: %u U/V plane delta: %u",
-              __FUNCTION__, yuv_layout.chromaStep,
-              static_cast<unsigned>(
-                  std::abs(sensor_buffer->plane.img_y_crcb.img_cb -
-                           sensor_buffer->plane.img_y_crcb.img_cr)));
+        ALOGE(
+            "%s: Unsupported YUV layout, chroma step: %zu U/V plane delta: %u",
+            __FUNCTION__, yuv_layout.chroma_step,
+            static_cast<unsigned>(
+                std::abs(sensor_buffer->plane.img_y_crcb.img_cb -
+                         sensor_buffer->plane.img_y_crcb.img_cr)));
         return BAD_VALUE;
       }
       sensor_buffer->plane.img_y_crcb.bytesPerPixel = isP010 ? 2 : 1;
     } else {
-      ALOGE("%s: Failed to lock output buffer!", __FUNCTION__);
+      ALOGE("%s: Failed to lock output buffer for stream id %d !", __FUNCTION__,
+            stream.id);
       return BAD_VALUE;
     }
   } else {
@@ -338,7 +340,7 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
       sensor_buffer->plane.img.img =
           static_cast<uint8_t*>(importer_->lock(buffer, usage, buffer_size));
     } else {
-      IMapper::Rect region{0, 0, width, height};
+      android::Rect region{0, 0, width, height};
       sensor_buffer->plane.img.img =
           static_cast<uint8_t*>(importer_->lock(buffer, usage, region));
     }
@@ -492,8 +494,12 @@ void EmulatedRequestProcessor::RequestProcessorLoop() {
           }
 
           if (ret == OK) {
-            auto result = request_state_->InitializeLogicalResult(pipeline_id,
-                                                                  frame_number);
+            auto partial_result = request_state_->InitializeLogicalResult(
+                pipeline_id, frame_number,
+                /*partial result*/ true);
+            auto result = request_state_->InitializeLogicalResult(
+                pipeline_id, frame_number,
+                /*partial result*/ false);
             // The screen rotation will be the same for all logical and physical devices
             uint32_t screen_rotation = screen_rotation_;
             for (auto it = logical_settings->begin();
@@ -503,7 +509,8 @@ void EmulatedRequestProcessor::RequestProcessorLoop() {
 
             sensor_->SetCurrentRequest(
                 std::move(logical_settings), std::move(result),
-                std::move(input_buffers), std::move(output_buffers));
+                std::move(partial_result), std::move(input_buffers),
+                std::move(output_buffers));
           } else {
             NotifyMessage msg{.type = MessageType::kError,
                               .message.error = {
@@ -538,10 +545,10 @@ void EmulatedRequestProcessor::RequestProcessorLoop() {
 }
 
 status_t EmulatedRequestProcessor::Initialize(
-    std::unique_ptr<HalCameraMetadata> static_meta,
+    std::unique_ptr<EmulatedCameraDeviceInfo> device_info,
     PhysicalDeviceMapPtr physical_devices) {
   std::lock_guard<std::mutex> lock(process_mutex_);
-  return request_state_->Initialize(std::move(static_meta),
+  return request_state_->Initialize(std::move(device_info),
                                     std::move(physical_devices));
 }
 

@@ -17,6 +17,7 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_AIDL_SERVICE_AIDL_PROFILER_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_AIDL_SERVICE_AIDL_PROFILER_H_
 
+#include <functional>
 #include <memory>
 
 #include "profiler.h"

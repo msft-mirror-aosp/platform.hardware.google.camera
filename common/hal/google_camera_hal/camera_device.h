@@ -50,6 +50,12 @@ class CameraDevice {
   status_t GetCameraCharacteristics(
       std::unique_ptr<HalCameraMetadata>* characteristics);
 
+  // Get the session characteristics of this camera device.
+  // characteristics will be filled only with the specific keys required from
+  // the HAL.
+  status_t GetSessionCharacteristics(
+      std::unique_ptr<HalCameraMetadata>* session_characteristics);
+
   // Get the characteristics of this camera device's physical camera if the
   // physical_camera_id belongs to this camera device.
   // characteristics will be filled with the physical camera ID's

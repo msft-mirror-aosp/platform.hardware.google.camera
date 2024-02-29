@@ -210,9 +210,6 @@ ScopedAStatus AidlCameraDevice::isStreamCombinationWithSettingsSupported(
 ScopedAStatus AidlCameraDevice::getSessionCharacteristics(
     const StreamConfiguration& session_config,
     CameraMetadata* characteristics_ret) {
-  // Temporary check to make sure session configuration is valid.
-  // As a mock implementation, we are just returning the camera characteristics
-  // for now.
   google_camera_hal::StreamConfiguration stream_config;
   status_t res =
       aidl_utils::ConvertToHalStreamConfig(session_config, &stream_config);
@@ -221,7 +218,34 @@ ScopedAStatus AidlCameraDevice::getSessionCharacteristics(
     return ScopedAStatus::fromServiceSpecificError(
         static_cast<int32_t>(Status::INTERNAL_ERROR));
   }
-  return getCameraCharacteristics(characteristics_ret);
+
+  if (characteristics_ret == nullptr) {
+    return ScopedAStatus::fromServiceSpecificError(
+        static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
+  }
+  characteristics_ret->metadata.clear();
+  std::unique_ptr<HalCameraMetadata> session_characteristics;
+  res =
+      google_camera_device_->GetSessionCharacteristics(&session_characteristics);
+  if (res != OK) {
+    ALOGE("%s: Getting session characteristics for camera %u failed: %s(%d)",
+          __FUNCTION__, camera_id_, strerror(-res), res);
+    return ScopedAStatus::fromServiceSpecificError(
+        static_cast<int32_t>(Status::INTERNAL_ERROR));
+  }
+
+  if (session_characteristics == nullptr) {
+    ALOGE("%s: Session characteristics for camera %u is nullptr.", __FUNCTION__,
+          camera_id_);
+    return ScopedAStatus::fromServiceSpecificError(
+        static_cast<int32_t>(Status::INTERNAL_ERROR));
+  }
+
+  uint32_t metadata_size = session_characteristics->GetCameraMetadataSize();
+  uint8_t* chars_p = (uint8_t*)session_characteristics->GetRawCameraMetadata();
+  characteristics_ret->metadata.assign(chars_p, chars_p + metadata_size);
+
+  return ScopedAStatus::ok();
 }
 
 ScopedAStatus AidlCameraDevice::getPhysicalCameraCharacteristics(

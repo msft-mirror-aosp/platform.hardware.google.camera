@@ -203,6 +203,74 @@ status_t CameraDevice::GetCameraCharacteristics(
   return hal_vendor_tag_utils::ModifyCharacteristicsKeys(characteristics->get());
 }
 
+// Populates the required session characteristics keys from a camera
+// characteristics object.
+status_t generateSessionCharacteristics(
+    const HalCameraMetadata* camera_characteristics,
+    HalCameraMetadata* session_characteristics) {
+  if (camera_characteristics == nullptr) {
+    ALOGE("%s: camera characteristics is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  if (session_characteristics == nullptr) {
+    ALOGE("%s: session characteristics is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  camera_metadata_ro_entry entry;
+  status_t res;
+
+  // Get the zoom ratio key
+  res = camera_characteristics->Get(ANDROID_CONTROL_ZOOM_RATIO_RANGE, &entry);
+  if (res == OK && entry.count == 2) {
+    std::vector<float> zoom_ratio_key(entry.data.f, entry.data.f + entry.count);
+    if (session_characteristics->Set(ANDROID_CONTROL_ZOOM_RATIO_RANGE,
+                                     zoom_ratio_key.data(),
+                                     zoom_ratio_key.size()) != OK) {
+      ALOGE("%s Updating static metadata with zoom ratio range failed",
+            __FUNCTION__);
+      return UNKNOWN_ERROR;
+    }
+  }
+
+  // Get the max digital zoom key
+  res = camera_characteristics->Get(ANDROID_SCALER_AVAILABLE_MAX_DIGITAL_ZOOM,
+                                    &entry);
+  if (res == OK) {
+    std::vector<float> max_digital_zoom_key(entry.data.f,
+                                            entry.data.f + entry.count);
+    if (session_characteristics->Set(ANDROID_SCALER_AVAILABLE_MAX_DIGITAL_ZOOM,
+                                     max_digital_zoom_key.data(),
+                                     max_digital_zoom_key.size()) != OK) {
+      ALOGE("%s Updating static metadata with max digital zoom failed",
+            __FUNCTION__);
+      return UNKNOWN_ERROR;
+    }
+  }
+
+  return OK;
+}
+
+status_t CameraDevice::GetSessionCharacteristics(
+    std::unique_ptr<HalCameraMetadata>* session_characteristics) {
+  ATRACE_CALL();
+  std::unique_ptr<HalCameraMetadata> camera_characteristics;
+  status_t res =
+      camera_device_hwl_->GetCameraCharacteristics(&camera_characteristics);
+  if (res != OK) {
+    ALOGE("%s: GetCameraCharacteristics() failed: %s (%d).", __FUNCTION__,
+          strerror(-res), res);
+    return res;
+  }
+
+  // Allocating space for 10 entries and 256 bytes.
+  *session_characteristics = HalCameraMetadata::Create(10, 256);
+
+  return generateSessionCharacteristics(camera_characteristics.get(),
+                                        session_characteristics->get());
+}
+
 status_t CameraDevice::GetPhysicalCameraCharacteristics(
     uint32_t physical_camera_id,
     std::unique_ptr<HalCameraMetadata>* characteristics) {

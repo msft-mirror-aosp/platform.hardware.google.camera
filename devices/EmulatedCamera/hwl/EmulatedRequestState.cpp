@@ -735,6 +735,20 @@ status_t EmulatedRequestState::InitializeSensorSettings(
     }
   }
 
+  // Check manual flash strength level
+  ret = request_settings_->Get(ANDROID_FLASH_STRENGTH_LEVEL, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    flash_strength_level_ = entry.data.i32[0];
+    if (ANDROID_FLASH_SINGLE_STRENGTH_MAX_LEVEL > 1 &&
+            ANDROID_FLASH_TORCH_STRENGTH_MAX_LEVEL > 1 && is_flash_supported_) {
+      ALOGI("%s: Device supports manual flash strength control", __FUNCTION__);
+      flash_strength_level_ = entry.data.i32[0];
+    } else {
+        ALOGI("%s: Device does not support manual flash strength control", __FUNCTION__);
+        return BAD_VALUE;
+      }
+    }
+
   // Check video stabilization parameter
   uint8_t edge_mode = ANDROID_EDGE_MODE_OFF;
   ret = request_settings_->Get(ANDROID_EDGE_MODE, &entry);
@@ -849,6 +863,15 @@ status_t EmulatedRequestState::InitializeSensorSettings(
     }
   }
 
+  ret = static_metadata_->Get(ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    if (entry.data.u8[0] == ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME) {
+      timestamp_source_ = ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME;
+    } else if (entry.data.u8[0] != ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_UNKNOWN) {
+      ALOGE("%s: Unsupported timestamp source", __FUNCTION__);
+    }
+  }
+
   sensor_settings->exposure_time = sensor_exposure_time_;
   sensor_settings->frame_duration = sensor_frame_duration_;
   sensor_settings->gain = sensor_sensitivity_;
@@ -864,10 +887,39 @@ status_t EmulatedRequestState::InitializeSensorSettings(
   sensor_settings->edge_mode = edge_mode;
   sensor_settings->sensor_pixel_mode = sensor_pixel_mode_;
   sensor_settings->test_pattern_mode = test_pattern_mode;
+  sensor_settings->timestamp_source = timestamp_source_;
   memcpy(sensor_settings->test_pattern_data, test_pattern_data,
          sizeof(sensor_settings->test_pattern_data));
 
   return OK;
+}
+
+uint32_t EmulatedRequestState::GetPartialResultCount(bool is_partial_result) {
+  uint32_t res = 0;
+
+  if (is_partial_result) {
+    res = 1;
+  } else {
+    res = partial_result_count ? partial_result_count : 1;
+  }
+
+  return res;
+}
+
+std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializePartialResult(
+    uint32_t pipeline_id, uint32_t frame_number) {
+  std::lock_guard<std::mutex> lock(request_state_mutex_);
+  auto result = std::make_unique<HwlPipelineResult>();
+
+  if (partial_result_count > 1) {
+    result->camera_id = camera_id_;
+    result->pipeline_id = pipeline_id;
+    result->frame_number = frame_number;
+    result->result_metadata = HalCameraMetadata::Create(0, 0);
+    result->partial_result = GetPartialResultCount(/*is partial result*/ true);
+  }
+
+  return result;
 }
 
 std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
@@ -878,7 +930,7 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
   result->pipeline_id = pipeline_id;
   result->frame_number = frame_number;
   result->result_metadata = HalCameraMetadata::Clone(request_settings_.get());
-  result->partial_result = partial_result_count_;
+  result->partial_result = GetPartialResultCount(/*is partial result*/ false);
 
   // Results supported on all emulated devices
   result->result_metadata->Set(ANDROID_REQUEST_PIPELINE_DEPTH,
@@ -957,14 +1009,20 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
   if (report_exposure_time_) {
     result->result_metadata->Set(ANDROID_SENSOR_EXPOSURE_TIME,
                                  &sensor_exposure_time_, 1);
+  } else {
+    result->result_metadata->Erase(ANDROID_SENSOR_EXPOSURE_TIME);
   }
   if (report_frame_duration_) {
     result->result_metadata->Set(ANDROID_SENSOR_FRAME_DURATION,
                                  &sensor_frame_duration_, 1);
+  } else {
+    result->result_metadata->Erase(ANDROID_SENSOR_FRAME_DURATION);
   }
   if (report_sensitivity_) {
     result->result_metadata->Set(ANDROID_SENSOR_SENSITIVITY,
                                  &sensor_sensitivity_, 1);
+  } else {
+    result->result_metadata->Erase(ANDROID_SENSOR_SENSITIVITY);
   }
   if (report_rolling_shutter_skew_) {
     result->result_metadata->Set(
@@ -1006,6 +1064,11 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
                                  intrinsic_calibration_,
                                  ARRAY_SIZE(intrinsic_calibration_));
   }
+  if (report_lens_intrinsics_samples_) {
+    result->result_metadata->Set(ANDROID_STATISTICS_LENS_INTRINSIC_SAMPLES,
+                                 intrinsic_calibration_,
+                                 ARRAY_SIZE(intrinsic_calibration_));
+  }
   if (report_distortion_) {
     result->result_metadata->Set(ANDROID_LENS_DISTORTION, distortion_,
                                  ARRAY_SIZE(distortion_));
@@ -1026,6 +1089,11 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
     }
     result->result_metadata->Set(ANDROID_SCALER_CROP_REGION, chosen_crop_region,
                                  ARRAY_SIZE(scaler_crop_region_default_));
+    if (report_active_sensor_crop_) {
+      result->result_metadata->Set(
+          ANDROID_LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_SENSOR_CROP_REGION,
+          chosen_crop_region, ARRAY_SIZE(scaler_crop_region_default_));
+    }
   }
   if (report_extended_scene_mode_) {
     result->result_metadata->Set(ANDROID_CONTROL_EXTENDED_SCENE_MODE,
@@ -1282,6 +1350,11 @@ status_t EmulatedRequestState::InitializeStatisticsDefaults() {
     return BAD_VALUE;
   }
 
+  report_lens_intrinsics_samples_ =
+      (available_results_.find(ANDROID_STATISTICS_LENS_INTRINSIC_SAMPLES) !=
+       available_results_.end()) &&
+      (available_results_.find(ANDROID_STATISTICS_LENS_INTRINSIC_TIMESTAMPS) !=
+       available_results_.end());
   report_scene_flicker_ =
       available_results_.find(ANDROID_STATISTICS_SCENE_FLICKER) !=
       available_results_.end();
@@ -2374,6 +2447,12 @@ status_t EmulatedRequestState::InitializeScalerDefaults() {
             __FUNCTION__);
       return BAD_VALUE;
     }
+
+    if (available_requests_.find(
+            ANDROID_LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_SENSOR_CROP_REGION) !=
+        available_results_.end()) {
+      report_active_sensor_crop_ = true;
+    }
     ret = static_metadata_->Get(ANDROID_SCALER_AVAILABLE_ROTATE_AND_CROP_MODES,
                                 &entry);
     if ((ret == OK) && (entry.count > 0)) {
@@ -2849,9 +2928,11 @@ status_t EmulatedRequestState::InitializeRequestDefaults() {
 
   ret = static_metadata_->Get(ANDROID_REQUEST_PARTIAL_RESULT_COUNT, &entry);
   if ((ret == OK) && (entry.count == 1)) {
-    if (entry.data.i32[0] != 1) {
-      ALOGW("%s: Partial results not supported!", __FUNCTION__);
+    if (entry.data.i32[0] > 2) {
+      ALOGW("%s: Partial result count greater than 2 not supported!",
+            __FUNCTION__);
     }
+    partial_result_count = entry.data.i32[0];
   }
 
   ret = static_metadata_->Get(ANDROID_REQUEST_AVAILABLE_CHARACTERISTICS_KEYS,

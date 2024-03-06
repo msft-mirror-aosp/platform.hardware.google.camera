@@ -32,7 +32,8 @@ std::unique_ptr<CaptureSession> CreateCaptureSession(
     CameraBufferAllocatorHwl* camera_buffer_allocator_hwl,
     CameraDeviceSessionHwl* camera_device_session_hwl,
     std::vector<HalStream>* hal_config,
-    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify) {
+    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
+    ProcessBatchCaptureResultFunc process_batch_capture_result) {
   // first pass: check predefined wrapper capture session
   for (auto sessionEntry : wrapper_capture_session_entries) {
     if (sessionEntry.IsStreamConfigurationSupported(camera_device_session_hwl,
@@ -61,7 +62,8 @@ std::unique_ptr<CaptureSession> CreateCaptureSession(
                                                     stream_config)) {
       return sessionEntry.CreateSession(
           camera_device_session_hwl, stream_config, process_capture_result,
-          notify, hwl_session_callback, hal_config, camera_buffer_allocator_hwl);
+          process_batch_capture_result, notify, hwl_session_callback,
+          hal_config, camera_buffer_allocator_hwl);
     }
   }
   return nullptr;

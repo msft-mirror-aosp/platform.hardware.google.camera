@@ -359,7 +359,10 @@ TEST_F(CameraDeviceSessionTests, ConfigurePreviewStream) {
   for (auto& resolution : preview_resolutions) {
     test_utils::GetPreviewOnlyStreamConfiguration(
         &preview_config, resolution.first, resolution.second);
-    res = session->ConfigureStreams(preview_config, &hal_configured_streams);
+    ConfigureStreamsReturn hal_config;
+    res = session->ConfigureStreams(preview_config, /*interfaceV3*/ false,
+                                    &hal_config);
+    hal_configured_streams = std::move(hal_config.hal_streams);
     EXPECT_EQ(res, OK);
   }
 }
@@ -408,8 +411,11 @@ TEST_F(CameraDeviceSessionTests, PreviewRequests) {
 
   test_utils::GetPreviewOnlyStreamConfiguration(&preview_config, kPreviewWidth,
                                                 kPreviewHeight);
-  ASSERT_EQ(session->ConfigureStreams(preview_config, &hal_configured_streams),
+  ConfigureStreamsReturn hal_config;
+  ASSERT_EQ(session->ConfigureStreams(preview_config, /*interfaceV3*/ false,
+                                      &hal_config),
             OK);
+  hal_configured_streams = std::move(hal_config.hal_streams);
   ASSERT_EQ(hal_configured_streams.size(), static_cast<uint32_t>(1));
 
   // Allocate buffers.

@@ -32,7 +32,6 @@
 
 namespace android {
 
-using google_camera_hal::Rect;
 using google_camera_hal::utils::GetSensorActiveArraySize;
 using google_camera_hal::utils::HasCapability;
 
@@ -106,7 +105,7 @@ EmulatedCameraDeviceSessionHwlImpl::Create(
 
 static std::pair<Dimension, Dimension> GetArrayDimensions(
     uint32_t camera_id, const HalCameraMetadata* metadata) {
-  Rect active_array_size;
+  google_camera_hal::Rect active_array_size;
   Dimension active_array_size_dimension;
   Dimension active_array_size_dimension_maximum_resolution;
   status_t ret = GetSensorActiveArraySize(metadata, &active_array_size);
@@ -167,6 +166,14 @@ status_t EmulatedCameraDeviceSessionHwlImpl::Initialize(
   if (ret != OK) {
     ALOGE("%s: Unable to extract sensor characteristics %s (%d)", __FUNCTION__,
           strerror(-ret), ret);
+    return ret;
+  }
+
+  ret = SupportsSessionHalBufManager(static_metadata_.get(),
+                                     &supports_session_hal_buf_manager_);
+  if (ret != OK) {
+    ALOGE("%s: Unable to get sensor hal buffer manager support %s (%d)",
+          __FUNCTION__, strerror(-ret), ret);
     return ret;
   }
 
@@ -371,6 +378,27 @@ status_t EmulatedCameraDeviceSessionHwlImpl::BuildPipelines() {
     pipelines_built_ = true;
   }
 
+  return OK;
+}
+
+status_t EmulatedCameraDeviceSessionHwlImpl::ShouldUseHalBufferManager(
+    bool* result) {
+  if (result == nullptr) {
+    ALOGE("%s result is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+  *result = false;
+  if (!pipelines_built_) {
+    ALOGE("%s: Pipelines haven't been built yet", __FUNCTION__);
+    return INVALID_OPERATION;
+  }
+  if (!supports_session_hal_buf_manager_) {
+    return OK;
+  }
+  // Heuristic which doesn't necessarily correspond to real scenarios
+  if (pipelines_.size() >= 1 && pipelines_[0].streams.size() >= 2) {
+    *result = true;
+  }
   return OK;
 }
 

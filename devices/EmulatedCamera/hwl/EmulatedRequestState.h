@@ -48,11 +48,15 @@ class EmulatedRequestState {
 
   std::unique_ptr<HwlPipelineResult> InitializeResult(uint32_t pipeline_id,
                                                       uint32_t frame_number);
+  std::unique_ptr<HwlPipelineResult> InitializePartialResult(
+      uint32_t pipeline_id, uint32_t frame_number);
 
   status_t InitializeSensorSettings(
       std::unique_ptr<HalCameraMetadata> request_settings,
       uint32_t override_frame_number,
       EmulatedSensor::SensorSettings* sensor_settings /*out*/);
+
+  uint32_t GetPartialResultCount(bool is_partial_result);
 
  private:
   bool SupportsCapability(uint8_t cap);
@@ -122,7 +126,6 @@ class EmulatedRequestState {
   std::set<int32_t> available_results_;
   std::set<int32_t> available_requests_;
   uint8_t max_pipeline_depth_ = 0;
-  int32_t partial_result_count_ = 1;  // TODO: add support for partial results
   bool supports_manual_sensor_ = false;
   bool supports_manual_post_processing_ = false;
   bool is_backward_compatible_ = false;
@@ -131,6 +134,7 @@ class EmulatedRequestState {
   bool supports_yuv_reprocessing_ = false;
   bool supports_remosaic_reprocessing_ = false;
   bool supports_stream_use_case_ = false;
+  uint8_t partial_result_count = 1;
 
   // android.control.*
   struct SceneOverride {
@@ -245,6 +249,7 @@ class EmulatedRequestState {
   // android.flash.*
   bool is_flash_supported_ = false;
   uint8_t flash_state_ = ANDROID_FLASH_STATE_UNAVAILABLE;
+  int32_t flash_strength_level_ = 1;
 
   // android.sensor.*
   std::pair<int32_t, int32_t> sensor_sensitivity_range_;
@@ -263,6 +268,7 @@ class EmulatedRequestState {
   bool report_green_split_ = false;
   bool report_noise_profile_ = false;
   bool report_extended_scene_mode_ = false;
+  uint32_t timestamp_source_ = ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_UNKNOWN;
 
   // android.scaler.*
   bool report_rotate_and_crop_ = false;
@@ -310,6 +316,8 @@ class EmulatedRequestState {
   bool report_pose_translation_ = false;
   bool report_distortion_ = false;
   bool report_intrinsic_calibration_ = false;
+  bool report_active_sensor_crop_ = false;
+  bool report_lens_intrinsics_samples_ = false;
   int32_t shading_map_size_[2] = {0};
 
   unsigned int rand_seed_ = 1;

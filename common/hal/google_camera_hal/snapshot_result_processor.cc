@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_SnapshotResultProcessor"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 #include "snapshot_result_processor.h"
@@ -52,7 +52,8 @@ SnapshotResultProcessor::SnapshotResultProcessor(
   yuv_stream_id_ = yuv_stream_id;
 }
 void SnapshotResultProcessor::SetResultCallback(
-    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify) {
+    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
+    ProcessBatchCaptureResultFunc /*process_batch_capture_result*/) {
   ATRACE_CALL();
   std::lock_guard<std::mutex> lock(callback_lock_);
   process_capture_result_ = process_capture_result;

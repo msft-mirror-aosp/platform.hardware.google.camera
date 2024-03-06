@@ -26,9 +26,10 @@ namespace google_camera_hal {
 // Defines a ResultProcessor mock using gmock.
 class MockResultProcessor : public ResultProcessor {
  public:
-  MOCK_METHOD2(SetResultCallback,
+  MOCK_METHOD3(SetResultCallback,
                void(ProcessCaptureResultFunc process_capture_result,
-                    NotifyFunc notify));
+                    NotifyFunc notify,
+                    ProcessBatchCaptureResultFunc process_batch_capture_result));
 
   MOCK_METHOD2(
       AddPendingRequests,

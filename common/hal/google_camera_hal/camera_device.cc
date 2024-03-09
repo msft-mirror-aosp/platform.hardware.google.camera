@@ -103,6 +103,7 @@ static void LoadLibraries(const std::vector<std::string>* libs) {
                            })) {
       ReadAheadVma(vma, kMadviseSizeLimitBytes);
     }
+    return true;
   };
   ProcMemInfo meminfo(getpid());
   meminfo.ForEachVmaFromMaps(vmaCollectorCb);

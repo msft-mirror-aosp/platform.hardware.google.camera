@@ -15,10 +15,10 @@
  */
 
 #define LOG_TAG "ResultDispatcherTests"
-#include <cutils/properties.h>
-#include <gtest/gtest.h>
 #include <log/log.h>
 
+#include <cutils/properties.h>
+#include <gtest/gtest.h>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -65,7 +65,6 @@ class ResultDispatcherTests : public ::testing::Test {
         [this](std::unique_ptr<CaptureResult> result) {
           ProcessCaptureResult(std::move(result));
         },
-        /*process_batch_capture_result=*/nullptr,
         [this](const NotifyMessage& message) { Notify(message); },
         stream_config, "TestResultDispatcher");
 

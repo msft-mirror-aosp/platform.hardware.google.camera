@@ -442,7 +442,8 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
         __FUNCTION__);
     return UNKNOWN_ERROR;
   }
-  realtime_result_processor->SetResultCallback(process_capture_result, notify);
+  realtime_result_processor->SetResultCallback(
+      process_capture_result, notify, /*process_batch_capture_result=*/nullptr);
 
   res = process_block->SetResultProcessor(std::move(realtime_result_processor));
   if (res != OK) {
@@ -490,7 +491,9 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
       return UNKNOWN_ERROR;
     }
     basic_result_processor_ = basic_result_processor.get();
-    basic_result_processor->SetResultCallback(process_capture_result, notify);
+    basic_result_processor->SetResultCallback(
+        process_capture_result, notify,
+        /*process_batch_capture_result=*/nullptr);
 
     res =
         denoise_processor->SetResultProcessor(std::move(basic_result_processor));
@@ -603,7 +606,8 @@ status_t ZslSnapshotCaptureSession::SetupSnapshotProcessChain(
   res = snapshot_process_block_->SetResultProcessor(
       std::move(snapshot_result_processor));
 
-  snapshot_result_processor_->SetResultCallback(process_capture_result, notify);
+  snapshot_result_processor_->SetResultCallback(
+      process_capture_result, notify, /*process_batch_capture_result=*/nullptr);
   res = ConfigureSnapshotStreams(stream_config);
   if (res != OK) {
     ALOGE("%s: Configuring snapshot stream failed: %s(%d)", __FUNCTION__,

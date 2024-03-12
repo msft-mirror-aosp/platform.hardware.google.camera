@@ -17,6 +17,8 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_HWL_INTERFACE_HWL_TYPES_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_HWL_INTERFACE_HWL_TYPES_H_
 
+#include <vector>
+
 #include "hal_types.h"
 
 namespace android {
@@ -81,6 +83,10 @@ struct HwlPipelineResult {
 using HwlProcessPipelineResultFunc =
     std::function<void(std::unique_ptr<HwlPipelineResult> /*result*/)>;
 
+// Callback to invoke to send a batched result from HWL.
+using HwlProcessPipelineBatchResultFunc = std::function<void(
+    std::vector<std::unique_ptr<HwlPipelineResult>> /*results*/)>;
+
 // Callback to invoke to notify a message from HWL.
 using NotifyHwlPipelineMessageFunc = std::function<void(
     uint32_t /*pipeline_id*/, const NotifyMessage& /*message*/)>;
@@ -89,6 +95,9 @@ using NotifyHwlPipelineMessageFunc = std::function<void(
 struct HwlPipelineCallback {
   // Callback to notify when a HWL pipeline produces a capture result.
   HwlProcessPipelineResultFunc process_pipeline_result;
+
+  // Callback to notify when a HWL pipeline produces a batched capture result.
+  HwlProcessPipelineBatchResultFunc process_pipeline_batch_result;
 
   // Callback to notify shutters or errors.
   NotifyHwlPipelineMessageFunc notify;

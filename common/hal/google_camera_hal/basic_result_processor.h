@@ -17,6 +17,8 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_BASIC_RESULT_PROCESSOR_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_BASIC_RESULT_PROCESSOR_H_
 
+#include <vector>
+
 #include "result_processor.h"
 
 namespace android {
@@ -31,14 +33,17 @@ class BasicResultProcessor : public ResultProcessor {
   virtual ~BasicResultProcessor();
 
   // Override functions of ResultProcessor start.
-  void SetResultCallback(ProcessCaptureResultFunc process_capture_result,
-                         NotifyFunc notify) override;
+  void SetResultCallback(
+      ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
+      ProcessBatchCaptureResultFunc process_batch_capture_result) override;
 
   status_t AddPendingRequests(
       const std::vector<ProcessBlockRequest>& process_block_requests,
       const CaptureRequest& remaining_session_request) override;
 
   void ProcessResult(ProcessBlockResult block_result) override;
+
+  void ProcessBatchResult(std::vector<ProcessBlockResult> block_results) override;
 
   void Notify(const ProcessBlockNotifyMessage& block_message) override;
 
@@ -53,6 +58,7 @@ class BasicResultProcessor : public ResultProcessor {
 
   // The following callbacks must be protected by callback_lock_.
   ProcessCaptureResultFunc process_capture_result_;
+  ProcessBatchCaptureResultFunc process_batch_capture_result_;
   NotifyFunc notify_;
 };
 

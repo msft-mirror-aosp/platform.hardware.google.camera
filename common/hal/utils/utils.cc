@@ -38,15 +38,16 @@ namespace {
 
 using FpsRange = std::pair<int32_t, int32_t>;
 
+static const std::vector<std::pair<FpsRange, FpsRange>> kAcceptableTransitions = {
+    std::make_pair<FpsRange, FpsRange>({2, 2}, {12, 12}),
+    std::make_pair<FpsRange, FpsRange>({12, 12}, {30, 30}),
+    std::make_pair<FpsRange, FpsRange>({30, 30}, {60, 60}),
+    std::make_pair<FpsRange, FpsRange>({24, 24}, {24, 30}),
+    std::make_pair<FpsRange, FpsRange>({24, 24}, {30, 30}),
+};
+
 bool IsAcceptableThrottledFpsChange(const FpsRange& old_fps,
                                     const FpsRange& new_fps) {
-  // We allow smooth transitions between [30,30] to [60,60] and [24,24] and [24,30].
-  constexpr std::array<std::pair<FpsRange, FpsRange>, 3> kAcceptableTransitions = {
-      std::make_pair<FpsRange, FpsRange>({30, 30}, {60, 60}),
-      std::make_pair<FpsRange, FpsRange>({24, 24}, {24, 30}),
-      std::make_pair<FpsRange, FpsRange>({24, 24}, {30, 30}),
-  };
-
   for (const std::pair<FpsRange, FpsRange>& range : kAcceptableTransitions) {
     // We don't care about the direction of the transition.
     if ((old_fps == range.first && new_fps == range.second) ||
@@ -54,7 +55,6 @@ bool IsAcceptableThrottledFpsChange(const FpsRange& old_fps,
       return true;
     }
   }
-
   return false;
 }
 }  // namespace
@@ -430,9 +430,9 @@ bool IsSessionParameterCompatible(const HalCameraMetadata* old_session,
       if (old_max_fps == new_max_fps || ignore_fps_range_diff) {
         ALOGI(
             "%s: Ignore fps (%d, %d) to (%d, %d). "
-            "video_60_to_30fps_thermal_throttle: %u",
+            "video_60_to_30fps_thermal_throttle: %u. video_fps_throttle: %u.",
             __FUNCTION__, old_min_fps, old_max_fps, new_min_fps, new_max_fps,
-            video_60_to_30fps_thermal_throttle);
+            video_60_to_30fps_thermal_throttle, video_fps_throttle);
         continue;
       }
 

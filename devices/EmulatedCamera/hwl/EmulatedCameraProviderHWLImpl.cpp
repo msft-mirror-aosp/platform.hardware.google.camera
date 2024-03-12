@@ -35,11 +35,14 @@
 namespace android {
 
 // Location of the camera configuration files.
-constexpr std::string_view kConfigurationFileNames[] = {
-    "emu_camera_back.json",
-    "emu_camera_front.json",
-    "emu_camera_depth.json",
-};
+constexpr std::string_view kCameraConfigBack = "emu_camera_back.json";
+constexpr std::string_view kCameraConfigFront = "emu_camera_front.json";
+constexpr std::string_view kCameraConfigExternal = "emu_camera_external.json";
+constexpr std::string_view kCameraConfigDepth = "emu_camera_depth.json";
+constexpr std::string_view kCameraConfigFiles[] = {
+    kCameraConfigBack, kCameraConfigFront, kCameraConfigExternal,
+    kCameraConfigDepth};
+
 constexpr std::string_view kConfigurationFileDirVendor = "/vendor/etc/config/";
 constexpr std::string_view kConfigurationFileDirApex =
     "/apex/com.google.emulated.camera.provider.hal/etc/config/";
@@ -711,8 +714,17 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
   }
   char prop[PROPERTY_VALUE_MAX];
   if (!property_get_bool("ro.boot.qemu", false)) {
-    for (const auto& iter : kConfigurationFileNames) {
-      config_file_locations.emplace_back(config_dir + iter.data());
+    // Cuttlefish
+    property_get("ro.vendor.camera.config", prop, nullptr);
+    if (strcmp(prop, "external") == 0) {
+      config_file_locations.emplace_back(config_dir +
+                                         kCameraConfigExternal.data());
+      logical_id = 1;
+    } else {
+      // Default phone layout.
+      config_file_locations.emplace_back(config_dir + kCameraConfigBack.data());
+      config_file_locations.emplace_back(config_dir + kCameraConfigFront.data());
+      config_file_locations.emplace_back(config_dir + kCameraConfigDepth.data());
     }
   } else {
     // Android Studio Emulator
@@ -721,22 +733,22 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
         property_get("vendor.qemu.sf.fake_camera", prop, nullptr);
         if (strcmp(prop, "both") == 0) {
           config_file_locations.emplace_back(config_dir +
-                                             kConfigurationFileNames[0].data());
+                                             kCameraConfigBack.data());
           config_file_locations.emplace_back(config_dir +
-                                             kConfigurationFileNames[1].data());
+                                             kCameraConfigFront.data());
         } else if (strcmp(prop, "front") == 0) {
           config_file_locations.emplace_back(config_dir +
-                                             kConfigurationFileNames[1].data());
+                                             kCameraConfigFront.data());
           logical_id = 1;
         } else if (strcmp(prop, "back") == 0) {
           config_file_locations.emplace_back(config_dir +
-                                             kConfigurationFileNames[0].data());
+                                             kCameraConfigBack.data());
           logical_id = 1;
         }
       }
     }
   }
-  static_metadata_.resize(ARRAY_SIZE(kConfigurationFileNames));
+  static_metadata_.resize(ARRAY_SIZE(kCameraConfigFiles));
 
   for (const auto& config_path : config_file_locations) {
     if (!android::base::ReadFileToString(config_path, &config)) {

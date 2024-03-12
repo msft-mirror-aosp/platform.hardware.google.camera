@@ -15,9 +15,9 @@
  */
 
 #define LOG_TAG "ResultProcessorTest"
+#include <gtest/gtest.h>
 #include <log/log.h>
 
-#include <gtest/gtest.h>
 #include <memory>
 
 #include "basic_result_processor.h"
@@ -59,7 +59,9 @@ TEST(ResultProcessorTest, SetResultCallback) {
     ASSERT_NE(result_processor, nullptr)
         << "Creating a result processor failed";
 
-    result_processor->SetResultCallback(process_capture_result, notify);
+    result_processor->SetResultCallback(
+        process_capture_result, notify,
+        /*process_batch_capture_result=*/nullptr);
   }
 }
 
@@ -116,7 +118,9 @@ TEST(ResultProcessorTest, ProcessResultAndNotify) {
     SendResultsAndMessages(result_processor.get());
 
     // Test again after setting result callback.
-    result_processor->SetResultCallback(process_capture_result, notify);
+    result_processor->SetResultCallback(
+        process_capture_result, notify,
+        /*process_batch_capture_result=*/nullptr);
     SendResultsAndMessages(result_processor.get());
   }
 }
@@ -135,7 +139,8 @@ TEST(ResultProcessorTest, BasicResultProcessorResultAndNotify) {
   NotifyFunc notify = NotifyFunc(
       [&](const NotifyMessage& /*message*/) { message_received = true; });
 
-  result_processor->SetResultCallback(process_capture_result, notify);
+  result_processor->SetResultCallback(process_capture_result, notify,
+                                      /*process_batch_capture_result=*/nullptr);
 
   ProcessBlockResult null_result;
   result_processor->ProcessResult(std::move(null_result));
@@ -165,7 +170,8 @@ TEST(ResultProcessorTest, BasicResultProcessorAddPendingRequest) {
 
   NotifyFunc notify = NotifyFunc([&](const NotifyMessage& /*message*/) {});
 
-  result_processor->SetResultCallback(process_capture_result, notify);
+  result_processor->SetResultCallback(process_capture_result, notify,
+                                      /*process_batch_capture_result=*/nullptr);
 
   std::vector<ProcessBlockRequest> requests(1);
   requests[0].request.output_buffers = {StreamBuffer{}};

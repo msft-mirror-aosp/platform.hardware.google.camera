@@ -30,21 +30,27 @@ namespace google_camera_hal {
 // ResultDispatcher dispatches capture results in the order of frame numbers,
 // including result metadata, shutters, and stream buffers.
 //
-// The client can add results and shutters via AddResult() and AddShutter() in
-// any order. ResultDispatcher will invoke ProcessCaptureResultFunc and
-// NotifyFunc to notify result metadata, shutters, and stream buffers in the
-// in the order of increasing frame numbers.
+// The client can add results and shutters via AddResult() (or AddBatchResult())
+// and AddShutter() in any order. ResultDispatcher will invoke
+// ProcessCaptureResultFunc (or ProcessBatchCaptureResultFunc) and NotifyFunc to
+// notify result metadata, shutters, and stream buffers in the in the order of
+// increasing frame numbers.
 class ResultDispatcher {
  public:
   // Create a ResultDispatcher.
   // partial_result_count is the partial result count.
-  // process_capture_result is the function to notify capture results.
-  // stream_config is the session stream configuration
+  // process_capture_result is the callback to notify a capture result.
+  // process_batch_capture_result is the callback to notify multiple capture
+  // results at once.
+  // stream_config is the session stream configuration.
   // notify is the function to notify shutter messages.
+  // If process_batch_capture_result is not null, it has the priority over
+  // process_capture_result.
   static std::unique_ptr<ResultDispatcher> Create(
       uint32_t partial_result_count,
-      ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-      const StreamConfiguration& stream_config,
+      ProcessCaptureResultFunc process_capture_result,
+      ProcessBatchCaptureResultFunc process_batch_capture_result,
+      NotifyFunc notify, const StreamConfiguration& stream_config,
       std::string_view name = "ResultDispatcher");
 
   virtual ~ResultDispatcher();
@@ -57,6 +63,9 @@ class ResultDispatcher {
   // Add a ready result. If the result doesn't belong to a pending request that
   // was previously added via AddPendingRequest(), an error will be returned.
   status_t AddResult(std::unique_ptr<CaptureResult> result);
+
+  // Add a batch of results which contains multiple ready results.
+  status_t AddBatchResult(std::vector<std::unique_ptr<CaptureResult>> results);
 
   // Add a shutter for a frame number. If the frame number doesn't belong to a
   // pending request that was previously added via AddPendingRequest(), an error
@@ -73,6 +82,7 @@ class ResultDispatcher {
 
   ResultDispatcher(uint32_t partial_result_count,
                    ProcessCaptureResultFunc process_capture_result,
+                   ProcessBatchCaptureResultFunc process_batch_capture_result,
                    NotifyFunc notify, const StreamConfiguration& stream_config,
                    std::string_view name = "ResultDispatcher");
 
@@ -136,11 +146,18 @@ class ResultDispatcher {
   // Remove pending shutter, result metadata, and buffers for a frame number.
   void RemovePendingRequestLocked(uint32_t frame_number);
 
-  // Invoke process_capture_result_ to notify metadata.
-  void NotifyResultMetadata(uint32_t frame_number,
-                            std::unique_ptr<HalCameraMetadata> metadata,
-                            std::vector<PhysicalCameraMetadata> physical_metadata,
-                            uint32_t partial_result);
+  // Add result metadata and buffers to the storage to send them from the notify
+  // callback thread.
+  status_t AddResultImpl(std::unique_ptr<CaptureResult> result);
+
+  // Compose a capture result which contains a result metadata.
+  std::unique_ptr<CaptureResult> MakeResultMetadata(
+      uint32_t frame_number, std::unique_ptr<HalCameraMetadata> metadata,
+      std::vector<PhysicalCameraMetadata> physical_metadata,
+      uint32_t partial_result);
+
+  // Invoke the capture result callback to notify capture results.
+  void NotifyCaptureResults(std::vector<std::unique_ptr<CaptureResult>> results);
 
   status_t AddFinalResultMetadata(
       uint32_t frame_number, std::unique_ptr<HalCameraMetadata> final_metadata,
@@ -156,21 +173,24 @@ class ResultDispatcher {
   // Get a shutter message that is ready to be notified via notify_.
   status_t GetReadyShutterMessage(NotifyMessage* message);
 
-  // Get a final metadata that is ready to be notified via
-  // process_capture_result_.
+  // Get a final metadata that is ready to be notified via the capture result callback.
   status_t GetReadyFinalMetadata(
       uint32_t* frame_number, std::unique_ptr<HalCameraMetadata>* final_metadata,
       std::vector<PhysicalCameraMetadata>* physical_metadata);
 
-  // Get a result with a buffer that is ready to be notified via
-  // process_capture_result_.
+  // Get a result with a buffer that is ready to be notified via the capture
+  // result callback.
   status_t GetReadyBufferResult(std::unique_ptr<CaptureResult>* result);
 
   // Check all pending shutters and invoke notify_ with shutters that are ready.
   void NotifyShutters();
 
-  // Check all pending final result metadata and invoke process_capture_result_
-  // with final result metadata that are ready.
+  // Send partial result callbacks if `results` contains partial result metadata.
+  void NotifyBatchPartialResultMetadata(
+      std::vector<std::unique_ptr<CaptureResult>>& results);
+
+  // Check all pending final result metadata and invoke the capture result
+  // callback with final result metadata that are ready.
   void NotifyFinalResultMetadata();
 
   // Check all pending buffers and invoke notify_ with buffers that are ready.
@@ -215,6 +235,7 @@ class ResultDispatcher {
 
   std::mutex process_capture_result_lock_;
   ProcessCaptureResultFunc process_capture_result_;
+  ProcessBatchCaptureResultFunc process_batch_capture_result_;
   NotifyFunc notify_;
 
   // A thread to run NotifyCallbackThreadLoop().

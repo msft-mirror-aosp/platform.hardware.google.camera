@@ -234,6 +234,12 @@ class AidlCameraDeviceSession
 
   std::shared_ptr<android::hardware::camera::implementation::AidlProfiler>
       aidl_profiler_;
+
+  // The ID of preview stream.
+  int32_t preview_stream_id_ = -1;
+
+  // The timestamp of last preview image actually sent by HAL.
+  uint32_t preview_timestamp_last_ = 0;
 };
 
 }  // namespace implementation

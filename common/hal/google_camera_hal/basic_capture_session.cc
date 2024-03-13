@@ -24,6 +24,7 @@
 
 #include "basic_request_processor.h"
 #include "basic_result_processor.h"
+#include "hal_types.h"
 #include "realtime_process_block.h"
 
 namespace android {
@@ -203,6 +204,33 @@ status_t BasicCaptureSession::Initialize(
     return UNKNOWN_ERROR;
   }
 
+  std::unique_ptr<HalCameraMetadata> characteristics;
+  uint32_t partial_result_count = 1;
+  status_t res = device_session_hwl->GetCameraCharacteristics(&characteristics);
+  if (res != OK) {
+    ALOGE("GetCameraCharacteristics failed");
+    return BAD_VALUE;
+  }
+  camera_metadata_ro_entry partial_result_entry;
+  res = characteristics->Get(ANDROID_REQUEST_PARTIAL_RESULT_COUNT,
+                             &partial_result_entry);
+  if (res == OK) {
+    partial_result_count = partial_result_entry.data.i32[0];
+  }
+
+  // Create result dispatcher.
+  std::string result_dispatcher_name =
+      "Cam" + std::to_string(device_session_hwl_->GetCameraId()) +
+      "_ResultDispatcher";
+  result_dispatcher_ =
+      ResultDispatcher::Create(partial_result_count, process_capture_result,
+                               process_batch_capture_result, notify,
+                               stream_config, result_dispatcher_name);
+  if (result_dispatcher_ == nullptr) {
+    ALOGE("Creating ResultDispatcher failed");
+    return UNKNOWN_ERROR;
+  }
+
   // Create result processor.
   auto result_processor = BasicResultProcessor::Create();
   if (result_processor == nullptr) {
@@ -210,8 +238,16 @@ status_t BasicCaptureSession::Initialize(
     return UNKNOWN_ERROR;
   }
 
-  result_processor->SetResultCallback(process_capture_result, notify,
-                                      process_batch_capture_result);
+  auto process_capture_result_cb = [this](std::unique_ptr<CaptureResult> result) {
+    ProcessCaptureResult(std::move(result));
+  };
+  auto notify_cb = [this](const NotifyMessage& message) { Notify(message); };
+  auto process_batch_capture_result_cb =
+      [this](std::vector<std::unique_ptr<CaptureResult>> results) {
+        ProcessBatchCaptureResult(std::move(results));
+      };
+  result_processor->SetResultCallback(process_capture_result_cb, notify_cb,
+                                      process_batch_capture_result_cb);
 
   // Create process block.
   auto process_block = RealtimeProcessBlock::Create(device_session_hwl_);
@@ -227,8 +263,8 @@ status_t BasicCaptureSession::Initialize(
     return UNKNOWN_ERROR;
   }
 
-  status_t res = ConfigureStreams(stream_config, request_processor_.get(),
-                                  process_block.get());
+  res = ConfigureStreams(stream_config, request_processor_.get(),
+                         process_block.get());
   if (res != OK) {
     ALOGE("%s: Configuring stream failed: %s(%d)", __FUNCTION__, strerror(-res),
           res);
@@ -255,12 +291,33 @@ status_t BasicCaptureSession::Initialize(
 
 status_t BasicCaptureSession::ProcessRequest(const CaptureRequest& request) {
   ATRACE_CALL();
+  result_dispatcher_->AddPendingRequest(request);
   return request_processor_->ProcessRequest(request);
 }
 
 status_t BasicCaptureSession::Flush() {
   ATRACE_CALL();
   return request_processor_->Flush();
+}
+
+void BasicCaptureSession::ProcessCaptureResult(
+    std::unique_ptr<CaptureResult> result) {
+  result_dispatcher_->AddResult(std::move(result));
+}
+
+void BasicCaptureSession::Notify(const NotifyMessage& message) {
+  if (message.type == MessageType::kShutter) {
+    result_dispatcher_->AddShutter(message.message.shutter.frame_number,
+                                   message.message.shutter.timestamp_ns,
+                                   message.message.shutter.readout_timestamp_ns);
+  } else {
+    result_dispatcher_->AddError(message.message.error);
+  }
+}
+
+void BasicCaptureSession::ProcessBatchCaptureResult(
+    std::vector<std::unique_ptr<CaptureResult>> results) {
+  result_dispatcher_->AddBatchResult(std::move(results));
 }
 
 }  // namespace google_camera_hal

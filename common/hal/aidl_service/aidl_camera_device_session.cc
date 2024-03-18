@@ -24,6 +24,7 @@
 #include <android/binder_manager.h>
 #include <cutils/properties.h>
 #include <cutils/trace.h>
+#include <hardware/gralloc.h>
 #include <log/log.h>
 #include <malloc.h>
 #include <ui/GraphicBufferMapper.h>
@@ -106,6 +107,28 @@ void AidlCameraDeviceSession::ProcessCaptureResult(
   for (auto& buffer : hal_result->output_buffers) {
     aidl_profiler_->ProfileFrameRate("Stream " +
                                      std::to_string(buffer.stream_id));
+  }
+  if (ATRACE_ENABLED()) {
+    bool dump_preview_stream_time = false;
+    for (size_t i = 0; i < hal_result->output_buffers.size(); i++) {
+      if (hal_result->output_buffers[i].stream_id == preview_stream_id_) {
+        dump_preview_stream_time = true;
+        break;
+      }
+    }
+
+    if (dump_preview_stream_time) {
+      timespec time;
+      clock_gettime(CLOCK_BOOTTIME, &time);
+      uint32_t timestamp_now =
+          static_cast<uint32_t>(time.tv_sec * 1000 + (time.tv_nsec / 1000000L));
+      if (preview_timestamp_last_ > 0) {
+        uint32_t timestamp_diff = timestamp_now - preview_timestamp_last_;
+        ATRACE_INT64("preview_timestamp_diff", timestamp_diff);
+        ATRACE_INT("preview_frame_number", hal_result->frame_number);
+      }
+      preview_timestamp_last_ = timestamp_now;
+    }
   }
 
   std::vector<CaptureResult> aidl_results(1);
@@ -344,7 +367,7 @@ status_t AidlCameraDeviceSession::Initialize(
     ALOGE("%s: aidl_profiler is nullptr.", __FUNCTION__);
     return BAD_VALUE;
   }
-
+  preview_timestamp_last_ = 0;
   status_t res = CreateMetadataQueue(&request_metadata_queue_,
                                      kRequestMetadataQueueSizeBytes,
                                      "ro.vendor.camera.req.fmq.size");
@@ -605,6 +628,18 @@ ndk::ScopedAStatus AidlCameraDeviceSession::configureStreamsImpl(
   if (res != OK) {
     return ndk::ScopedAStatus::fromServiceSpecificError(
         static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
+  }
+  preview_stream_id_ = -1;
+  for (uint32_t i = 0; i < hal_stream_config.streams.size(); i++) {
+    auto& stream = hal_stream_config.streams[i];
+    if (stream.stream_type == google_camera_hal::StreamType::kOutput &&
+        stream.format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED &&
+        ((stream.usage & GRALLOC_USAGE_HW_COMPOSER) ==
+             GRALLOC_USAGE_HW_COMPOSER ||
+         (stream.usage & GRALLOC_USAGE_HW_TEXTURE) == GRALLOC_USAGE_HW_TEXTURE)) {
+      preview_stream_id_ = stream.id;
+      break;
+    }
   }
 
   google_camera_hal::ConfigureStreamsReturn hal_configured_streams;

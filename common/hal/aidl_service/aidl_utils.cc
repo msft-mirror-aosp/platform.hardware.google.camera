@@ -366,7 +366,7 @@ status_t ConvertToAidlStreamBuffer(
     return res;
   }
 
-  aidl_buffer->acquireFence = aidl::android::hardware::common::NativeHandle();
+  aidl_buffer->acquireFence = makeToAidlIfNotNull(hal_buffer.acquire_fence);
   aidl_buffer->releaseFence = makeToAidlIfNotNull(hal_buffer.release_fence);
   return OK;
 }

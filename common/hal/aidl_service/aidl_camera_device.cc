@@ -182,10 +182,9 @@ ScopedAStatus AidlCameraDevice::constructDefaultRequestSettings(
   res = google_camera_device_->ConstructDefaultRequestSettings(hal_type,
                                                                &settings);
   if (res != OK) {
-    ALOGE("%s: Getting camera characteristics for camera %u failed: %s(%d)",
+    ALOGE("%s: ConstructDefaultRequestSettings for camera %u failed: %s(%d)",
           __FUNCTION__, camera_id_, strerror(-res), res);
-    return ScopedAStatus::fromServiceSpecificError(
-        static_cast<int32_t>(Status::INTERNAL_ERROR));
+    return aidl_utils::ConvertToAidlReturn(res);
   }
   if (settings == nullptr) {
     ALOGE("%s: Default request settings for camera %u is nullptr.",

@@ -14,37 +14,34 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_AidlProfiler"
-
 #include "aidl_profiler.h"
 
 #include <log/log.h>
 
+#include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <utility>
+#include <vector>
 
 #include "profiler.h"
+#include "profiler_util.h"
+#include "tracked_profiler.h"
 
 namespace android {
-namespace hardware {
-namespace camera {
-namespace implementation {
+namespace google_camera_hal {
 namespace {
 
-using ::google::camera_common::Profiler;
+using google::camera_common::Profiler;
 
 // setprop key for profiling open/close camera
 constexpr char kPropKeyProfileOpenClose[] =
     "persist.vendor.camera.profiler.open_close";
 // setprop key for profiling camera fps
 constexpr char kPropKeyProfileFps[] = "persist.vendor.camera.profiler.fps";
-
-constexpr char kFirstFrame[] = "First frame";
-constexpr char kHalTotal[] = "HAL Total";
-constexpr char kIdleString[] = "<-- IDLE -->";
-constexpr char kOverall[] = "Overall";
 
 class AidlProfilerImpl : public AidlProfiler {
  public:
@@ -56,88 +53,78 @@ class AidlProfilerImpl : public AidlProfiler {
   }
 
   std::unique_ptr<AidlScopedProfiler> MakeScopedProfiler(
-      ScopedType type,
+      EventType type,
       std::unique_ptr<google::camera_common::Profiler> custom_latency_profiler,
       std::unique_ptr<google::camera_common::Profiler> custom_fps_profiler)
       override {
+    /*
+     * Makes a ScopedProfiler to help profile the corresponding event type. If
+     * profiling an open, close, or reconfiguration operation, function checks
+     * to see if the event can be used as a continuation of a previous operation
+     */
     std::lock_guard lock(api_mutex_);
-    if (type == ScopedType::kConfigureStream && fps_profiler_ == nullptr) {
+    if (type == EventType::kConfigureStream && fps_profiler_ == nullptr) {
       if (SetFpsProfiler(std::move(custom_fps_profiler)) == false) {
         fps_profiler_ = CreateFpsProfiler();
       }
     }
 
-    if (latency_profiler_ == nullptr) {
-      if (SetLatencyProfiler(std::move(custom_latency_profiler)) == false) {
-        latency_profiler_ = CreateLatencyProfiler();
+    latency_profilers_.erase(
+        std::remove_if(latency_profilers_.begin(), latency_profilers_.end(),
+                       [type](const auto& profiler) {
+                         return profiler->ShouldDelete(type);
+                       }),
+        latency_profilers_.end());
+
+    for (auto rprofiler = latency_profilers_.rbegin();
+         rprofiler != latency_profilers_.rend(); ++rprofiler) {
+      if (std::unique_ptr<AidlScopedProfiler> ret =
+              (*rprofiler)->AcceptNextState(type);
+          ret != nullptr) {
+        return ret;
       }
-      if (latency_profiler_ != nullptr) {
-        has_camera_open_ = false;
-        config_count_ = 0;
-        flush_count_ = 0;
-        idle_count_ = 0;
+    }
+
+    if (int size = latency_profilers_.size(); size > 2) {
+      ALOGE("%s: Too many overlapping operations (have: %d). Will not profile.",
+            __FUNCTION__, size);
+      return nullptr;
+    }
+
+    if (type == EventType::kOpen || type == EventType::kFlush) {
+      if (SetOrCreateTrackedProfiler(std::move(custom_latency_profiler),
+                                     camera_id_string_)) {
+        return latency_profilers_.back()->AcceptNextState(type);
       } else {
         return nullptr;
       }
     }
-
-    IdleEndLocked();
-
-    const char* name = nullptr;
-    int32_t id = 0;
-    switch (type) {
-      case ScopedType::kOpen:
-        name = "Open";
-        has_camera_open_ = true;
-        latency_profiler_->SetUseCase(camera_id_string_ + "-Open");
-        break;
-      case ScopedType::kConfigureStream:
-        name = "ConfigureStream";
-        if (!has_camera_open_) {
-          latency_profiler_->SetUseCase(camera_id_string_ + "-Reconfiguration");
-        }
-        id = config_count_++;
-        break;
-      case ScopedType::kFlush:
-        name = "Flush";
-        latency_profiler_->SetUseCase(camera_id_string_ + "-Flush");
-        id = flush_count_++;
-        break;
-      case ScopedType::kClose:
-        name = "Close";
-        latency_profiler_->SetUseCase(camera_id_string_ + "-Close");
-        break;
-      default:
-        ALOGE("%s: Unknown type %d", __FUNCTION__, type);
-        return nullptr;
-    }
-    return std::make_unique<AidlScopedProfiler>(
-        latency_profiler_, name, id, [this, type]() {
-          std::lock_guard lock(api_mutex_);
-          if (type == ScopedType::kClose) {
-            DeleteProfilerLocked();
-          } else {
-            IdleStartLocked();
-          }
-        });
+    ALOGE("%s: Could not find an operation for incoming event: %s",
+          __FUNCTION__, EventTypeToString(type).c_str());
+    return nullptr;
   }
 
   void FirstFrameStart() override {
     std::lock_guard lock(api_mutex_);
-    IdleEndLocked();
-    if (latency_profiler_ != nullptr) {
-      latency_profiler_->Start(kFirstFrame, Profiler::kInvalidRequestId);
-      latency_profiler_->Start(kHalTotal, Profiler::kInvalidRequestId);
+    for (auto rprofiler = latency_profilers_.rbegin();
+         rprofiler != latency_profilers_.rend(); ++rprofiler) {
+      if ((*rprofiler)->AcceptFirstFrameStart()) {
+        return;
+      }
     }
+    ALOGE("%s: Error: no profiler accepted First Frame Start", __FUNCTION__);
   }
 
   void FirstFrameEnd() override {
     std::lock_guard lock(api_mutex_);
-    if (latency_profiler_ != nullptr) {
-      latency_profiler_->End(kFirstFrame, Profiler::kInvalidRequestId);
-      latency_profiler_->End(kHalTotal, Profiler::kInvalidRequestId);
-      DeleteProfilerLocked();
+    for (auto rprofiler = latency_profilers_.rbegin();
+         rprofiler != latency_profilers_.rend(); ++rprofiler) {
+      if ((*rprofiler)->AcceptFirstFrameEnd()) {
+        latency_profilers_.erase(std::next(rprofiler).base());
+        return;
+      }
     }
+    ALOGE("%s: Error: no profiler accepted First Frame End", __FUNCTION__);
   }
 
   void ProfileFrameRate(const std::string& name) override {
@@ -163,6 +150,25 @@ class AidlProfilerImpl : public AidlProfiler {
     return profiler;
   }
 
+  bool SetOrCreateTrackedProfiler(std::unique_ptr<Profiler> profiler,
+                                  std::string camera_id_string) {
+    if (profiler == nullptr) {
+      std::shared_ptr<Profiler> latency_profiler_ = CreateLatencyProfiler();
+      if (latency_profiler_ == nullptr) {
+        return false;
+      }
+      latency_profilers_.emplace_back(std::make_shared<TrackedProfiler>(
+          latency_profiler_, camera_id_string, EventType::kNone));
+    } else {
+      profiler->SetDumpFilePrefix(
+          "/data/vendor/camera/profiler/aidl_open_close_");
+      profiler->Start(kOverall, Profiler::kInvalidRequestId);
+      latency_profilers_.emplace_back(std::make_shared<TrackedProfiler>(
+          std::move(profiler), camera_id_string, EventType::kNone));
+    }
+    return true;
+  }
+
   std::shared_ptr<Profiler> CreateFpsProfiler() {
     if (fps_flag_ == Profiler::SetPropFlag::kDisable) {
       return nullptr;
@@ -176,25 +182,6 @@ class AidlProfilerImpl : public AidlProfiler {
     return profiler;
   }
 
-  void DeleteProfilerLocked() {
-    if (latency_profiler_ != nullptr) {
-      latency_profiler_->End(kOverall, Profiler::kInvalidRequestId);
-      latency_profiler_ = nullptr;
-    }
-  }
-
-  void IdleStartLocked() {
-    if (latency_profiler_ != nullptr) {
-      latency_profiler_->Start(kIdleString, idle_count_++);
-    }
-  }
-
-  void IdleEndLocked() {
-    if (latency_profiler_ != nullptr && idle_count_ > 0) {
-      latency_profiler_->End(kIdleString, idle_count_ - 1);
-    }
-  }
-
   uint32_t GetCameraId() const {
     return camera_id_;
   }
@@ -203,20 +190,6 @@ class AidlProfilerImpl : public AidlProfiler {
   }
   int32_t GetFpsFlag() const {
     return fps_flag_;
-  }
-
-  bool SetLatencyProfiler(std::unique_ptr<Profiler> profiler) {
-    if (profiler == nullptr) {
-      return false;
-    }
-    latency_profiler_ = std::move(profiler);
-    if (latency_profiler_ != nullptr) {
-      latency_profiler_->SetDumpFilePrefix(
-          "/data/vendor/camera/profiler/aidl_open_close_");
-      latency_profiler_->Start(kOverall, Profiler::kInvalidRequestId);
-      return true;
-    }
-    return false;
   }
 
   bool SetFpsProfiler(std::unique_ptr<Profiler> profiler) {
@@ -232,25 +205,21 @@ class AidlProfilerImpl : public AidlProfiler {
     return false;
   }
 
+  // Protect all API functions mutually exclusive, all member variables should
+  // also be protected by this mutex.
+  std::mutex api_mutex_;
+  std::vector<std::shared_ptr<TrackedProfiler>> latency_profilers_;
+  std::shared_ptr<Profiler> fps_profiler_;
+
   const std::string camera_id_string_;
   const uint32_t camera_id_;
   const int32_t latency_flag_;
   const int32_t fps_flag_;
-
-  // Protect all API functions mutually exclusive, all member variables should
-  // also be protected by this mutex.
-  std::mutex api_mutex_;
-  std::shared_ptr<Profiler> latency_profiler_;
-  std::shared_ptr<Profiler> fps_profiler_;
-  bool has_camera_open_;
-  uint8_t config_count_;
-  uint8_t flush_count_;
-  uint8_t idle_count_;
 };
 
 class AidlProfilerMock : public AidlProfiler {
   std::unique_ptr<AidlScopedProfiler> MakeScopedProfiler(
-      ScopedType, std::unique_ptr<google::camera_common::Profiler>,
+      EventType, std::unique_ptr<google::camera_common::Profiler>,
       std::unique_ptr<google::camera_common::Profiler>) override {
     return nullptr;
   }
@@ -312,7 +281,5 @@ AidlScopedProfiler::~AidlScopedProfiler() {
   }
 }
 
-}  // namespace implementation
-}  // namespace camera
-}  // namespace hardware
+}  // namespace google_camera_hal
 }  // namespace android

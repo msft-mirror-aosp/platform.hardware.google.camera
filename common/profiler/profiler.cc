@@ -103,11 +103,20 @@ class ProfilerImpl : public Profiler {
  protected:
   // A structure to hold start time, end time, and count of profiling code
   // snippet.
-  struct TimeSlot {
+  class TimeSlot {
+   public:
     int64_t start = 0;
     int64_t end = 0;
     int32_t count = 0;
     int32_t request_id = 0;
+
+    bool is_valid() const {
+      return end >= start && start && end && count;
+    }
+
+    int64_t duration() const {
+      return end - start;
+    }
   };
 
   struct TimeSlotEvent {
@@ -281,7 +290,7 @@ void ProfilerImpl::ProfileFrameRate(const std::string& name) {
       float fps =
           realtime_frame_rate.count * kNsPerSec / static_cast<float>(elapsed);
       float avg_fps = frame_rate.count * kNsPerSec /
-                      static_cast<float>(frame_rate.end - frame_rate.start);
+                      static_cast<float>(frame_rate.duration());
       ALOGI("%s: current FPS %3.2f, avg %3.2f", name.c_str(), fps, avg_fps);
       realtime_frame_rate.count = 0;
       realtime_frame_rate.start = current;
@@ -358,8 +367,8 @@ void ProfilerImpl::PrintResult() {
     float mean_dt = 0.f;
     std::vector<float> elapses;
     for (const auto& slot : time_series) {
-      if (slot.count > 0) {
-        float elapsed = (slot.end - slot.start) * kNanoToMilli;
+      if (slot.is_valid()) {
+        float elapsed = slot.duration() * kNanoToMilli;
         sum_dt += elapsed;
         num_samples += slot.count;
         min_dt = std::min(min_dt, elapsed);
@@ -388,9 +397,10 @@ void ProfilerImpl::PrintResult() {
     }
 
     TimeSlot& frame_rate = frame_rate_map_[node_name];
-    int64_t duration = frame_rate.end - frame_rate.start;
+    int64_t duration = frame_rate.duration();
     float fps = 0;
-    if (duration > kNsPerSec) {
+    if (duration > 1 * kNsPerSec) {
+      // Want at least 1 second of data to look at
       fps = frame_rate.count * kNsPerSec / static_cast<float>(duration);
     }
     time_results.push_back(
@@ -431,21 +441,23 @@ void ProfilerImpl::DumpTxt(std::string_view filepath) {
     for (const auto& [node_name, time_series] : timing_map_) {
       fout << node_name << " ";
       for (const auto& time_slot : time_series) {
-        float elapsed = static_cast<float>(time_slot.end - time_slot.start) /
-                        std::max(1, time_slot.count);
-        fout << elapsed * kNanoToMilli << " ";
+        if (time_slot.is_valid()) {
+          float elapsed =
+              static_cast<float>(time_slot.duration()) / time_slot.count;
+          fout << elapsed * kNanoToMilli << " ";
+        } else {
+          fout << "NA ";
+        }
       }
       fout << "\n";
       TimeSlot& frame_rate = frame_rate_map_[node_name];
-      int64_t duration = frame_rate.end - frame_rate.start;
-      float fps = 0;
-      if (duration > kNsPerSec) {
-        fps = frame_rate.count * kNsPerSec / static_cast<float>(duration);
-      }
-      if (fps > 0) {
-        fout << node_name << " fps:" << fps;
-      } else {
+      if (int64_t duration = frame_rate.duration();
+          duration <= kNsPerSec || frame_rate.count <= 0) {
         fout << node_name << " fps: NA";
+      } else {
+        fout << node_name << " fps:"
+             << frame_rate.count * kNsPerSec / static_cast<float>(duration);
+        ;
       }
       fout << "\n";
     }
@@ -485,16 +497,18 @@ void ProfilerImpl::DumpPb(std::string_view filepath) {
       profiler::TimeSeries& target = *profiling_result.add_target();
       target.set_name(node_name);
       for (const auto& time_slot : time_series) {
-        profiler::TimeStamp& time_stamp = *target.add_runtime();
-        // A single node can be called multiple times in a frame. Every time the
-        // node is called in the same frame, the profiler accumulates the
-        // timestamp value in time_slot.start/end, and increments the count.
-        // Therefore the result timestamp we stored is the `average` timestamp.
-        // Note: consider using minimum-start, and maximum-end.
-        time_stamp.set_start(time_slot.start / std::max(1, time_slot.count));
-        time_stamp.set_end(time_slot.end / std::max(1, time_slot.count));
-        time_stamp.set_count(time_slot.count);
-        time_stamp.set_request_id(time_slot.request_id);
+        if (time_slot.is_valid()) {
+          profiler::TimeStamp& time_stamp = *target.add_runtime();
+          // A single node can be called multiple times in a frame. Every time
+          // the node is called in the same frame, the profiler accumulates the
+          // timestamp value in time_slot.start/end, and increments the count.
+          // Therefore the result timestamp we stored is the `average`
+          // timestamp. Note: consider using minimum-start, and maximum-end.
+          time_stamp.set_start(time_slot.start / std::max(1, time_slot.count));
+          time_stamp.set_end(time_slot.end / std::max(1, time_slot.count));
+          time_stamp.set_count(time_slot.count);
+          time_stamp.set_request_id(time_slot.request_id);
+        }
       }
     }
     profiling_result.SerializeToOstream(&fout);
@@ -508,7 +522,7 @@ std::vector<Profiler::LatencyEvent> ProfilerImpl::GetLatencyData() {
   std::vector<LatencyEvent> latency_data;
   for (const auto& [node_name, time_series] : timing_map_) {
     for (const auto& slot : time_series) {
-      if (slot.count > 0 && time_results.size() < time_results.max_size()) {
+      if (slot.is_valid() && time_results.size() < time_results.max_size()) {
         time_results.push_back({node_name, slot});
       }
     }
@@ -518,8 +532,8 @@ std::vector<Profiler::LatencyEvent> ProfilerImpl::GetLatencyData() {
       [](const auto& a, const auto& b) { return a.slot.end < b.slot.end; });
 
   for (const auto& [node_name, slot] : time_results) {
-    if (slot.count > 0) {
-      float elapsed = (slot.end - slot.start) * kNanoToMilli;
+    if (slot.is_valid()) {
+      float elapsed = slot.duration() * kNanoToMilli;
       latency_data.push_back({node_name, elapsed});
     }
   }
@@ -557,7 +571,7 @@ class ProfilerStopwatchImpl : public ProfilerImpl {
     std::vector<TimeSlotEvent> time_results;
     for (const auto& [node_name, time_series] : timing_map_) {
       for (const auto& slot : time_series) {
-        if (slot.count > 0 && time_results.size() < time_results.max_size()) {
+        if (slot.is_valid() && time_results.size() < time_results.max_size()) {
           time_results.push_back({node_name, slot});
         }
       }
@@ -567,8 +581,8 @@ class ProfilerStopwatchImpl : public ProfilerImpl {
         [](const auto& a, const auto& b) { return a.slot.end < b.slot.end; });
 
     for (const auto& [node_name, slot] : time_results) {
-      if (slot.count > 0) {
-        float elapsed = (slot.end - slot.start) * kNanoToMilli;
+      if (slot.is_valid()) {
+        float elapsed = slot.duration() * kNanoToMilli;
         ALOGI("%51.51s: %8.3f ms", node_name.c_str(), elapsed);
       }
     }
@@ -581,7 +595,11 @@ class ProfilerStopwatchImpl : public ProfilerImpl {
       for (const auto& [node_name, time_series] : timing_map_) {
         fout << node_name << " ";
         for (const auto& slot : time_series) {
-          fout << (slot.end - slot.start) * kNanoToMilli << " ";
+          if (slot.is_valid()) {
+            fout << slot.duration() * kNanoToMilli << " ";
+          } else {
+            fout << "NA ";
+          }
         }
         fout << "\n";
       }

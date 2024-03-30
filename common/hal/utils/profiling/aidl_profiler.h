@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef HARDWARE_GOOGLE_CAMERA_HAL_AIDL_SERVICE_AIDL_PROFILER_H_
-#define HARDWARE_GOOGLE_CAMERA_HAL_AIDL_SERVICE_AIDL_PROFILER_H_
+#ifndef HARDWARE_GOOGLE_CAMERA_UTIL_AIDL_SERVICE_AIDL_PROFILER_H_
+#define HARDWARE_GOOGLE_CAMERA_UTIL_AIDL_SERVICE_AIDL_PROFILER_H_
 
 #include <functional>
 #include <memory>
+#include <string>
 
 #include "profiler.h"
+#include "profiler_util.h"
 
 namespace android {
-namespace hardware {
-namespace camera {
-namespace implementation {
+namespace google_camera_hal {
 
 class AidlScopedProfiler {
  public:
@@ -44,19 +44,13 @@ class AidlScopedProfiler {
 
 class AidlProfiler {
  public:
-  enum class ScopedType {
-    kOpen,
-    kConfigureStream,
-    kFlush,
-    kClose,
-  };
   virtual ~AidlProfiler() = default;
 
   static std::shared_ptr<AidlProfiler> Create(uint32_t camera_id);
 
   // Make a ScopedProfiler for given type.
   virtual std::unique_ptr<AidlScopedProfiler> MakeScopedProfiler(
-      ScopedType type,
+      EventType type,
       std::unique_ptr<google::camera_common::Profiler> custom_latency_profiler,
       std::unique_ptr<google::camera_common::Profiler> custom_fps_profiler) = 0;
 
@@ -77,9 +71,7 @@ class AidlProfiler {
   AidlProfiler() = default;
 };
 
-}  // namespace implementation
-}  // namespace camera
-}  // namespace hardware
+}  // namespace google_camera_hal
 }  // namespace android
 
-#endif  // HARDWARE_GOOGLE_CAMERA_HAL_AIDL_SERVICE_AIDL_PROFILER_H_
+#endif  // HARDWARE_GOOGLE_CAMERA_UTIL_AIDL_SERVICE_AIDL_PROFILER_H_

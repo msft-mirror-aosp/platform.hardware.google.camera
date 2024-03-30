@@ -23,6 +23,7 @@
 #include "aidl_camera_device_session.h"
 #include "aidl_profiler.h"
 #include "aidl_utils.h"
+#include "profiler_util.h"
 
 namespace android {
 namespace hardware {
@@ -64,7 +65,7 @@ status_t AidlCameraDevice::Initialize(
 
   camera_id_ = google_camera_device->GetPublicCameraId();
   google_camera_device_ = std::move(google_camera_device);
-  aidl_profiler_ = AidlProfiler::Create(camera_id_);
+  aidl_profiler_ = google_camera_hal::AidlProfiler::Create(camera_id_);
   if (aidl_profiler_ == nullptr) {
     ALOGE("%s: Failed to create AidlProfiler.", __FUNCTION__);
     return UNKNOWN_ERROR;
@@ -288,7 +289,7 @@ ScopedAStatus AidlCameraDevice::open(
   }
   *session_ret = nullptr;
   auto profiler = aidl_profiler_->MakeScopedProfiler(
-      AidlProfiler::ScopedType::kOpen,
+      google_camera_hal::EventType::kOpen,
       google_camera_device_->GetProfiler(camera_id_,
                                          aidl_profiler_->GetLatencyFlag()),
       google_camera_device_->GetProfiler(camera_id_,

@@ -33,6 +33,9 @@
 #include "aidl_profiler.h"
 #include "aidl_thermal_utils.h"
 #include "aidl_utils.h"
+#include "profiler_util.h"
+#include "tracked_profiler.h"
+
 namespace android {
 namespace hardware {
 namespace camera {
@@ -62,13 +65,12 @@ using ::aidl::android::hardware::camera::device::StreamBuffersVal;
 using ::aidl::android::hardware::camera::device::StreamConfiguration;
 using ::aidl::android::hardware::thermal::Temperature;
 using ::aidl::android::hardware::thermal::TemperatureType;
-using ::android::hardware::camera::implementation::AidlProfiler;
 using ::android::hardware::camera::implementation::aidl_utils::ConvertToAidlReturn;
 
 std::shared_ptr<AidlCameraDeviceSession> AidlCameraDeviceSession::Create(
     const std::shared_ptr<ICameraDeviceCallback>& callback,
     std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session,
-    std::shared_ptr<AidlProfiler> aidl_profiler) {
+    std::shared_ptr<google_camera_hal::AidlProfiler> aidl_profiler) {
   ATRACE_NAME("AidlCameraDeviceSession::Create");
   auto session = ndk::SharedRefBase::make<AidlCameraDeviceSession>();
   if (session == nullptr) {
@@ -356,7 +358,7 @@ void AidlCameraDeviceSession::ReturnStreamBuffers(
 status_t AidlCameraDeviceSession::Initialize(
     const std::shared_ptr<ICameraDeviceCallback>& callback,
     std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session,
-    std::shared_ptr<AidlProfiler> aidl_profiler) {
+    std::shared_ptr<google_camera_hal::AidlProfiler> aidl_profiler) {
   ATRACE_NAME("AidlCameraDeviceSession::Initialize");
   if (device_session == nullptr) {
     ALOGE("%s: device_session is nullptr.", __FUNCTION__);
@@ -608,12 +610,13 @@ ndk::ScopedAStatus AidlCameraDeviceSession::configureStreamsImpl(
         static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
   }
 
-  auto profiler = aidl_profiler_->MakeScopedProfiler(
-      AidlProfiler::ScopedType::kConfigureStream,
-      device_session_->GetProfiler(aidl_profiler_->GetCameraId(),
-                                   aidl_profiler_->GetLatencyFlag()),
-      device_session_->GetProfiler(aidl_profiler_->GetCameraId(),
-                                   aidl_profiler_->GetFpsFlag()));
+  std::unique_ptr<google_camera_hal::AidlScopedProfiler> profiler =
+      aidl_profiler_->MakeScopedProfiler(
+          google_camera_hal::EventType::kConfigureStream,
+          device_session_->GetProfiler(aidl_profiler_->GetCameraId(),
+                                       aidl_profiler_->GetLatencyFlag()),
+          device_session_->GetProfiler(aidl_profiler_->GetCameraId(),
+                                       aidl_profiler_->GetFpsFlag()));
 
   first_frame_requested_ = false;
   num_pending_first_frame_buffers_ = 0;
@@ -784,12 +787,13 @@ ndk::ScopedAStatus AidlCameraDeviceSession::flush() {
         static_cast<int32_t>(Status::INTERNAL_ERROR));
   }
 
-  auto profiler = aidl_profiler_->MakeScopedProfiler(
-      AidlProfiler::ScopedType::kFlush,
-      device_session_->GetProfiler(aidl_profiler_->GetCameraId(),
-                                   aidl_profiler_->GetLatencyFlag()),
-      device_session_->GetProfiler(aidl_profiler_->GetCameraId(),
-                                   aidl_profiler_->GetFpsFlag()));
+  std::unique_ptr<google_camera_hal::AidlScopedProfiler> profiler =
+      aidl_profiler_->MakeScopedProfiler(
+          google_camera_hal::EventType::kFlush,
+          device_session_->GetProfiler(aidl_profiler_->GetCameraId(),
+                                       aidl_profiler_->GetLatencyFlag()),
+          device_session_->GetProfiler(aidl_profiler_->GetCameraId(),
+                                       aidl_profiler_->GetFpsFlag()));
 
   status_t res = device_session_->Flush();
   if (res != OK) {
@@ -805,12 +809,13 @@ ndk::ScopedAStatus AidlCameraDeviceSession::flush() {
 ndk::ScopedAStatus AidlCameraDeviceSession::close() {
   ATRACE_NAME("AidlCameraDeviceSession::close");
   if (device_session_ != nullptr) {
-    auto profiler = aidl_profiler_->MakeScopedProfiler(
-        AidlProfiler::ScopedType::kClose,
-        device_session_->GetProfiler(aidl_profiler_->GetCameraId(),
-                                     aidl_profiler_->GetLatencyFlag()),
-        device_session_->GetProfiler(aidl_profiler_->GetCameraId(),
-                                     aidl_profiler_->GetFpsFlag()));
+    std::unique_ptr<google_camera_hal::AidlScopedProfiler> profiler =
+        aidl_profiler_->MakeScopedProfiler(
+            google_camera_hal::EventType::kClose,
+            device_session_->GetProfiler(aidl_profiler_->GetCameraId(),
+                                         aidl_profiler_->GetLatencyFlag()),
+            device_session_->GetProfiler(aidl_profiler_->GetCameraId(),
+                                         aidl_profiler_->GetFpsFlag()));
     device_session_ = nullptr;
   }
   return ndk::ScopedAStatus::ok();

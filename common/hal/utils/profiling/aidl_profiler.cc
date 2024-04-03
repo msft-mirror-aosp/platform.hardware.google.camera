@@ -42,14 +42,20 @@ constexpr char kPropKeyProfileOpenClose[] =
     "persist.vendor.camera.profiler.open_close";
 // setprop key for profiling camera fps
 constexpr char kPropKeyProfileFps[] = "persist.vendor.camera.profiler.fps";
+constexpr char kPropKeyProfileReprocess[] =
+    "persist.vendor.camera.profiler.reprocess";
+
+constexpr char kReprocess[] = "Reprocess Frame ";
 
 class AidlProfilerImpl : public AidlProfiler {
  public:
-  AidlProfilerImpl(uint32_t camera_id, int32_t latency_flag, int32_t fps_flag)
+  AidlProfilerImpl(uint32_t camera_id, int32_t latency_flag, int32_t fps_flag,
+                   int32_t reprocess_latency_flag)
       : camera_id_string_("Cam" + std::to_string(camera_id)),
         camera_id_(camera_id),
         latency_flag_(latency_flag),
-        fps_flag_(fps_flag) {
+        fps_flag_(fps_flag),
+        reprocess_latency_flag_(reprocess_latency_flag) {
   }
 
   std::unique_ptr<AidlScopedProfiler> MakeScopedProfiler(
@@ -127,6 +133,35 @@ class AidlProfilerImpl : public AidlProfiler {
     ALOGE("%s: Error: no profiler accepted First Frame End", __FUNCTION__);
   }
 
+  void ReprocessingRequestStart(
+      std::unique_ptr<Profiler> custom_reprocessing_profiler,
+      int32_t id) override {
+    std::lock_guard lock(api_mutex_);
+    if (reprocessing_profiler_ == nullptr) {
+      if (!SetReprocessingProfiler(std::move(custom_reprocessing_profiler))) {
+        reprocessing_profiler_ = CreateReprocessingProfiler();
+      }
+      reprocessing_profiler_->SetUseCase(camera_id_string_ + "-Reprocess");
+      open_reprocessing_frames_count_ = 0;
+    }
+    if (reprocessing_profiler_ != nullptr) {
+      reprocessing_profiler_->Start(kReprocess + std::to_string(id),
+                                    Profiler::kInvalidRequestId);
+      open_reprocessing_frames_count_++;
+    }
+  }
+
+  void ReprocessingResultEnd(int32_t id) override {
+    std::lock_guard lock(api_mutex_);
+    if (reprocessing_profiler_ != nullptr) {
+      reprocessing_profiler_->End(kReprocess + std::to_string(id),
+                                  Profiler::kInvalidRequestId);
+      if (--open_reprocessing_frames_count_ <= 0) {
+        reprocessing_profiler_ = nullptr;
+      }
+    }
+  }
+
   void ProfileFrameRate(const std::string& name) override {
     std::lock_guard lock(api_mutex_);
     if (fps_profiler_ != nullptr) {
@@ -182,6 +217,19 @@ class AidlProfilerImpl : public AidlProfiler {
     return profiler;
   }
 
+  std::shared_ptr<Profiler> CreateReprocessingProfiler() {
+    if (reprocess_latency_flag_ == Profiler::SetPropFlag::kDisable) {
+      return nullptr;
+    }
+    std::shared_ptr<Profiler> profiler = Profiler::Create(latency_flag_);
+    if (profiler == nullptr) {
+      ALOGE("%s: Failed to create profiler", __FUNCTION__);
+      return nullptr;
+    }
+    profiler->SetDumpFilePrefix("/data/vendor/camera/profiler/aidl_reprocess_");
+    return profiler;
+  }
+
   uint32_t GetCameraId() const {
     return camera_id_;
   }
@@ -190,6 +238,9 @@ class AidlProfilerImpl : public AidlProfiler {
   }
   int32_t GetFpsFlag() const {
     return fps_flag_;
+  }
+  int32_t GetReprocessLatencyFlag() const {
+    return reprocess_latency_flag_;
   }
 
   bool SetFpsProfiler(std::unique_ptr<Profiler> profiler) {
@@ -205,16 +256,34 @@ class AidlProfilerImpl : public AidlProfiler {
     return false;
   }
 
+  bool SetReprocessingProfiler(std::unique_ptr<Profiler> profiler) {
+    if (profiler == nullptr) {
+      return false;
+    }
+    reprocessing_profiler_ = std::move(profiler);
+    open_reprocessing_frames_count_ = 0;
+    if (reprocessing_profiler_ != nullptr) {
+      reprocessing_profiler_->SetDumpFilePrefix(
+          "data/vendor/camera/profiler/aidl_reprocess_");
+      return true;
+    }
+    return false;
+  }
+
   // Protect all API functions mutually exclusive, all member variables should
   // also be protected by this mutex.
   std::mutex api_mutex_;
   std::vector<std::shared_ptr<TrackedProfiler>> latency_profilers_;
   std::shared_ptr<Profiler> fps_profiler_;
+  std::shared_ptr<Profiler> reprocessing_profiler_;
 
   const std::string camera_id_string_;
   const uint32_t camera_id_;
   const int32_t latency_flag_;
   const int32_t fps_flag_;
+  const int32_t reprocess_latency_flag_;
+
+  int32_t open_reprocessing_frames_count_;
 };
 
 class AidlProfilerMock : public AidlProfiler {
@@ -227,6 +296,8 @@ class AidlProfilerMock : public AidlProfiler {
   void FirstFrameStart() override{};
   void FirstFrameEnd() override{};
   void ProfileFrameRate(const std::string&) override{};
+  void ReprocessingRequestStart(std::unique_ptr<Profiler>, int32_t) override{};
+  void ReprocessingResultEnd(int32_t) override{};
 
   uint32_t GetCameraId() const override {
     return 0;
@@ -235,6 +306,9 @@ class AidlProfilerMock : public AidlProfiler {
     return 0;
   }
   int32_t GetFpsFlag() const override {
+    return 0;
+  }
+  int32_t GetReprocessLatencyFlag() const override {
     return 0;
   }
 };
@@ -246,20 +320,28 @@ std::shared_ptr<AidlProfiler> AidlProfiler::Create(uint32_t camera_id) {
       kPropKeyProfileOpenClose, Profiler::SetPropFlag::kCustomProfiler);
   int32_t fps_flag = property_get_int32(kPropKeyProfileFps,
                                         Profiler::SetPropFlag::kCustomProfiler);
+  int32_t reprocess_latency_flag = property_get_int32(
+      kPropKeyProfileReprocess, Profiler::SetPropFlag::kCustomProfiler);
+
   if (latency_flag == Profiler::SetPropFlag::kDisable &&
-      fps_flag == Profiler::SetPropFlag::kDisable) {
+      fps_flag == Profiler::SetPropFlag::kDisable &&
+      reprocess_latency_flag == Profiler::SetPropFlag::kDisable) {
     return std::make_shared<AidlProfilerMock>();
   }
   // Use stopwatch flag to print result.
   if ((latency_flag & Profiler::SetPropFlag::kPrintBit) != 0) {
     latency_flag |= Profiler::SetPropFlag::kStopWatch;
   }
+  if ((reprocess_latency_flag & Profiler::SetPropFlag::kPrintBit) != 0) {
+    reprocess_latency_flag |= Profiler::SetPropFlag::kStopWatch;
+  }
   // Use interval flag to print fps instead of print on end.
   if ((fps_flag & Profiler::SetPropFlag::kPrintBit) != 0) {
     fps_flag |= Profiler::SetPropFlag::kPrintFpsPerIntervalBit;
     fps_flag &= ~Profiler::SetPropFlag::kPrintBit;
   }
-  return std::make_shared<AidlProfilerImpl>(camera_id, latency_flag, fps_flag);
+  return std::make_shared<AidlProfilerImpl>(camera_id, latency_flag, fps_flag,
+                                            reprocess_latency_flag);
 }
 
 AidlScopedProfiler::AidlScopedProfiler(std::shared_ptr<Profiler> profiler,

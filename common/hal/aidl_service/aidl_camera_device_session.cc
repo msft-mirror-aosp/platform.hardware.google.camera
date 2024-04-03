@@ -141,6 +141,10 @@ void AidlCameraDeviceSession::ProcessCaptureResult(
           strerror(-res), res);
     return;
   }
+  if (aidl_results[0].inputBuffer.streamId != -1) {
+    ATRACE_ASYNC_END("reprocess_frame", aidl_results[0].frameNumber);
+    aidl_profiler_->ReprocessingResultEnd(aidl_results[0].frameNumber);
+  }
 
   auto aidl_res = aidl_device_callback_->processCaptureResult(aidl_results);
   if (!aidl_res.isOk()) {
@@ -163,7 +167,6 @@ void AidlCameraDeviceSession::ProcessBatchCaptureResult(
     std::unique_ptr<google_camera_hal::CaptureResult>& hal_result =
         hal_results[i];
     auto& aidl_result = aidl_results[i];
-
     TryLogFirstFrameDone(*hal_result, __FUNCTION__);
 
     for (auto& buffer : hal_result->output_buffers) {
@@ -177,6 +180,11 @@ void AidlCameraDeviceSession::ProcessBatchCaptureResult(
       ALOGE("%s: Converting to AIDL result failed: %s(%d)", __FUNCTION__,
             strerror(-res), res);
       return;
+    }
+
+    if (aidl_result.inputBuffer.streamId != -1) {
+      ATRACE_ASYNC_END("reprocess_frame", aidl_result.frameNumber);
+      aidl_profiler_->ReprocessingResultEnd(aidl_result.frameNumber);
     }
   }
 
@@ -713,6 +721,17 @@ ndk::ScopedAStatus AidlCameraDeviceSession::processCaptureRequest(
     first_request_frame_number_ = requests[0].frameNumber;
     aidl_profiler_->FirstFrameStart();
     ATRACE_ASYNC_BEGIN("first_frame", 0);
+  }
+
+  for (const auto& request : requests) {
+    if (request.inputBuffer.streamId != -1) {
+      ATRACE_ASYNC_BEGIN("reprocess_frame", request.frameNumber);
+      aidl_profiler_->ReprocessingRequestStart(
+          device_session_->GetProfiler(
+              aidl_profiler_->GetCameraId(),
+              aidl_profiler_->GetReprocessLatencyFlag()),
+          request.frameNumber);
+    }
   }
 
   std::vector<google_camera_hal::BufferCache> hal_buffer_caches;

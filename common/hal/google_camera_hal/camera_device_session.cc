@@ -1546,6 +1546,7 @@ status_t CameraDeviceSession::Flush() {
 
   is_flushing_ = true;
   status_t res = capture_session_->Flush();
+  stream_buffer_cache_manager_->NotifyFlushingAll();
   is_flushing_ = false;
 
   return res;

@@ -3,6 +3,7 @@
 // and GCH
 
 package {
+    default_team: "trendy_team_pixel_camera_system_software",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
@@ -27,11 +28,11 @@ cc_defaults {
 }
 
 cc_defaults {
-  name: "apex_update_listener_cc_defaults_static",
-  static_libs: [
-    "libtinyxml2",
-    "libapex_update_listener",
-  ],
+    name: "apex_update_listener_cc_defaults_static",
+    static_libs: [
+        "libtinyxml2",
+        "libapex_update_listener",
+    ],
 }
 
 cc_library_static {

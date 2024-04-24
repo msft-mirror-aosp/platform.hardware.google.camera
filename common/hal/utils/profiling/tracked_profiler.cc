@@ -31,7 +31,7 @@
 namespace android {
 namespace google_camera_hal {
 
-using google::camera_common::Profiler;
+using ::google::camera_common::Profiler;
 
 void TrackedProfiler::SetUseCase(std::string name) {
   profiler_->SetUseCase(name);

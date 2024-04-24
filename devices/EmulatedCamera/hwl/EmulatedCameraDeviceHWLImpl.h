@@ -20,6 +20,8 @@
 #include <camera_device_hwl.h>
 #include <hal_types.h>
 
+#include <vector>
+
 #include "EmulatedCameraDeviceInfo.h"
 #include "EmulatedSensor.h"
 #include "EmulatedTorchState.h"
@@ -54,6 +56,8 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
 
   status_t GetCameraCharacteristics(
       std::unique_ptr<HalCameraMetadata>* characteristics) const override;
+
+  std::vector<uint32_t> GetPhysicalCameraIds() const override;
 
   status_t GetPhysicalCameraCharacteristics(
       uint32_t physical_camera_id,

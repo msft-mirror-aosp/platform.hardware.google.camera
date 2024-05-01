@@ -133,19 +133,6 @@ status_t EmulatedCameraDeviceHwlImpl::GetCameraCharacteristics(
   return OK;
 }
 
-std::vector<uint32_t> EmulatedCameraDeviceHwlImpl::GetPhysicalCameraIds() const {
-  std::vector<uint32_t> ret;
-  if (physical_device_map_.get() == nullptr ||
-      physical_device_map_->size() == 0) {
-    return ret;
-  }
-  ret.reserve(physical_device_map_->size());
-  for (const& entry : physical_device_map_) {
-    ret.emplace_back(entry.first);
-  }
-  return ret;
-}
-
 status_t EmulatedCameraDeviceHwlImpl::GetPhysicalCameraCharacteristics(
     uint32_t physical_camera_id,
     std::unique_ptr<HalCameraMetadata>* characteristics) const {

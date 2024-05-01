@@ -176,26 +176,14 @@ status_t CameraDevice::Initialize(
     return res;
   }
 
-  res = utils::GetStreamUseCases(
-      static_metadata.get(),
-      &camera_id_to_stream_use_cases_[camera_device_hwl_->GetCameraId()]);
+  res = utils::GetStreamUseCases(static_metadata.get(), &stream_use_cases_);
   if (res != OK) {
-    ALOGE(
-        "%s: Initializing logical stream use case for camera id %u failed: "
-        "%s(%d)",
-        __FUNCTION__, camera_device_hwl_->GetCameraId(), strerror(-res), res);
+    ALOGE("%s: Getting stream use cases failed: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
     return res;
   }
-  res = utils::GetPhysicalCameraStreamUseCases(camera_device_hwl_.get(),
-                                               &camera_id_to_stream_use_cases_);
 
-  if (res != OK) {
-    ALOGE(
-        "%s: Initializing physical stream use case for camera id %u failed: "
-        "%s(%d)",
-        __FUNCTION__, camera_device_hwl_->GetCameraId(), strerror(-res), res);
-  }
-  return res;
+  return OK;
 }
 
 status_t CameraDevice::GetResourceCost(CameraResourceCost* cost) {
@@ -367,8 +355,7 @@ status_t CameraDevice::CreateCameraDeviceSession(
 
 bool CameraDevice::IsStreamCombinationSupported(
     const StreamConfiguration& stream_config, bool /*check_settings*/) {
-  if (!utils::IsStreamUseCaseSupported(stream_config, public_camera_id_,
-                                       camera_id_to_stream_use_cases_)) {
+  if (!utils::IsStreamUseCaseSupported(stream_config, stream_use_cases_)) {
     return false;
   }
 

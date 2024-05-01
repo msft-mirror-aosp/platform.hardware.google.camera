@@ -541,55 +541,10 @@ std::vector<std::string> FindLibraryPaths(const char* dir_path) {
   return libs;
 }
 
-status_t GetPhysicalCameraStreamUseCases(
-    const PhysicalCameraInfoHwl* physical_camera_info,
-    std::map<uint32_t, std::set<int64_t>>* camera_id_to_stream_use_cases) {
-  status_t res = OK;
-  if (physical_camera_info == nullptr) {
-    ALOGE("physical_camera_info is nullptr");
-    return BAD_VALUE;
-  }
-  if (camera_id_to_stream_use_cases == nullptr) {
-    ALOGE("camera_id_to_stream_use_cases is nullptr");
-    return BAD_VALUE;
-  }
-  for (uint32_t physical_id : physical_camera_info->GetPhysicalCameraIds()) {
-    std::unique_ptr<google_camera_hal::HalCameraMetadata> physical_characteristics;
-    res = physical_camera_info->GetPhysicalCameraCharacteristics(
-        physical_id, &physical_characteristics);
-    if (res != OK) {
-      ALOGE("%s: Get physical camera characteristics failed: %s(%d)",
-            __FUNCTION__, strerror(-res), res);
-      return res;
-    }
-
-    res = utils::GetStreamUseCases(
-        physical_characteristics.get(),
-        &((*camera_id_to_stream_use_cases)[physical_id]));
-    if (res != OK) {
-      ALOGE("%s: Initializing stream use case failed: %s(%d)", __FUNCTION__,
-            strerror(-res), res);
-      return res;
-    }
-  }
-  return OK;
-}
-
-bool IsStreamUseCaseSupported(
-    const StreamConfiguration& stream_config, uint32_t logical_camera_id,
-    const std::map<uint32_t, std::set<int64_t>>& camera_id_to_stream_use_cases,
-    bool log_if_not_supported) {
+bool IsStreamUseCaseSupported(const StreamConfiguration& stream_config,
+                              const std::set<int64_t>& stream_use_cases,
+                              bool log_if_not_supported) {
   for (const auto& stream : stream_config.streams) {
-    uint32_t id = stream.is_physical_camera_stream ? stream.physical_camera_id
-                                                   : logical_camera_id;
-    auto it = camera_id_to_stream_use_cases.find(id);
-    if (it == camera_id_to_stream_use_cases.end()) {
-      if (log_if_not_supported) {
-        ALOGE("camera id %u not in set of supported physical camera ids", id);
-        return false;
-      }
-    }
-    const std::set<int64_t>& stream_use_cases = it->second;
     if (stream_use_cases.find(stream.use_case) == stream_use_cases.end()) {
       if (log_if_not_supported) {
         ALOGE("Stream use case %d not in set of supported use cases",

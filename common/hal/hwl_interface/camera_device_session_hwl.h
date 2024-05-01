@@ -24,7 +24,6 @@
 #include "hal_camera_metadata.h"
 #include "hwl_types.h"
 #include "multicam_coordinator_hwl.h"
-#include "physical_camera_info_hwl.h"
 #include "profiler.h"
 #include "session_data_defs.h"
 #include "zoom_ratio_mapper_hwl.h"
@@ -34,7 +33,7 @@ namespace google_camera_hal {
 
 // CameraDeviceSessionHwl provides methods to return default settings,
 // create pipelines, submit capture requests, and flush the session.
-class CameraDeviceSessionHwl : public PhysicalCameraInfoHwl {
+class CameraDeviceSessionHwl {
  public:
   virtual ~CameraDeviceSessionHwl() = default;
 
@@ -133,6 +132,11 @@ class CameraDeviceSessionHwl : public PhysicalCameraInfoHwl {
   // Return the camera ID that this camera device session is associated with.
   virtual uint32_t GetCameraId() const = 0;
 
+  // Return the physical camera ID that this camera device session is associated
+  // with. If the camera device does not have multiple physical camera devices,
+  // this method should return an empty std::vector.
+  virtual std::vector<uint32_t> GetPhysicalCameraIds() const = 0;
+
   // Returns true if the two given physical camera ids can be streamed
   // simultaneously from this device session.
   virtual bool CanStreamSimultaneously(uint32_t /* physical_camera_id_1 */,
@@ -142,6 +146,11 @@ class CameraDeviceSessionHwl : public PhysicalCameraInfoHwl {
 
   // Return the characteristics that this camera device session is associated with.
   virtual status_t GetCameraCharacteristics(
+      std::unique_ptr<HalCameraMetadata>* characteristics) const = 0;
+
+  // Return the characteristics of a physical camera belonging to this device session.
+  virtual status_t GetPhysicalCameraCharacteristics(
+      uint32_t physical_camera_id,
       std::unique_ptr<HalCameraMetadata>* characteristics) const = 0;
 
   // See common/session_data_def.h for more info on Session Data API

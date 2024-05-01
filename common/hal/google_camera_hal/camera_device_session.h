@@ -436,7 +436,7 @@ class CameraDeviceSession {
   std::set<uint32_t> ignore_shutters_;
 
   // Stream use cases supported by this camera device
-  std::map<uint32_t, std::set<int64_t>> camera_id_to_stream_use_cases_;
+  std::set<int64_t> stream_use_cases_;
 
   static constexpr int32_t kInvalidStreamId = -1;
 

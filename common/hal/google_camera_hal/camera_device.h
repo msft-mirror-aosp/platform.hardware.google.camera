@@ -17,8 +17,6 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_CAMERA_DEVICE_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_CAMERA_DEVICE_H_
 
-#include <map>
-
 #include "camera_buffer_allocator_hwl.h"
 #include "camera_device_hwl.h"
 #include "camera_device_session.h"
@@ -125,7 +123,7 @@ class CameraDevice {
   // Opened library handles that should be closed on destruction
   std::vector<void*> external_capture_session_lib_handles_;
   // Stream use cases supported by this camera device
-  std::map<uint32_t, std::set<int64_t>> camera_id_to_stream_use_cases_;
+  std::set<int64_t> stream_use_cases_;
 
   const std::vector<std::string>* configure_streams_libs_ = nullptr;
 };

@@ -410,13 +410,24 @@ status_t CameraDeviceSession::Initialize(
     return res;
   }
 
-  res = utils::GetStreamUseCases(characteristics.get(), &stream_use_cases_);
+  res = utils::GetStreamUseCases(
+      characteristics.get(),
+      &camera_id_to_stream_use_cases_[device_session_hwl_->GetCameraId()]);
   if (res != OK) {
-    ALOGE("%s: Initializing stream use case failed: %s(%d)", __FUNCTION__,
-          strerror(-res), res);
+    ALOGE("%s: Initializing stream use case failed: %s(%d) for camera id %u",
+          __FUNCTION__, strerror(-res), res, device_session_hwl_->GetCameraId());
     return res;
   }
 
+  res = utils::GetPhysicalCameraStreamUseCases(device_session_hwl_.get(),
+                                               &camera_id_to_stream_use_cases_);
+  if (res != OK) {
+    ALOGE(
+        "%s: Initializing physical stream use cases failed: %s(%d) for camera "
+        "id %u",
+        __FUNCTION__, strerror(-res), res, device_session_hwl_->GetCameraId());
+    return res;
+  }
   res = InitializeBufferManagement(characteristics.get());
   if (res != OK) {
     ALOGE("%s: Initialize buffer management failed: %s(%d)", __FUNCTION__,
@@ -703,7 +714,8 @@ status_t CameraDeviceSession::ConfigureStreams(
   // IsStreamCombinationSupported doesn't match the
   // CameraDevice::IsStreamCombination. We should look at unifying the two for a
   // potentially cleaner code-base.
-  if (!utils::IsStreamUseCaseSupported(stream_config, stream_use_cases_)) {
+  if (!utils::IsStreamUseCaseSupported(stream_config, camera_id_,
+                                       camera_id_to_stream_use_cases_)) {
     return BAD_VALUE;
   }
   device_session_hwl_->setConfigureStreamsV2(v2);

@@ -19,9 +19,11 @@
 
 #include <log/log.h>
 
+#include <map>
 #include <set>
 #include <utility>
 
+#include "camera_device_session_hwl.h"
 #include "hal_types.h"
 
 namespace android {
@@ -84,9 +86,14 @@ status_t UpdateThreadSched(pthread_t thread, int32_t policy,
 status_t GetStreamUseCases(const HalCameraMetadata* static_metadata,
                            std::set<int64_t>* stream_use_cases);
 
-bool IsStreamUseCaseSupported(const StreamConfiguration& stream_config,
-                              const std::set<int64_t>& stream_use_cases,
-                              bool log_if_not_supported = true);
+status_t GetPhysicalCameraStreamUseCases(
+    const PhysicalCameraInfoHwl* physical_camera_info,
+    std::map<uint32_t, std::set<int64_t>>* camera_id_to_stream_use_cases);
+
+bool IsStreamUseCaseSupported(
+    const StreamConfiguration& stream_config, uint32_t logical_camera_id,
+    const std::map<uint32_t, std::set<int64_t>>& camera_id_to_stream_use_cases,
+    bool log_if_not_supported = true);
 
 // Map the rectangle to the coordination of HAL.
 void ConvertZoomRatio(float zoom_ratio, const Dimension& active_array_dimension,

@@ -23,6 +23,7 @@
 #include "camera_device_session_hwl.h"
 #include "hal_camera_metadata.h"
 #include "hal_types.h"
+#include "physical_camera_info_hwl.h"
 #include "profiler.h"
 
 namespace android {
@@ -33,7 +34,7 @@ namespace google_camera_hal {
 // a single physical camera. It provides methods to query static information
 // about the associated camera devices. It does not hold any states of the
 // camera device.
-class CameraDeviceHwl {
+class CameraDeviceHwl : public PhysicalCameraInfoHwl {
  public:
   virtual ~CameraDeviceHwl() = default;
 
@@ -46,12 +47,6 @@ class CameraDeviceHwl {
   // Get the characteristics of this camera device HWL.
   // characteristics will be filled by CameraDeviceHwl.
   virtual status_t GetCameraCharacteristics(
-      std::unique_ptr<HalCameraMetadata>* characteristics) const = 0;
-
-  // Get the characteristics of the physical camera of this camera device.
-  // characteristics will be filled by CameraDeviceHwl.
-  virtual status_t GetPhysicalCameraCharacteristics(
-      uint32_t physical_camera_id,
       std::unique_ptr<HalCameraMetadata>* characteristics) const = 0;
 
   // Set the torch mode of the camera device. The torch mode status remains

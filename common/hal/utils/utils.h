@@ -23,8 +23,8 @@
 #include <set>
 #include <utility>
 
-#include "camera_device_session_hwl.h"
 #include "hal_types.h"
+#include "physical_camera_info_hwl.h"
 
 namespace android {
 namespace google_camera_hal {

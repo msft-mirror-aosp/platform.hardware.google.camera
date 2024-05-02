@@ -140,7 +140,7 @@ std::vector<uint32_t> EmulatedCameraDeviceHwlImpl::GetPhysicalCameraIds() const 
     return ret;
   }
   ret.reserve(physical_device_map_->size());
-  for (const& entry : physical_device_map_) {
+  for (const auto& entry : *physical_device_map_) {
     ret.emplace_back(entry.first);
   }
   return ret;

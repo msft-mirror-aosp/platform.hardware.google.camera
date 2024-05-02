@@ -21,6 +21,7 @@
 #include <set>
 #include <shared_mutex>
 #include <vector>
+#include <map>
 
 #include "camera_buffer_allocator_hwl.h"
 #include "camera_device_session_hwl.h"

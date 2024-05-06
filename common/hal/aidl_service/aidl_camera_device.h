@@ -99,6 +99,9 @@ class AidlCameraDevice : public BnCameraDevice {
   // End of override functions in ICameraDevice
   AidlCameraDevice() = default;
 
+ protected:
+  ::ndk::SpAIBinder createBinder() override;
+
  private:
   status_t Initialize(std::unique_ptr<CameraDevice> google_camera_device);
 

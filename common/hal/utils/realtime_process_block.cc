@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_RealtimeProcessBlock"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
+#include "realtime_process_block.h"
+
 #include <log/log.h>
 #include <utils/Trace.h>
 
 #include "hal_utils.h"
-#include "realtime_process_block.h"
 #include "result_processor.h"
 
 namespace android {
@@ -63,6 +64,12 @@ RealtimeProcessBlock::RealtimeProcessBlock(
       [this](std::unique_ptr<HwlPipelineResult> result) {
         NotifyHwlPipelineResult(std::move(result));
       });
+
+  hwl_pipeline_callback_.process_pipeline_batch_result =
+      HwlProcessPipelineBatchResultFunc(
+          [this](std::vector<std::unique_ptr<HwlPipelineResult>> results) {
+            NotifyHwlPipelineBatchResult(std::move(results));
+          });
 
   hwl_pipeline_callback_.notify = NotifyHwlPipelineMessageFunc(
       [this](uint32_t pipeline_id, const NotifyMessage& message) {
@@ -200,6 +207,31 @@ void RealtimeProcessBlock::NotifyHwlPipelineResult(
 
   ProcessBlockResult result = {.result = std::move(capture_result)};
   result_processor_->ProcessResult(std::move(result));
+}
+
+void RealtimeProcessBlock::NotifyHwlPipelineBatchResult(
+    std::vector<std::unique_ptr<HwlPipelineResult>> hwl_results) {
+  ATRACE_CALL();
+  std::lock_guard<std::mutex> lock(result_processor_lock_);
+  if (result_processor_ == nullptr) {
+    ALOGE("%s: result processor is nullptr. Dropping a result", __FUNCTION__);
+    return;
+  }
+
+  std::vector<ProcessBlockResult> block_results;
+  block_results.reserve(hwl_results.size());
+  for (auto& hwl_result : hwl_results) {
+    auto capture_result =
+        hal_utils::ConvertToCaptureResult(std::move(hwl_result));
+    if (capture_result == nullptr) {
+      ALOGE("%s: Converting to capture result failed.", __FUNCTION__);
+      return;
+    }
+
+    block_results.push_back(
+        ProcessBlockResult{.result = std::move(capture_result)});
+  }
+  result_processor_->ProcessBatchResult(std::move(block_results));
 }
 
 void RealtimeProcessBlock::NotifyHwlPipelineMessage(

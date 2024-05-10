@@ -46,6 +46,7 @@ cc_defaults {
         "libjsoncpp",
         "liblog",
         "libsync",
+        "libui",
         "libutils",
         "libyuv",
     ],

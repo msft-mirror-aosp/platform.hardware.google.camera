@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_HdrplusCaptureSession"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 #include "hdrplus_capture_session.h"
@@ -80,8 +80,9 @@ bool HdrplusCaptureSession::IsStreamConfigurationSupported(
 std::unique_ptr<HdrplusCaptureSession> HdrplusCaptureSession::Create(
     CameraDeviceSessionHwl* device_session_hwl,
     const StreamConfiguration& stream_config,
-    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-    HwlSessionCallback /*session_callback*/,
+    ProcessCaptureResultFunc process_capture_result,
+    ProcessBatchCaptureResultFunc /*process_batch_capture_result*/,
+    NotifyFunc notify, HwlSessionCallback /*session_callback*/,
     std::vector<HalStream>* hal_configured_streams,
     CameraBufferAllocatorHwl* /*camera_allocator_hwl*/) {
   ATRACE_CALL();
@@ -380,7 +381,8 @@ status_t HdrplusCaptureSession::SetupRealtimeProcessChain(
     ALOGE("%s: Creating RealtimeZslResultProcessor failed.", __FUNCTION__);
     return UNKNOWN_ERROR;
   }
-  result_processor->SetResultCallback(process_capture_result, notify);
+  result_processor->SetResultCallback(process_capture_result, notify,
+                                      /*process_batch_capture_result=*/nullptr);
 
   *realtime_process_block = std::move(process_block);
   *realtime_result_processor = std::move(result_processor);
@@ -426,7 +428,8 @@ status_t HdrplusCaptureSession::SetupHdrplusProcessChain(
     ALOGE("%s: Creating HdrplusResultProcessor failed.", __FUNCTION__);
     return UNKNOWN_ERROR;
   }
-  result_processor->SetResultCallback(process_capture_result, notify);
+  result_processor->SetResultCallback(process_capture_result, notify,
+                                      /*process_batch_capture_result=*/nullptr);
 
   status_t res = ConfigureHdrplusStreams(
       stream_config, hdrplus_request_processor_.get(), process_block.get());
@@ -480,8 +483,9 @@ status_t HdrplusCaptureSession::Initialize(
   }
 
   // Create result dispatcher
-  result_dispatcher_ = ResultDispatcher::Create(
-      kPartialResult, process_capture_result, notify, "HdrplusDispatcher");
+  result_dispatcher_ =
+      ResultDispatcher::Create(kPartialResult, process_capture_result, notify,
+                               stream_config, "HdrplusDispatcher");
   if (result_dispatcher_ == nullptr) {
     ALOGE("%s: Cannot create result dispatcher.", __FUNCTION__);
     return UNKNOWN_ERROR;

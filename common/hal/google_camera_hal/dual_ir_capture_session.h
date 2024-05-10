@@ -51,6 +51,8 @@ class DualIrCaptureSession : public CaptureSession {
   // lifetime of DualIrCaptureSession.
   // stream_config is the stream configuration.
   // process_capture_result is the callback function to notify results.
+  // process_batch_capture_result is the callback function to notify batched
+  // results.
   // notify is the callback function to notify messages.
   // hal_configured_streams will be filled with HAL configured streams.
   // camera_allocator_hwl is owned by the caller and must be valid during the
@@ -58,8 +60,9 @@ class DualIrCaptureSession : public CaptureSession {
   static std::unique_ptr<CaptureSession> Create(
       CameraDeviceSessionHwl* device_session_hwl,
       const StreamConfiguration& stream_config,
-      ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-      HwlSessionCallback session_callback,
+      ProcessCaptureResultFunc process_capture_result,
+      ProcessBatchCaptureResultFunc process_batch_capture_result,
+      NotifyFunc notify, HwlSessionCallback session_callback,
       std::vector<HalStream>* hal_configured_streams,
       CameraBufferAllocatorHwl* camera_allocator_hwl);
 

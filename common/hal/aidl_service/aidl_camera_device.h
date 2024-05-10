@@ -36,6 +36,7 @@ using aidl::android::hardware::camera::device::ICameraDevice;
 using aidl::android::hardware::camera::device::ICameraDeviceCallback;
 using aidl::android::hardware::camera::device::ICameraDeviceSession;
 using aidl::android::hardware::camera::device::ICameraInjectionSession;
+using aidl::android::hardware::camera::device::RequestTemplate;
 using aidl::android::hardware::camera::device::StreamConfiguration;
 using ::android::hardware::camera::implementation::AidlProfiler;
 using ndk::ScopedAStatus;
@@ -85,6 +86,16 @@ class AidlCameraDevice : public BnCameraDevice {
   ScopedAStatus turnOnTorchWithStrengthLevel(int32_t torchStrength) override;
 
   ScopedAStatus getTorchStrengthLevel(int32_t* strength_level) override;
+
+  ScopedAStatus constructDefaultRequestSettings(
+      RequestTemplate requestTemplate, CameraMetadata* requestSettings) override;
+
+  ScopedAStatus isStreamCombinationWithSettingsSupported(
+      const StreamConfiguration& streamConfiguration, bool* supported) override;
+
+  ScopedAStatus getSessionCharacteristics(
+      const StreamConfiguration& session_config,
+      CameraMetadata* characteristics) override;
 
   // End of override functions in ICameraDevice
   AidlCameraDevice() = default;

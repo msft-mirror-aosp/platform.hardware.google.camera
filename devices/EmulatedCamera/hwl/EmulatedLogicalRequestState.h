@@ -33,6 +33,7 @@ struct EmulatedStream : public HalStream {
   bool is_input;
   int32_t group_id;
   int64_t use_case;
+  int32_t color_space;
 };
 
 struct EmulatedPipeline {
@@ -67,11 +68,12 @@ class EmulatedLogicalRequestState {
       std::unique_ptr<HalCameraMetadata>* default_settings /*out*/);
 
   std::unique_ptr<HwlPipelineResult> InitializeLogicalResult(
-      uint32_t pipeline_id, uint32_t frame_number);
+      uint32_t pipeline_id, uint32_t frame_number, bool is_partial_result);
 
   status_t InitializeLogicalSettings(
       std::unique_ptr<HalCameraMetadata> request_settings,
       std::unique_ptr<std::set<uint32_t>> physical_camera_output_ids,
+      uint32_t frame_number,
       EmulatedSensor::LogicalCameraSettings* logical_settings /*out*/);
 
   static std::unique_ptr<HalCameraMetadata> AdaptLogicalCharacteristics(

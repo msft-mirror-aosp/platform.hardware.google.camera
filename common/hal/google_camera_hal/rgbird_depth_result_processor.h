@@ -39,8 +39,9 @@ class RgbirdDepthResultProcessor : public ResultProcessor {
   virtual ~RgbirdDepthResultProcessor() = default;
 
   // Override functions of ResultProcessor start.
-  void SetResultCallback(ProcessCaptureResultFunc process_capture_result,
-                         NotifyFunc notify) override;
+  void SetResultCallback(
+      ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
+      ProcessBatchCaptureResultFunc process_batch_capture_result) override;
 
   status_t AddPendingRequests(
       const std::vector<ProcessBlockRequest>& process_block_requests,

@@ -18,6 +18,7 @@
 #define HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_REALTIME_PROCESS_BLOCK_H_
 
 #include <shared_mutex>
+#include <vector>
 
 #include "process_block.h"
 
@@ -67,6 +68,10 @@ class RealtimeProcessBlock : public ProcessBlock {
 
   // Invoked when the HWL pipeline sends a result.
   void NotifyHwlPipelineResult(std::unique_ptr<HwlPipelineResult> hwl_result);
+
+  // Invoked when the HWL pipeline sends a batched result.
+  void NotifyHwlPipelineBatchResult(
+      std::vector<std::unique_ptr<HwlPipelineResult>> hwl_results);
 
   // Invoked when the HWL pipeline sends a message.
   void NotifyHwlPipelineMessage(uint32_t pipeline_id,

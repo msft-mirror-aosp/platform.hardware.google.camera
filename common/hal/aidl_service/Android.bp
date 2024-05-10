@@ -81,7 +81,7 @@ cc_defaults {
         "aidl_camera_device_session.cc",
         "aidl_camera_provider.cc",
         "aidl_profiler.cc",
-        "hidl_thermal_utils.cc",
+        "aidl_thermal_utils.cc",
         "aidl_utils.cc",
         "libc_wrappers.cc",
     ],
@@ -90,14 +90,10 @@ cc_defaults {
     ],
     compile_multilib: "first",
     shared_libs: [
-        "android.hardware.camera.device-V1-ndk",
+        "android.hardware.camera.device-V3-ndk",
         "android.hardware.camera.common-V1-ndk",
-        "android.hardware.camera.provider-V1-ndk",
-        "android.hardware.graphics.mapper@2.0",
-        "android.hardware.graphics.mapper@3.0",
-        "android.hardware.graphics.mapper@4.0",
-        "android.hardware.thermal@2.0",
-        "libbinder",
+        "android.hardware.camera.provider-V3-ndk",
+        "android.hardware.thermal-V1-ndk",
         "libbinder_ndk",
         "libbase",
         "libcamera_metadata",
@@ -107,6 +103,7 @@ cc_defaults {
         "libgooglecamerahalutils",
         "libhidlbase",
         "liblog",
+        "libui",
         "libutils",
         "lib_profiler",
     ],
@@ -119,7 +116,7 @@ cc_defaults {
 }
 
 cc_defaults {
-    name: "camera_service_defaults",
+    name: "hardware_camera_service_defaults",
     defaults: [
         "camera_service_defaults_common",
     ],
@@ -132,7 +129,7 @@ cc_defaults {
 cc_binary {
     name: "android.hardware.camera.provider@2.7-service-google",
     defaults: [
-        "camera_service_defaults",
+        "hardware_camera_service_defaults",
         "camera_service_eager_hal_defaults",
     ],
     init_rc: ["android.hardware.camera.provider@2.7-service-google.rc"],
@@ -141,7 +138,7 @@ cc_binary {
 cc_binary {
     name: "android.hardware.camera.provider@2.7-service-google-lazy",
     defaults: [
-        "camera_service_defaults",
+        "hardware_camera_service_defaults",
         "camera_service_lazy_hal_defaults",
     ],
     init_rc: ["android.hardware.camera.provider@2.7-service-google-lazy.rc"],

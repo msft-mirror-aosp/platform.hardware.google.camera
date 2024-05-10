@@ -26,9 +26,12 @@
 #include "basic_capture_session.h"
 #include "capture_session_utils.h"
 #include "dual_ir_capture_session.h"
+#include "hal_types.h"
 #include "hal_utils.h"
 #include "hdrplus_capture_session.h"
 #include "rgbird_capture_session.h"
+#include "system/camera_metadata.h"
+#include "ui/GraphicBufferMapper.h"
 #include "vendor_tag_defs.h"
 #include "vendor_tag_types.h"
 #include "vendor_tags.h"
@@ -184,48 +187,7 @@ status_t CameraDeviceSession::UpdatePendingRequest(CaptureResult* result) {
 
 void CameraDeviceSession::ProcessCaptureResult(
     std::unique_ptr<CaptureResult> result) {
-  if (result == nullptr) {
-    ALOGE("%s: result is nullptr", __FUNCTION__);
-    return;
-  }
-  zoom_ratio_mapper_.UpdateCaptureResult(result.get());
-
-  // If buffer management is not supported, simply send the result to the client.
-  if (!buffer_management_supported_) {
-    std::shared_lock lock(session_callback_lock_);
-    session_callback_.process_capture_result(std::move(result));
-    return;
-  }
-
-  status_t res = UpdatePendingRequest(result.get());
-  if (res != OK) {
-    ALOGE("%s: Updating inflight requests/streams failed.", __FUNCTION__);
-  }
-
-  for (auto& stream_buffer : result->output_buffers) {
-    ALOGV("%s: [sbc] <= Return result output buf[%p], bid[%" PRIu64
-          "], strm[%d], frm[%u]",
-          __FUNCTION__, stream_buffer.buffer, stream_buffer.buffer_id,
-          stream_buffer.stream_id, result->frame_number);
-  }
-  for (auto& stream_buffer : result->input_buffers) {
-    ALOGV("%s: [sbc] <= Return result input buf[%p], bid[%" PRIu64
-          "], strm[%d], frm[%u]",
-          __FUNCTION__, stream_buffer.buffer, stream_buffer.buffer_id,
-          stream_buffer.stream_id, result->frame_number);
-  }
-
-  // If there is dummy buffer or a dummy buffer has been observed of this frame,
-  // handle the capture result specifically.
-  bool result_handled = false;
-  res = TryHandleDummyResult(result.get(), &result_handled);
-  if (res != OK) {
-    ALOGE("%s: Failed to handle dummy result.", __FUNCTION__);
-    return;
-  }
-  if (result_handled == true) {
-    return;
-  }
+  if (TryHandleCaptureResult(result)) return;
 
   // Update pending request tracker with returned buffers.
   std::vector<StreamBuffer> buffers;
@@ -242,18 +204,40 @@ void CameraDeviceSession::ProcessCaptureResult(
     session_callback_.process_capture_result(std::move(result));
   }
 
-  if (!buffers.empty()) {
-    if (pending_requests_tracker_->TrackReturnedAcquiredBuffers(buffers) != OK) {
-      ALOGE("%s: Tracking requested acquired buffers failed", __FUNCTION__);
+  TrackReturnedBuffers(buffers);
+}
+
+void CameraDeviceSession::ProcessBatchCaptureResult(
+    std::vector<std::unique_ptr<CaptureResult>> results) {
+  std::vector<std::unique_ptr<CaptureResult>> results_to_callback;
+  results_to_callback.reserve(results.size());
+  std::vector<StreamBuffer> buffers;
+  for (auto& result : results) {
+    if (TryHandleCaptureResult(result)) continue;
+
+    // Update pending request tracker with returned buffers.
+    buffers.insert(buffers.end(), result->output_buffers.begin(),
+                   result->output_buffers.end());
+
+    if (result->result_metadata) {
+      std::lock_guard<std::mutex> lock(request_record_lock_);
+      pending_results_.erase(result->frame_number);
     }
-    if (pending_requests_tracker_->TrackReturnedResultBuffers(buffers) != OK) {
-      ALOGE("%s: Tracking requested quota buffers failed", __FUNCTION__);
-    }
+
+    results_to_callback.push_back(std::move(result));
   }
+
+  {
+    std::shared_lock lock(session_callback_lock_);
+    session_callback_.process_batch_capture_result(
+        std::move(results_to_callback));
+  }
+
+  TrackReturnedBuffers(buffers);
 }
 
 void CameraDeviceSession::Notify(const NotifyMessage& result) {
-  if (buffer_management_supported_) {
+  if (buffer_management_used_) {
     uint32_t frame_number = 0;
     if (result.type == MessageType::kError) {
       frame_number = result.message.error.frame_number;
@@ -303,29 +287,6 @@ void CameraDeviceSession::Notify(const NotifyMessage& result) {
   session_callback_.notify(result);
 }
 
-status_t CameraDeviceSession::InitializeBufferMapper() {
-  buffer_mapper_v4_ =
-      android::hardware::graphics::mapper::V4_0::IMapper::getService();
-  if (buffer_mapper_v4_ != nullptr) {
-    return OK;
-  }
-
-  buffer_mapper_v3_ =
-      android::hardware::graphics::mapper::V3_0::IMapper::getService();
-  if (buffer_mapper_v3_ != nullptr) {
-    return OK;
-  }
-
-  buffer_mapper_v2_ =
-      android::hardware::graphics::mapper::V2_0::IMapper::getService();
-  if (buffer_mapper_v2_ != nullptr) {
-    return OK;
-  }
-
-  ALOGE("%s: Getting buffer mapper failed.", __FUNCTION__);
-  return UNKNOWN_ERROR;
-}
-
 void CameraDeviceSession::InitializeCallbacks() {
   std::lock_guard lock(session_callback_lock_);
 
@@ -356,6 +317,12 @@ void CameraDeviceSession::InitializeCallbacks() {
       ProcessCaptureResultFunc([this](std::unique_ptr<CaptureResult> result) {
         ProcessCaptureResult(std::move(result));
       });
+
+  camera_device_session_callback_.process_batch_capture_result =
+      ProcessBatchCaptureResultFunc(
+          [this](std::vector<std::unique_ptr<CaptureResult>> results) {
+            ProcessBatchCaptureResult(std::move(results));
+          });
 
   camera_device_session_callback_.notify =
       NotifyFunc([this](const NotifyMessage& result) { Notify(result); });
@@ -388,9 +355,12 @@ status_t CameraDeviceSession::InitializeBufferManagement(
   status_t res = characteristics->Get(
       ANDROID_INFO_SUPPORTED_BUFFER_MANAGEMENT_VERSION, &entry);
   if (res == OK && entry.count > 0) {
-    buffer_management_supported_ =
-        (entry.data.u8[0] >=
+    buffer_management_used_ =
+        (entry.data.u8[0] ==
          ANDROID_INFO_SUPPORTED_BUFFER_MANAGEMENT_VERSION_HIDL_DEVICE_3_5);
+    session_buffer_management_supported_ =
+        (entry.data.u8[0] ==
+         ANDROID_INFO_SUPPORTED_BUFFER_MANAGEMENT_VERSION_SESSION_CONFIGURABLE);
   }
 
   return OK;
@@ -414,17 +384,11 @@ status_t CameraDeviceSession::Initialize(
   device_session_hwl_ = std::move(device_session_hwl);
   camera_allocator_hwl_ = camera_allocator_hwl;
 
-  status_t res = InitializeBufferMapper();
-  if (res != OK) {
-    ALOGE("%s: Initialize buffer mapper failed: %s(%d)", __FUNCTION__,
-          strerror(-res), res);
-    return res;
-  }
-
+  GraphicBufferMapper::preloadHal();
   InitializeCallbacks();
 
   std::unique_ptr<google_camera_hal::HalCameraMetadata> characteristics;
-  res = device_session_hwl_->GetCameraCharacteristics(&characteristics);
+  status_t res = device_session_hwl_->GetCameraCharacteristics(&characteristics);
   if (res != OK) {
     ALOGE("%s: Get camera characteristics failed: %s(%d)", __FUNCTION__,
           strerror(-res), res);
@@ -457,6 +421,21 @@ status_t CameraDeviceSession::Initialize(
   return OK;
 }
 
+status_t GetMaxResDimension(const HalCameraMetadata* characteristics,
+                            Dimension& max_res_dimension) {
+  Rect active_array_maximum_resolution_size;
+  status_t max_res_status = utils::GetSensorActiveArraySize(
+      characteristics, &active_array_maximum_resolution_size,
+      /*maximum_resolution*/ true);
+  if (max_res_status == OK) {
+    max_res_dimension = {active_array_maximum_resolution_size.right -
+                             active_array_maximum_resolution_size.left + 1,
+                         active_array_maximum_resolution_size.bottom -
+                             active_array_maximum_resolution_size.top + 1};
+  }
+  return max_res_status;
+}
+
 void CameraDeviceSession::InitializeZoomRatioMapper(
     HalCameraMetadata* characteristics) {
   if (characteristics == nullptr) {
@@ -466,7 +445,8 @@ void CameraDeviceSession::InitializeZoomRatioMapper(
 
   Rect active_array_size;
   status_t res =
-      utils::GetSensorActiveArraySize(characteristics, &active_array_size);
+      utils::GetSensorActiveArraySize(characteristics, &active_array_size,
+                                      /*maximum_resolution*/ false);
   if (res != OK) {
     ALOGE("%s: Failed to get the active array size: %s(%d)", __FUNCTION__,
           strerror(-res), res);
@@ -478,6 +458,10 @@ void CameraDeviceSession::InitializeZoomRatioMapper(
   params.active_array_dimension = {
       active_array_size.right - active_array_size.left + 1,
       active_array_size.bottom - active_array_size.top + 1};
+
+  // Populate max-res dimension only if the logical camera have max-res resolution
+  (void)GetMaxResDimension(characteristics,
+                           params.active_array_maximum_resolution_dimension);
 
   std::vector<uint32_t> physical_camera_ids =
       device_session_hwl_->GetPhysicalCameraIds();
@@ -493,7 +477,8 @@ void CameraDeviceSession::InitializeZoomRatioMapper(
     }
 
     res = utils::GetSensorActiveArraySize(physical_cam_characteristics.get(),
-                                          &active_array_size);
+                                          &active_array_size,
+                                          /*maximum_resolution*/ false);
     if (res != OK) {
       ALOGE("%s: Failed to get cam: %u, active array size: %s(%d)",
             __FUNCTION__, id, strerror(-res), res);
@@ -504,6 +489,12 @@ void CameraDeviceSession::InitializeZoomRatioMapper(
         active_array_size.bottom - active_array_size.top + 1};
     params.physical_cam_active_array_dimension.emplace(id,
                                                        active_array_dimension);
+    Dimension max_res_dimension;
+    if (GetMaxResDimension(physical_cam_characteristics.get(),
+                           max_res_dimension) == OK) {
+      params.physical_cam_active_array_maximum_resolution_dimension.emplace(
+          id, max_res_dimension);
+    }
   }
 
   res = utils::GetZoomRatioRange(characteristics, &params.zoom_ratio_range);
@@ -571,16 +562,7 @@ CameraDeviceSession::~CameraDeviceSession() {
   }
   external_capture_session_entries_.clear();
 
-  if (buffer_mapper_v4_ != nullptr) {
-    FreeImportedBufferHandles<android::hardware::graphics::mapper::V4_0::IMapper>(
-        buffer_mapper_v4_);
-  } else if (buffer_mapper_v3_ != nullptr) {
-    FreeImportedBufferHandles<android::hardware::graphics::mapper::V3_0::IMapper>(
-        buffer_mapper_v3_);
-  } else if (buffer_mapper_v2_ != nullptr) {
-    FreeImportedBufferHandles<android::hardware::graphics::mapper::V2_0::IMapper>(
-        buffer_mapper_v2_);
-  }
+  FreeImportedBufferHandles();
 }
 
 void CameraDeviceSession::UnregisterThermalCallback() {
@@ -652,12 +634,17 @@ status_t CameraDeviceSession::ConstructDefaultRequestSettings(
 }
 
 status_t CameraDeviceSession::ConfigureStreams(
-    const StreamConfiguration& stream_config,
-    std::vector<HalStream>* hal_config) {
+    const StreamConfiguration& stream_config, bool v2,
+    ConfigureStreamsReturn* configured_streams) {
   ATRACE_CALL();
   bool set_realtime_thread = false;
   int32_t schedule_policy;
   struct sched_param schedule_param = {0};
+  if (configured_streams == nullptr) {
+    ALOGE("%s: configured_streams output is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+  std::vector<HalStream>& hal_config = configured_streams->hal_streams;
   if (utils::SupportRealtimeThread()) {
     bool get_thread_schedule = false;
     if (pthread_getschedparam(pthread_self(), &schedule_policy,
@@ -704,13 +691,14 @@ status_t CameraDeviceSession::ConfigureStreams(
   if (!utils::IsStreamUseCaseSupported(stream_config, stream_use_cases_)) {
     return BAD_VALUE;
   }
-
+  device_session_hwl_->setConfigureStreamsV2(v2);
   capture_session_ = CreateCaptureSession(
       stream_config, kWrapperCaptureSessionEntries,
       external_capture_session_entries_, kCaptureSessionEntries,
       hwl_session_callback_, camera_allocator_hwl_, device_session_hwl_.get(),
-      hal_config, camera_device_session_callback_.process_capture_result,
-      camera_device_session_callback_.notify);
+      &hal_config, camera_device_session_callback_.process_capture_result,
+      camera_device_session_callback_.notify,
+      camera_device_session_callback_.process_batch_capture_result);
 
   if (capture_session_ == nullptr) {
     ALOGE("%s: Cannot find a capture session compatible with stream config",
@@ -720,8 +708,19 @@ status_t CameraDeviceSession::ConfigureStreams(
     }
     return BAD_VALUE;
   }
-
-  if (buffer_management_supported_) {
+  if (session_buffer_management_supported_ && v2) {
+    bool use_buffer_management = false;
+    auto ret =
+        device_session_hwl_->ShouldUseHalBufferManager(&use_buffer_management);
+    if (ret != OK) {
+      ALOGE("%s: shouldUseHalBufManager() failed", __FUNCTION__);
+      return ret;
+    } else {
+      buffer_management_used_ = use_buffer_management;
+    }
+    configured_streams->use_hal_buf_manager = buffer_management_used_;
+  }
+  if (buffer_management_used_) {
     stream_buffer_cache_manager_ = StreamBufferCacheManager::Create();
     if (stream_buffer_cache_manager_ == nullptr) {
       ALOGE("%s: Failed to create stream buffer cache manager.", __FUNCTION__);
@@ -733,7 +732,7 @@ status_t CameraDeviceSession::ConfigureStreams(
     }
 
     status_t res =
-        RegisterStreamsIntoCacheManagerLocked(stream_config, *hal_config);
+        RegisterStreamsIntoCacheManagerLocked(stream_config, hal_config);
     if (res != OK) {
       ALOGE("%s: Failed to register streams into stream buffer cache manager.",
             __FUNCTION__);
@@ -746,7 +745,7 @@ status_t CameraDeviceSession::ConfigureStreams(
   }
 
   // (b/129561652): Framework assumes HalStream is sorted.
-  std::sort(hal_config->begin(), hal_config->end(),
+  std::sort(hal_config.begin(), hal_config.end(),
             [](const HalStream& a, const HalStream& b) { return a.id < b.id; });
 
   // Backup the streams received from frameworks into configured_streams_map_,
@@ -760,9 +759,9 @@ status_t CameraDeviceSession::ConfigureStreams(
 
   // If buffer management is support, create a pending request tracker for
   // capture request throttling.
-  if (buffer_management_supported_) {
+  if (buffer_management_used_) {
     pending_requests_tracker_ =
-        PendingRequestsTracker::Create(*hal_config, grouped_stream_id_map_);
+        PendingRequestsTracker::Create(hal_config, grouped_stream_id_map_);
     if (pending_requests_tracker_ == nullptr) {
       ALOGE("%s: Cannot create a pending request tracker.", __FUNCTION__);
       if (set_realtime_thread) {
@@ -791,7 +790,6 @@ status_t CameraDeviceSession::ConfigureStreams(
   if (set_realtime_thread) {
     utils::UpdateThreadSched(pthread_self(), schedule_policy, &schedule_param);
   }
-
   return OK;
 }
 
@@ -885,7 +883,7 @@ status_t CameraDeviceSession::CreateCaptureRequestLocked(
     }
     // If buffer management API is supported, buffers will be requested via
     // RequestStreamBuffersFunc.
-    if (!buffer_management_supported_) {
+    if (!buffer_management_used_) {
       res = UpdateBufferHandlesLocked(&updated_request->output_buffers);
       if (res != OK) {
         ALOGE("%s: Updating output buffer handles failed: %s(%d)", __FUNCTION__,
@@ -900,22 +898,16 @@ status_t CameraDeviceSession::CreateCaptureRequestLocked(
   return OK;
 }
 
-template <class T, class U>
 status_t CameraDeviceSession::ImportBufferHandleLocked(
-    const sp<T> buffer_mapper, const StreamBuffer& buffer) {
+    const StreamBuffer& buffer) {
   ATRACE_CALL();
-  U mapper_error;
   buffer_handle_t imported_buffer_handle;
 
-  auto hidl_res = buffer_mapper->importBuffer(
-      android::hardware::hidl_handle(buffer.buffer),
-      [&](const auto& error, const auto& buffer_handle) {
-        mapper_error = error;
-        imported_buffer_handle = static_cast<buffer_handle_t>(buffer_handle);
-      });
-  if (!hidl_res.isOk() || mapper_error != U::NONE) {
-    ALOGE("%s: Importing buffer failed: %s, mapper error %u", __FUNCTION__,
-          hidl_res.description().c_str(), mapper_error);
+  status_t status = GraphicBufferMapper::get().importBufferNoValidate(
+      buffer.buffer, &imported_buffer_handle);
+  if (status != OK) {
+    ALOGE("%s: Importing buffer failed: %s", __FUNCTION__,
+          ::android::statusToString(status).c_str());
     return UNKNOWN_ERROR;
   }
 
@@ -931,23 +923,7 @@ status_t CameraDeviceSession::ImportBufferHandles(
   // Import buffers that are new to HAL.
   for (auto& buffer : buffers) {
     if (!IsBufferImportedLocked(buffer.stream_id, buffer.buffer_id)) {
-      status_t res = OK;
-      if (buffer_mapper_v4_ != nullptr) {
-        res = ImportBufferHandleLocked<
-            android::hardware::graphics::mapper::V4_0::IMapper,
-            android::hardware::graphics::mapper::V4_0::Error>(buffer_mapper_v4_,
-                                                              buffer);
-      } else if (buffer_mapper_v3_ != nullptr) {
-        res = ImportBufferHandleLocked<
-            android::hardware::graphics::mapper::V3_0::IMapper,
-            android::hardware::graphics::mapper::V3_0::Error>(buffer_mapper_v3_,
-                                                              buffer);
-      } else {
-        res = ImportBufferHandleLocked<
-            android::hardware::graphics::mapper::V2_0::IMapper,
-            android::hardware::graphics::mapper::V2_0::Error>(buffer_mapper_v2_,
-                                                              buffer);
-      }
+      status_t res = ImportBufferHandleLocked(buffer);
 
       if (res != OK) {
         ALOGE("%s: Importing buffer %" PRIu64 " from stream %d failed: %s(%d)",
@@ -972,7 +948,7 @@ status_t CameraDeviceSession::ImportRequestBufferHandles(
     return res;
   }
 
-  if (buffer_management_supported_) {
+  if (buffer_management_used_) {
     ALOGV(
         "%s: Buffer management is enabled. Skip importing buffers in "
         "requests.",
@@ -1154,7 +1130,8 @@ status_t CameraDeviceSession::HandleInactiveStreams(const CaptureRequest& reques
     status_t res = stream_buffer_cache_manager_->IsStreamActive(
         stream_buffer.stream_id, &is_active);
     if (res != OK) {
-      ALOGE("%s: Failed to check if stream is active.", __FUNCTION__);
+      ALOGE("%s: Failed to check if stream is active, error status: %s(%d)",
+            __FUNCTION__, strerror(-res), res);
       return UNKNOWN_ERROR;
     }
     if (!is_active) {
@@ -1185,7 +1162,7 @@ void CameraDeviceSession::CheckRequestForStreamBufferCacheManager(
     return;
   }
 
-  // Note: This function should only be called if buffer_management_supported_
+  // Note: This function should only be called if buffer_management_used_
   // is true.
   if (pending_request_streams_.empty()) {
     pending_requests_tracker_->OnBufferCacheFlushed();
@@ -1316,14 +1293,14 @@ status_t CameraDeviceSession::ProcessCaptureRequest(
                          ErrorCode::kErrorRequest);
       NotifyBufferError(request);
       need_to_process = false;
-    } else if (buffer_management_supported_) {
+    } else if (buffer_management_used_) {
       CheckRequestForStreamBufferCacheManager(updated_request, &need_to_process);
     }
 
     if (need_to_process) {
       // If buffer management is supported, framework does not throttle requests
       // with stream's max buffers. We need to throttle on our own.
-      if (buffer_management_supported_) {
+      if (buffer_management_used_) {
         std::vector<int32_t> first_requested_stream_ids;
 
         res = pending_requests_tracker_->WaitAndTrackRequestBuffers(
@@ -1348,7 +1325,7 @@ status_t CameraDeviceSession::ProcessCaptureRequest(
 
       // Check the flush status again to prevent flush being called while we are
       // waiting for the request buffers(request throttling).
-      if (buffer_management_supported_ && is_flushing_) {
+      if (buffer_management_used_ && is_flushing_) {
         std::vector<StreamBuffer> buffers = updated_request.output_buffers;
         {
           std::lock_guard<std::mutex> lock(request_record_lock_);
@@ -1423,41 +1400,28 @@ void CameraDeviceSession::RemoveBufferCache(
       continue;
     }
 
-    auto free_buffer_mapper = [&buffer_handle_it](auto buffer_mapper) {
-      auto hidl_res = buffer_mapper->freeBuffer(
-          const_cast<native_handle_t*>(buffer_handle_it->second));
-      if (!hidl_res.isOk()) {
-        ALOGE("%s: Freeing imported buffer failed: %s", __FUNCTION__,
-              hidl_res.description().c_str());
-      }
-    };
-
     device_session_hwl_->RemoveCachedBuffers(buffer_handle_it->second);
 
-    if (buffer_mapper_v4_ != nullptr) {
-      free_buffer_mapper(buffer_mapper_v4_);
-    } else if (buffer_mapper_v3_ != nullptr) {
-      free_buffer_mapper(buffer_mapper_v3_);
-    } else {
-      free_buffer_mapper(buffer_mapper_v2_);
-      ;
+    status_t res =
+        GraphicBufferMapper::get().freeBuffer(buffer_handle_it->second);
+    if (res != OK) {
+      ALOGE("%s: Freeing imported buffer failed: %s", __FUNCTION__,
+            ::android::statusToString(res).c_str());
     }
 
     imported_buffer_handle_map_.erase(buffer_handle_it);
   }
 }
 
-template <class T>
-void CameraDeviceSession::FreeBufferHandlesLocked(const sp<T> buffer_mapper,
-                                                  int32_t stream_id) {
+void CameraDeviceSession::FreeBufferHandlesLocked(int32_t stream_id) {
   for (auto buffer_handle_it = imported_buffer_handle_map_.begin();
        buffer_handle_it != imported_buffer_handle_map_.end();) {
     if (buffer_handle_it->first.stream_id == stream_id) {
-      auto hidl_res = buffer_mapper->freeBuffer(
-          const_cast<native_handle_t*>(buffer_handle_it->second));
-      if (!hidl_res.isOk()) {
+      status_t res =
+          GraphicBufferMapper::get().freeBuffer(buffer_handle_it->second);
+      if (res != OK) {
         ALOGE("%s: Freeing imported buffer failed: %s", __FUNCTION__,
-              hidl_res.description().c_str());
+              ::android::statusToString(res).c_str());
       }
       buffer_handle_it = imported_buffer_handle_map_.erase(buffer_handle_it);
     } else {
@@ -1466,21 +1430,16 @@ void CameraDeviceSession::FreeBufferHandlesLocked(const sp<T> buffer_mapper,
   }
 }
 
-template <class T>
-void CameraDeviceSession::FreeImportedBufferHandles(const sp<T> buffer_mapper) {
+void CameraDeviceSession::FreeImportedBufferHandles() {
   ATRACE_CALL();
   std::lock_guard<std::mutex> lock(imported_buffer_handle_map_lock_);
 
-  if (buffer_mapper == nullptr) {
-    return;
-  }
-
+  auto& mapper = GraphicBufferMapper::get();
   for (auto buffer_handle_it : imported_buffer_handle_map_) {
-    auto hidl_res = buffer_mapper->freeBuffer(
-        const_cast<native_handle_t*>(buffer_handle_it.second));
-    if (!hidl_res.isOk()) {
+    status_t status = mapper.freeBuffer(buffer_handle_it.second);
+    if (status != OK) {
       ALOGE("%s: Freeing imported buffer failed: %s", __FUNCTION__,
-            hidl_res.description().c_str());
+            ::android::statusToString(status).c_str());
     }
   }
 
@@ -1502,16 +1461,7 @@ void CameraDeviceSession::CleanupStaleStreamsLocked(
     if (!found) {
       std::lock_guard<std::mutex> lock(imported_buffer_handle_map_lock_);
       stream_it = configured_streams_map_.erase(stream_it);
-      if (buffer_mapper_v4_ != nullptr) {
-        FreeBufferHandlesLocked<android::hardware::graphics::mapper::V4_0::IMapper>(
-            buffer_mapper_v4_, stream_id);
-      } else if (buffer_mapper_v3_ != nullptr) {
-        FreeBufferHandlesLocked<android::hardware::graphics::mapper::V3_0::IMapper>(
-            buffer_mapper_v3_, stream_id);
-      } else {
-        FreeBufferHandlesLocked<android::hardware::graphics::mapper::V2_0::IMapper>(
-            buffer_mapper_v2_, stream_id);
-      }
+      FreeBufferHandlesLocked(stream_id);
     } else {
       stream_it++;
     }
@@ -1720,8 +1670,10 @@ status_t CameraDeviceSession::RegisterStreamsIntoCacheManagerLocked(
 
     status_t res = stream_buffer_cache_manager_->RegisterStream(reg_info);
     if (res != OK) {
-      ALOGE("%s: Failed to register stream into stream buffer cache manager.",
-            __FUNCTION__);
+      ALOGE(
+          "%s: Failed to register stream into stream buffer cache manager, "
+          "error status: %s(%d)",
+          __FUNCTION__, strerror(-res), res);
       return UNKNOWN_ERROR;
     }
     ALOGI("%s: [sbc] Registered stream %d into SBC manager.", __FUNCTION__,
@@ -1748,7 +1700,10 @@ status_t CameraDeviceSession::RequestBuffersFromStreamBufferCacheManager(
   status_t res = this->stream_buffer_cache_manager_->GetStreamBuffer(
       stream_id, &buffer_request_result);
   if (res != OK) {
-    ALOGE("%s: Failed to get stream buffer from SBC manager.", __FUNCTION__);
+    ALOGE(
+        "%s: Failed to get stream buffer from SBC manager, error status: "
+        "%s(%d).",
+        __FUNCTION__, strerror(-res), res);
     return UNKNOWN_ERROR;
   }
 
@@ -1852,8 +1807,8 @@ status_t CameraDeviceSession::RequestStreamBuffers(
   if (status != BufferRequestStatus::kOk || buffer_returns.size() != 1) {
     ALOGW(
         "%s: Requesting stream buffer failed. (buffer_returns has %zu "
-        "entries)",
-        __FUNCTION__, buffer_returns.size());
+        "entries; status is %s(%d)).",
+        __FUNCTION__, buffer_returns.size(), strerror(-res), status);
     for (auto& buffer_return : buffer_returns) {
       ALOGI("%s: stream %d, buffer request error %d", __FUNCTION__,
             buffer_return.stream_id, buffer_return.val.error);
@@ -1903,6 +1858,64 @@ void CameraDeviceSession::ReturnStreamBuffers(
 std::unique_ptr<google::camera_common::Profiler>
 CameraDeviceSession::GetProfiler(uint32_t camera_id, int option) {
   return device_session_hwl_->GetProfiler(camera_id, option);
+}
+
+bool CameraDeviceSession::TryHandleCaptureResult(
+    std::unique_ptr<CaptureResult>& result) {
+  if (result == nullptr) {
+    ALOGE("%s: result is nullptr", __FUNCTION__);
+    return true;
+  }
+  zoom_ratio_mapper_.UpdateCaptureResult(result.get());
+
+  // If buffer management is not used, simply send the result to the client.
+  if (!buffer_management_used_) {
+    std::shared_lock lock(session_callback_lock_);
+    session_callback_.process_capture_result(std::move(result));
+    return true;
+  }
+
+  status_t res = UpdatePendingRequest(result.get());
+  if (res != OK) {
+    ALOGE("%s: Updating inflight requests/streams failed: %s(%d)", __FUNCTION__,
+          strerror(-res), res);
+    return true;
+  }
+
+  for (auto& stream_buffer : result->output_buffers) {
+    ALOGV("%s: [sbc] <= Return result output buf[%p], bid[%" PRIu64
+          "], strm[%d], frm[%u]",
+          __FUNCTION__, stream_buffer.buffer, stream_buffer.buffer_id,
+          stream_buffer.stream_id, result->frame_number);
+  }
+  for (auto& stream_buffer : result->input_buffers) {
+    ALOGV("%s: [sbc] <= Return result input buf[%p], bid[%" PRIu64
+          "], strm[%d], frm[%u]",
+          __FUNCTION__, stream_buffer.buffer, stream_buffer.buffer_id,
+          stream_buffer.stream_id, result->frame_number);
+  }
+
+  // If there is placeholder buffer or a placeholder buffer has been observed of
+  // this frame, handle the capture result specifically.
+  bool result_handled = false;
+  res = TryHandleDummyResult(result.get(), &result_handled);
+  if (res != OK) {
+    ALOGE("%s: Failed to handle placeholder result.", __FUNCTION__);
+    return true;
+  }
+  return result_handled;
+}
+
+void CameraDeviceSession::TrackReturnedBuffers(
+    const std::vector<StreamBuffer>& buffers) {
+  if (!buffers.empty()) {
+    if (pending_requests_tracker_->TrackReturnedAcquiredBuffers(buffers) != OK) {
+      ALOGE("%s: Tracking requested acquired buffers failed", __FUNCTION__);
+    }
+    if (pending_requests_tracker_->TrackReturnedResultBuffers(buffers) != OK) {
+      ALOGE("%s: Tracking requested quota buffers failed", __FUNCTION__);
+    }
+  }
 }
 
 }  // namespace google_camera_hal

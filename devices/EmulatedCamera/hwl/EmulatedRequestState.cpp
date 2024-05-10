@@ -43,7 +43,8 @@ const std::set<uint8_t> EmulatedRequestState::kSupportedCapabilites = {
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_REMOSAIC_REPROCESSING,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_ULTRA_HIGH_RESOLUTION_SENSOR,
     ANDROID_REQUEST_AVAILABLE_CAPABILITIES_DYNAMIC_RANGE_TEN_BIT,
-    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_STREAM_USE_CASE};
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_STREAM_USE_CASE,
+    ANDROID_REQUEST_AVAILABLE_CAPABILITIES_COLOR_SPACE_PROFILES};
 
 const std::set<uint8_t> EmulatedRequestState::kSupportedHWLevels = {
     ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED,
@@ -615,6 +616,7 @@ status_t EmulatedRequestState::ProcessAE() {
 
 status_t EmulatedRequestState::InitializeSensorSettings(
     std::unique_ptr<HalCameraMetadata> request_settings,
+    uint32_t override_frame_number,
     EmulatedSensor::SensorSettings* sensor_settings /*out*/) {
   if ((sensor_settings == nullptr) || (request_settings.get() == nullptr)) {
     return BAD_VALUE;
@@ -686,6 +688,17 @@ status_t EmulatedRequestState::InitializeSensorSettings(
     zoom_ratio_ = std::min(std::max(entry.data.f[0], min_zoom), max_zoom);
   }
 
+  // Check settings override
+  ret = request_settings_->Get(ANDROID_CONTROL_SETTINGS_OVERRIDE, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    settings_override_ = entry.data.i32[0];
+  }
+
+  // Store settings override frame number
+  if (override_frame_number != 0) {
+    settings_overriding_frame_number_ = override_frame_number;
+  }
+
   // Check rotate_and_crop setting
   ret = request_settings_->Get(ANDROID_SCALER_ROTATE_AND_CROP, &entry);
   if ((ret == OK) && (entry.count == 1)) {
@@ -710,6 +723,31 @@ status_t EmulatedRequestState::InitializeSensorSettings(
             __FUNCTION__, entry.data.u8[0]);
     }
   }
+
+  // Check autoframing
+  ret = request_settings_->Get(ANDROID_CONTROL_AUTOFRAMING, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    autoframing_ = entry.data.i32[0];
+    if (autoframing_ == ANDROID_CONTROL_AUTOFRAMING_ON) {
+      // Set zoom_ratio to be a hard-coded value to test autoframing.
+      zoom_ratio_ = 1.7f;
+      vstab_mode = ANDROID_CONTROL_VIDEO_STABILIZATION_MODE_OFF;
+    }
+  }
+
+  // Check manual flash strength level
+  ret = request_settings_->Get(ANDROID_FLASH_STRENGTH_LEVEL, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    flash_strength_level_ = entry.data.i32[0];
+    if (ANDROID_FLASH_SINGLE_STRENGTH_MAX_LEVEL > 1 &&
+            ANDROID_FLASH_TORCH_STRENGTH_MAX_LEVEL > 1 && is_flash_supported_) {
+      ALOGI("%s: Device supports manual flash strength control", __FUNCTION__);
+      flash_strength_level_ = entry.data.i32[0];
+    } else {
+        ALOGI("%s: Device does not support manual flash strength control", __FUNCTION__);
+        return BAD_VALUE;
+      }
+    }
 
   // Check video stabilization parameter
   uint8_t edge_mode = ANDROID_EDGE_MODE_OFF;
@@ -825,6 +863,15 @@ status_t EmulatedRequestState::InitializeSensorSettings(
     }
   }
 
+  ret = static_metadata_->Get(ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE, &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    if (entry.data.u8[0] == ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME) {
+      timestamp_source_ = ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME;
+    } else if (entry.data.u8[0] != ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_UNKNOWN) {
+      ALOGE("%s: Unsupported timestamp source", __FUNCTION__);
+    }
+  }
+
   sensor_settings->exposure_time = sensor_exposure_time_;
   sensor_settings->frame_duration = sensor_frame_duration_;
   sensor_settings->gain = sensor_sensitivity_;
@@ -840,10 +887,39 @@ status_t EmulatedRequestState::InitializeSensorSettings(
   sensor_settings->edge_mode = edge_mode;
   sensor_settings->sensor_pixel_mode = sensor_pixel_mode_;
   sensor_settings->test_pattern_mode = test_pattern_mode;
+  sensor_settings->timestamp_source = timestamp_source_;
   memcpy(sensor_settings->test_pattern_data, test_pattern_data,
          sizeof(sensor_settings->test_pattern_data));
 
   return OK;
+}
+
+uint32_t EmulatedRequestState::GetPartialResultCount(bool is_partial_result) {
+  uint32_t res = 0;
+
+  if (is_partial_result) {
+    res = 1;
+  } else {
+    res = partial_result_count ? partial_result_count : 1;
+  }
+
+  return res;
+}
+
+std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializePartialResult(
+    uint32_t pipeline_id, uint32_t frame_number) {
+  std::lock_guard<std::mutex> lock(request_state_mutex_);
+  auto result = std::make_unique<HwlPipelineResult>();
+
+  if (partial_result_count > 1) {
+    result->camera_id = camera_id_;
+    result->pipeline_id = pipeline_id;
+    result->frame_number = frame_number;
+    result->result_metadata = HalCameraMetadata::Create(0, 0);
+    result->partial_result = GetPartialResultCount(/*is partial result*/ true);
+  }
+
+  return result;
 }
 
 std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
@@ -854,7 +930,7 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
   result->pipeline_id = pipeline_id;
   result->frame_number = frame_number;
   result->result_metadata = HalCameraMetadata::Clone(request_settings_.get());
-  result->partial_result = partial_result_count_;
+  result->partial_result = GetPartialResultCount(/*is partial result*/ false);
 
   // Results supported on all emulated devices
   result->result_metadata->Set(ANDROID_REQUEST_PIPELINE_DEPTH,
@@ -869,6 +945,26 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
   result->result_metadata->Set(ANDROID_CONTROL_AWB_STATE, &awb_state_, 1);
   result->result_metadata->Set(ANDROID_CONTROL_AE_MODE, &ae_mode_, 1);
   result->result_metadata->Set(ANDROID_CONTROL_AE_STATE, &ae_state_, 1);
+  // If the overriding frame number isn't larger than current frame number,
+  // use 0.
+  int32_t settings_override = settings_override_;
+  uint32_t overriding_frame_number = settings_overriding_frame_number_;
+  if (overriding_frame_number <= frame_number) {
+    overriding_frame_number = frame_number;
+    settings_override = ANDROID_CONTROL_SETTINGS_OVERRIDE_OFF;
+  }
+  result->result_metadata->Set(ANDROID_CONTROL_SETTINGS_OVERRIDE,
+                               &settings_override, 1);
+  result->result_metadata->Set(ANDROID_CONTROL_SETTINGS_OVERRIDING_FRAME_NUMBER,
+                               (int32_t*)&overriding_frame_number, 1);
+  result->result_metadata->Set(ANDROID_CONTROL_AUTOFRAMING, &autoframing_, 1);
+  uint8_t autoframing_state = ANDROID_CONTROL_AUTOFRAMING_STATE_INACTIVE;
+  if (autoframing_ == ANDROID_CONTROL_AUTOFRAMING_ON) {
+    autoframing_state = ANDROID_CONTROL_AUTOFRAMING_STATE_CONVERGED;
+  }
+  result->result_metadata->Set(ANDROID_CONTROL_AUTOFRAMING_STATE,
+                               &autoframing_state, 1);
+
   int32_t fps_range[] = {ae_target_fps_.min_fps, ae_target_fps_.max_fps};
   result->result_metadata->Set(ANDROID_CONTROL_AE_TARGET_FPS_RANGE, fps_range,
                                ARRAY_SIZE(fps_range));
@@ -913,14 +1009,20 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
   if (report_exposure_time_) {
     result->result_metadata->Set(ANDROID_SENSOR_EXPOSURE_TIME,
                                  &sensor_exposure_time_, 1);
+  } else {
+    result->result_metadata->Erase(ANDROID_SENSOR_EXPOSURE_TIME);
   }
   if (report_frame_duration_) {
     result->result_metadata->Set(ANDROID_SENSOR_FRAME_DURATION,
                                  &sensor_frame_duration_, 1);
+  } else {
+    result->result_metadata->Erase(ANDROID_SENSOR_FRAME_DURATION);
   }
   if (report_sensitivity_) {
     result->result_metadata->Set(ANDROID_SENSOR_SENSITIVITY,
                                  &sensor_sensitivity_, 1);
+  } else {
+    result->result_metadata->Erase(ANDROID_SENSOR_SENSITIVITY);
   }
   if (report_rolling_shutter_skew_) {
     result->result_metadata->Set(
@@ -936,12 +1038,9 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
                                  1);
   }
   if (report_focus_range_) {
-    float focus_range[2] = {0.f};
-    if (minimum_focus_distance_ > .0f) {
-      focus_range[0] = 1 / minimum_focus_distance_;
-    }
-    result->result_metadata->Set(ANDROID_LENS_FOCUS_RANGE, focus_range,
-                                 ARRAY_SIZE(focus_range));
+    float focus_range[2] = {};
+    focus_range[0] = focus_distance_;
+    result->result_metadata->Set(ANDROID_LENS_FOCUS_RANGE, focus_range, ARRAY_SIZE(focus_range));
   }
   if (report_filter_density_) {
     result->result_metadata->Set(ANDROID_LENS_FILTER_DENSITY, &filter_density_,
@@ -965,6 +1064,11 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
                                  intrinsic_calibration_,
                                  ARRAY_SIZE(intrinsic_calibration_));
   }
+  if (report_lens_intrinsics_samples_) {
+    result->result_metadata->Set(ANDROID_STATISTICS_LENS_INTRINSIC_SAMPLES,
+                                 intrinsic_calibration_,
+                                 ARRAY_SIZE(intrinsic_calibration_));
+  }
   if (report_distortion_) {
     result->result_metadata->Set(ANDROID_LENS_DISTORTION, distortion_,
                                  ARRAY_SIZE(distortion_));
@@ -985,6 +1089,11 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
     }
     result->result_metadata->Set(ANDROID_SCALER_CROP_REGION, chosen_crop_region,
                                  ARRAY_SIZE(scaler_crop_region_default_));
+    if (report_active_sensor_crop_) {
+      result->result_metadata->Set(
+          ANDROID_LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_SENSOR_CROP_REGION,
+          chosen_crop_region, ARRAY_SIZE(scaler_crop_region_default_));
+    }
   }
   if (report_extended_scene_mode_) {
     result->result_metadata->Set(ANDROID_CONTROL_EXTENDED_SCENE_MODE,
@@ -1241,6 +1350,11 @@ status_t EmulatedRequestState::InitializeStatisticsDefaults() {
     return BAD_VALUE;
   }
 
+  report_lens_intrinsics_samples_ =
+      (available_results_.find(ANDROID_STATISTICS_LENS_INTRINSIC_SAMPLES) !=
+       available_results_.end()) &&
+      (available_results_.find(ANDROID_STATISTICS_LENS_INTRINSIC_TIMESTAMPS) !=
+       available_results_.end());
   report_scene_flicker_ =
       available_results_.find(ANDROID_STATISTICS_SCENE_FLICKER) !=
       available_results_.end();
@@ -2084,6 +2198,10 @@ status_t EmulatedRequestState::InitializeControlDefaults() {
         default_requests_[idx]->Set(ANDROID_CONTROL_AF_TRIGGER, &af_trigger, 1);
       }
     }
+
+    int32_t settings_override = ANDROID_CONTROL_SETTINGS_OVERRIDE_OFF;
+    default_requests_[idx]->Set(ANDROID_CONTROL_SETTINGS_OVERRIDE,
+                                &settings_override, 1);
   }
 
   return InitializeHotPixelDefaults();
@@ -2328,6 +2446,12 @@ status_t EmulatedRequestState::InitializeScalerDefaults() {
       ALOGE("%s: Scaler crop must reported on backward compatible devices!",
             __FUNCTION__);
       return BAD_VALUE;
+    }
+
+    if (available_requests_.find(
+            ANDROID_LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_SENSOR_CROP_REGION) !=
+        available_results_.end()) {
+      report_active_sensor_crop_ = true;
     }
     ret = static_metadata_->Get(ANDROID_SCALER_AVAILABLE_ROTATE_AND_CROP_MODES,
                                 &entry);
@@ -2804,9 +2928,11 @@ status_t EmulatedRequestState::InitializeRequestDefaults() {
 
   ret = static_metadata_->Get(ANDROID_REQUEST_PARTIAL_RESULT_COUNT, &entry);
   if ((ret == OK) && (entry.count == 1)) {
-    if (entry.data.i32[0] != 1) {
-      ALOGW("%s: Partial results not supported!", __FUNCTION__);
+    if (entry.data.i32[0] > 2) {
+      ALOGW("%s: Partial result count greater than 2 not supported!",
+            __FUNCTION__);
     }
+    partial_result_count = entry.data.i32[0];
   }
 
   ret = static_metadata_->Get(ANDROID_REQUEST_AVAILABLE_CHARACTERISTICS_KEYS,

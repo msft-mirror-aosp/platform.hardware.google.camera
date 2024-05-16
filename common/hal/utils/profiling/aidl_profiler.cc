@@ -35,7 +35,7 @@ namespace android {
 namespace google_camera_hal {
 namespace {
 
-using google::camera_common::Profiler;
+using ::google::camera_common::Profiler;
 
 // setprop key for profiling open/close camera
 constexpr char kPropKeyProfileOpenClose[] =

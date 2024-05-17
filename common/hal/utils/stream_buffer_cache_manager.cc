@@ -48,7 +48,9 @@ inline constexpr char kRaiseBufAllocationPriority[] =
 // below HWL.
 static constexpr auto kBufferWaitingTimeOutSec = 400ms;
 
-StreamBufferCacheManager::StreamBufferCacheManager() {
+StreamBufferCacheManager::StreamBufferCacheManager(
+    const std::set<int32_t>& hal_buffer_managed_stream_ids)
+    : hal_buffer_managed_streams_(hal_buffer_managed_stream_ids) {
   workload_thread_ = std::thread([this] { this->WorkloadThreadLoop(); });
   if (utils::SupportRealtimeThread()) {
     status_t res = utils::SetRealtimeThread(workload_thread_.native_handle());
@@ -70,11 +72,12 @@ StreamBufferCacheManager::~StreamBufferCacheManager() {
   workload_thread_.join();
 }
 
-std::unique_ptr<StreamBufferCacheManager> StreamBufferCacheManager::Create() {
+std::unique_ptr<StreamBufferCacheManager> StreamBufferCacheManager::Create(
+    const std::set<int32_t>& hal_buffer_managed_stream_ids) {
   ATRACE_CALL();
 
-  auto manager =
-      std::unique_ptr<StreamBufferCacheManager>(new StreamBufferCacheManager());
+  auto manager = std::unique_ptr<StreamBufferCacheManager>(
+      new StreamBufferCacheManager(hal_buffer_managed_stream_ids));
   if (manager == nullptr) {
     ALOGE("%s: Failed to create stream buffer cache manager.", __FUNCTION__);
     return nullptr;
@@ -97,6 +100,15 @@ status_t StreamBufferCacheManager::RegisterStream(
   if (reg_info.request_func == nullptr || reg_info.return_func == nullptr) {
     ALOGE("%s: Can't register stream, request or return function is nullptr.",
           __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  if (hal_buffer_managed_streams_.find(reg_info.stream_id) ==
+      hal_buffer_managed_streams_.end()) {
+    ALOGE(
+        "%s: SBC only supports registering HAL buffer managed streams, "
+        "stream id %d not supported",
+        __FUNCTION__, reg_info.stream_id);
     return BAD_VALUE;
   }
 
@@ -124,7 +136,14 @@ status_t StreamBufferCacheManager::RegisterStream(
 status_t StreamBufferCacheManager::GetStreamBuffer(
     int32_t stream_id, StreamBufferRequestResult* res) {
   ATRACE_CALL();
-
+  if (hal_buffer_managed_streams_.find(stream_id) ==
+      hal_buffer_managed_streams_.end()) {
+    ALOGE(
+        "%s: SBC only supports registering HAL buffer managed streams, "
+        "stream id %d not supported",
+        __FUNCTION__, stream_id);
+    return BAD_VALUE;
+  }
   StreamBufferCache* stream_buffer_cache = nullptr;
   status_t result = GetStreamBufferCache(stream_id, &stream_buffer_cache);
   if (result != OK) {
@@ -160,6 +179,14 @@ status_t StreamBufferCacheManager::GetStreamBuffer(
 }
 
 status_t StreamBufferCacheManager::NotifyProviderReadiness(int32_t stream_id) {
+  if (hal_buffer_managed_streams_.find(stream_id) ==
+      hal_buffer_managed_streams_.end()) {
+    ALOGE(
+        "%s: SBC only supports HAL buffer managed streams, "
+        "stream id %d not supported",
+        __FUNCTION__, stream_id);
+    return BAD_VALUE;
+  }
   StreamBufferCache* stream_buffer_cache = nullptr;
   status_t res = GetStreamBufferCache(stream_id, &stream_buffer_cache);
   if (res != OK) {
@@ -196,6 +223,14 @@ status_t StreamBufferCacheManager::NotifyFlushingAll() {
 
 status_t StreamBufferCacheManager::IsStreamActive(int32_t stream_id,
                                                   bool* is_active) {
+  if (hal_buffer_managed_streams_.find(stream_id) ==
+      hal_buffer_managed_streams_.end()) {
+    ALOGE(
+        "%s: SBC only supports HAL buffer managed streams, "
+        "stream id %d not supported",
+        __FUNCTION__, stream_id);
+    return BAD_VALUE;
+  }
   StreamBufferCache* stream_buffer_cache = nullptr;
   status_t res = GetStreamBufferCache(stream_id, &stream_buffer_cache);
   if (res != OK) {
@@ -574,8 +609,17 @@ void StreamBufferCacheManager::StreamBufferCache::ReleaseDummyBufferLocked() {
 status_t StreamBufferCacheManager::GetStreamBufferCache(
     int32_t stream_id, StreamBufferCache** stream_buffer_cache) {
   std::unique_lock<std::mutex> map_lock(caches_map_mutex_);
+  if (hal_buffer_managed_streams_.find(stream_id) ==
+      hal_buffer_managed_streams_.end()) {
+    ALOGE(
+        "%s: SBC only supports HAL buffer managed streams, "
+        "stream id %d not supported",
+        __FUNCTION__, stream_id);
+    return BAD_VALUE;
+  }
+
   if (stream_buffer_caches_.find(stream_id) == stream_buffer_caches_.end()) {
-    ALOGE("%s: Sream %d can not be found.", __FUNCTION__, stream_id);
+    ALOGE("%s: Stream %d can not be found.", __FUNCTION__, stream_id);
     return BAD_VALUE;
   }
 

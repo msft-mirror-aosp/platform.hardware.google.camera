@@ -324,7 +324,8 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
       }
       sensor_buffer->plane.img_y_crcb.bytesPerPixel = isP010 ? 2 : 1;
     } else {
-      ALOGE("%s: Failed to lock output buffer!", __FUNCTION__);
+      ALOGE("%s: Failed to lock output buffer for stream id %d !", __FUNCTION__,
+            stream.id);
       return BAD_VALUE;
     }
   } else {
@@ -544,10 +545,10 @@ void EmulatedRequestProcessor::RequestProcessorLoop() {
 }
 
 status_t EmulatedRequestProcessor::Initialize(
-    std::unique_ptr<HalCameraMetadata> static_meta,
+    std::unique_ptr<EmulatedCameraDeviceInfo> device_info,
     PhysicalDeviceMapPtr physical_devices) {
   std::lock_guard<std::mutex> lock(process_mutex_);
-  return request_state_->Initialize(std::move(static_meta),
+  return request_state_->Initialize(std::move(device_info),
                                     std::move(physical_devices));
 }
 

@@ -57,6 +57,10 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
   status_t GetCameraCharacteristics(
       std::unique_ptr<HalCameraMetadata>* characteristics) const override;
 
+  status_t GetSessionCharacteristics(
+      const StreamConfiguration& session_config,
+      std::unique_ptr<HalCameraMetadata>& characteristics) const override;
+
   std::vector<uint32_t> GetPhysicalCameraIds() const override;
 
   status_t GetPhysicalCameraCharacteristics(
@@ -79,8 +83,8 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
       CameraBufferAllocatorHwl* camera_allocator_hwl,
       std::unique_ptr<CameraDeviceSessionHwl>* session) override;
 
-  bool IsStreamCombinationSupported(
-      const StreamConfiguration& stream_config) override;
+  bool IsStreamCombinationSupported(const StreamConfiguration& stream_config,
+                                    const bool /*check_settings*/) const override;
 
   // End of override functions in CameraDeviceHwl.
 

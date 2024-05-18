@@ -226,8 +226,8 @@ ScopedAStatus AidlCameraDevice::getSessionCharacteristics(
   }
   characteristics_ret->metadata.clear();
   std::unique_ptr<HalCameraMetadata> session_characteristics;
-  res =
-      google_camera_device_->GetSessionCharacteristics(&session_characteristics);
+  res = google_camera_device_->GetSessionCharacteristics(
+      stream_config, session_characteristics);
   if (res != OK) {
     ALOGE("%s: Getting session characteristics for camera %u failed: %s(%d)",
           __FUNCTION__, camera_id_, strerror(-res), res);

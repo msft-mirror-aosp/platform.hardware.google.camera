@@ -18,6 +18,7 @@
 //#define LOG_NDEBUG 0
 #include "aidl_camera_device.h"
 
+#include <android/binder_ibinder_platform.h>
 #include <log/log.h>
 
 #include "aidl_camera_device_session.h"
@@ -225,8 +226,8 @@ ScopedAStatus AidlCameraDevice::getSessionCharacteristics(
   }
   characteristics_ret->metadata.clear();
   std::unique_ptr<HalCameraMetadata> session_characteristics;
-  res =
-      google_camera_device_->GetSessionCharacteristics(&session_characteristics);
+  res = google_camera_device_->GetSessionCharacteristics(
+      stream_config, session_characteristics);
   if (res != OK) {
     ALOGE("%s: Getting session characteristics for camera %u failed: %s(%d)",
           __FUNCTION__, camera_id_, strerror(-res), res);
@@ -356,6 +357,11 @@ ScopedAStatus AidlCameraDevice::isStreamCombinationSupportedInternal(
   return ScopedAStatus::ok();
 }
 
+::ndk::SpAIBinder AidlCameraDevice::createBinder() {
+  auto binder = BnCameraDevice::createBinder();
+  AIBinder_setInheritRt(binder.get(), true);
+  return binder;
+}
 }  // namespace implementation
 }  // namespace device
 }  // namespace camera

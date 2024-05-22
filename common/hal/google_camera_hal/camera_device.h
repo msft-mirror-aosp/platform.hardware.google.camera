@@ -52,11 +52,20 @@ class CameraDevice {
   status_t GetCameraCharacteristics(
       std::unique_ptr<HalCameraMetadata>* characteristics);
 
-  // Get the session characteristics of this camera device.
-  // characteristics will be filled only with the specific keys required from
-  // the HAL.
+  // For certain feature combinations, some keys in camera characteristics
+  // have more limited support range compared with that returned by
+  // GetCameraCharacterics. This function will return the limited values of the
+  // keys listed in CameraCharacteristics#getAvailableSessionCharacteristicsKeys
+  // for the input StreamConfiguration.
+  //
+  // stream_config includes the requested streams and session settings for
+  // which we are going to fetch the characteristics.
+  //
+  // session_characteristic will be filled with the session characteristics keys
+  // with their limited ranges.
   status_t GetSessionCharacteristics(
-      std::unique_ptr<HalCameraMetadata>* session_characteristics);
+      const StreamConfiguration& stream_config,
+      std::unique_ptr<HalCameraMetadata>& session_characteristics);
 
   // Get the characteristics of this camera device's physical camera if the
   // physical_camera_id belongs to this camera device.
@@ -97,8 +106,13 @@ class CameraDevice {
     return public_camera_id_;
   };
 
-  // Query whether a particular logical and physical streams combination are
-  // supported. stream_config contains the stream configurations.
+  // Query whether a particular streams configuration is supported.
+  // stream_config: It contains the stream info and a set of features, which are
+  // described in the form of session settings.
+  // check_settings: When check_settings is true, this function will check if
+  // the input features combination in stream_config is supported. The feature
+  // set camera hwl has to scan for reporting support status is defined in
+  // framework by CameraCharacteristics#INFO_SESSION_CONFIGURATION_QUERY_VERSION.
   bool IsStreamCombinationSupported(const StreamConfiguration& stream_config,
                                     bool check_settings);
 

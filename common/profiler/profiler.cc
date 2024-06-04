@@ -200,10 +200,10 @@ class ProfilerImpl : public Profiler {
   virtual void DumpResult(const std::string& filepath);
 
   // Dump result in text format.
-  void DumpTxt(std::string_view filepath);
+  void DumpTxt(const std::string& filepath);
 
   // Dump result in proto binary format.
-  void DumpPb(std::string_view filepath);
+  void DumpPb(const std::string& filepath);
 
   // Dump result format extension: proto or text.
   constexpr static char kStrPb[] = ".pb";
@@ -431,7 +431,7 @@ void ProfilerImpl::PrintResult() {
   ALOGI("");
 }
 
-void ProfilerImpl::DumpTxt(std::string_view filepath) {
+void ProfilerImpl::DumpTxt(const std::string& filepath) {
   // The dump result data is organized as 3 sections:
   //  1. detla time and fps of each frame.
   //  2. start time of each frame.
@@ -485,7 +485,7 @@ void ProfilerImpl::DumpTxt(std::string_view filepath) {
   }
 }
 
-void ProfilerImpl::DumpPb(std::string_view filepath) {
+void ProfilerImpl::DumpPb(const std::string& filepath) {
   if (std::ofstream fout(filepath, std::ios::out); fout.is_open()) {
     profiler::ProfilingResult profiling_result;
     profiling_result.set_usecase(use_case_);

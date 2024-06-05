@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_RgbirdCaptureSession"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
+#include "rgbird_capture_session.h"
+
 #include <cutils/properties.h>
+#include <inttypes.h>
 #include <log/log.h>
 #include <utils/Trace.h>
 
-#include <inttypes.h>
 #include <set>
 
 #include "basic_result_processor.h"
@@ -31,7 +33,6 @@
 #include "hdrplus_request_processor.h"
 #include "hdrplus_result_processor.h"
 #include "multicam_realtime_process_block.h"
-#include "rgbird_capture_session.h"
 #include "rgbird_depth_result_processor.h"
 #include "rgbird_result_request_processor.h"
 #include "rgbird_rt_request_processor.h"
@@ -89,8 +90,9 @@ bool RgbirdCaptureSession::IsStreamConfigurationSupported(
 std::unique_ptr<CaptureSession> RgbirdCaptureSession::Create(
     CameraDeviceSessionHwl* device_session_hwl,
     const StreamConfiguration& stream_config,
-    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-    HwlSessionCallback session_callback,
+    ProcessCaptureResultFunc process_capture_result,
+    ProcessBatchCaptureResultFunc /*process_batch_capture_result*/,
+    NotifyFunc notify, HwlSessionCallback session_callback,
     std::vector<HalStream>* hal_configured_streams,
     CameraBufferAllocatorHwl* /*camera_allocator_hwl*/) {
   ATRACE_CALL();
@@ -573,7 +575,8 @@ status_t RgbirdCaptureSession::SetupRealtimeProcessChain(
     ALOGE("%s: Creating RgbirdResultRequestProcessor failed.", __FUNCTION__);
     return UNKNOWN_ERROR;
   }
-  rt_result_processor->SetResultCallback(process_capture_result, notify);
+  rt_result_processor->SetResultCallback(
+      process_capture_result, notify, /*process_batch_capture_result=*/nullptr);
 
   if (is_hdrplus_supported_) {
     res = rt_result_processor->ConfigureStreams(internal_stream_manager_.get(),
@@ -652,7 +655,8 @@ status_t RgbirdCaptureSession::SetupHdrplusProcessChain(
     ALOGE("%s: Creating HdrplusResultProcessor failed.", __FUNCTION__);
     return UNKNOWN_ERROR;
   }
-  result_processor->SetResultCallback(process_capture_result, notify);
+  result_processor->SetResultCallback(process_capture_result, notify,
+                                      /*process_batch_capture_result=*/nullptr);
 
   StreamConfiguration process_block_stream_config;
   status_t res =
@@ -716,7 +720,9 @@ status_t RgbirdCaptureSession::CreateProcessChain(
 
   // Connecting the depth segment of the realtime process chain.
   if (NeedDepthProcessBlock()) {
-    depth_result_processor->SetResultCallback(process_capture_result, notify);
+    depth_result_processor->SetResultCallback(
+        process_capture_result, notify,
+        /*process_batch_capture_result=*/nullptr);
 
     res = ConnectProcessChain(realtime_result_processor.get(),
                               std::move(depth_process_block),
@@ -987,7 +993,8 @@ status_t RgbirdCaptureSession::Initialize(
 
   // Create result dispatcher
   result_dispatcher_ =
-      ResultDispatcher::Create(kPartialResult, process_capture_result, notify,
+      ResultDispatcher::Create(kPartialResult, process_capture_result,
+                               /*process_batch_capture_result=*/nullptr, notify,
                                stream_config, "RgbirdDispatcher");
   if (result_dispatcher_ == nullptr) {
     ALOGE("%s: Cannot create result dispatcher.", __FUNCTION__);

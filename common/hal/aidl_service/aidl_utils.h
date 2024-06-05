@@ -51,6 +51,7 @@ using aidl::android::hardware::camera::device::BufferRequestStatus;
 using aidl::android::hardware::camera::device::BufferStatus;
 using aidl::android::hardware::camera::device::CaptureRequest;
 using aidl::android::hardware::camera::device::CaptureResult;
+using aidl::android::hardware::camera::device::ConfigureStreamsRet;
 using aidl::android::hardware::camera::device::ErrorCode;
 using aidl::android::hardware::camera::device::ErrorMsg;
 using aidl::android::hardware::camera::device::HalStream;
@@ -91,8 +92,8 @@ status_t ConvertToAidlResourceCost(
     CameraResourceCost* aidl_cost);
 
 status_t ConvertToAidlHalStreamConfig(
-    const std::vector<google_camera_hal::HalStream>& hal_configured_streams,
-    std::vector<HalStream>* aidl_hal_stream_config);
+    const google_camera_hal::ConfigureStreamsReturn& hal_config,
+    ConfigureStreamsRet* aidl_config);
 
 status_t ConverToAidlNotifyMessage(
     const google_camera_hal::NotifyMessage& hal_message,

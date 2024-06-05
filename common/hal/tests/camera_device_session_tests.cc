@@ -16,21 +16,20 @@
 
 #define LOG_TAG "CameraDeviceSessionTests"
 #include <dlfcn.h>
+#include <gtest/gtest.h>
 #include <log/log.h>
 #include <sys/stat.h>
-
-#include <gtest/gtest.h>
-#include "utils.h"
 
 #include <algorithm>
 
 #include "gralloc_buffer_allocator.h"
-#include "hwl_types.h"
 #include "mock_device_session_hwl.h"
 #include "test_utils.h"
+#include "utils.h"
 
 namespace android {
 namespace google_camera_hal {
+namespace {
 
 using ::testing::_;
 using ::testing::AtLeast;
@@ -168,29 +167,36 @@ class CameraDeviceSessionTests : public ::testing::Test {
     std::lock_guard<std::mutex> lock(callback_lock_);
     auto pending_result = received_results_.find(result->frame_number);
     if (pending_result == received_results_.end()) {
-      ALOGE("%s: frame %u result_metadata %p", __FUNCTION__,
-            result->frame_number, result->result_metadata.get());
       received_results_.emplace(result->frame_number, std::move(result));
     } else {
       if (result->result_metadata != nullptr) {
         // TODO(b/143902331): support partial results.
-        ASSERT_NE(pending_result->second->result_metadata, nullptr);
         pending_result->second->result_metadata =
             std::move(result->result_metadata);
+        pending_result->second->partial_result = result->partial_result;
       }
 
-      pending_result->second->input_buffers.insert(
-          pending_result->second->input_buffers.end(),
-          result->input_buffers.begin(), result->input_buffers.end());
+      if (!result->input_buffers.empty()) {
+        pending_result->second->input_buffers.insert(
+            pending_result->second->input_buffers.end(),
+            result->input_buffers.begin(), result->input_buffers.end());
+      }
 
-      pending_result->second->output_buffers.insert(
-          pending_result->second->output_buffers.end(),
-          result->output_buffers.begin(), result->output_buffers.end());
-
-      pending_result->second->partial_result = result->partial_result;
+      if (!result->output_buffers.empty()) {
+        pending_result->second->output_buffers.insert(
+            pending_result->second->output_buffers.end(),
+            result->output_buffers.begin(), result->output_buffers.end());
+      }
     }
 
     callback_condition_.notify_one();
+  }
+
+  void ProcessBatchCaptureResult(
+      std::vector<std::unique_ptr<CaptureResult>> results) {
+    for (auto& result : results) {
+      ProcessCaptureResult(std::move(result));
+    }
   }
 
   // Invoked when CameraDeviceSession notify a message.
@@ -297,8 +303,8 @@ class CameraDeviceSessionTests : public ::testing::Test {
 };
 
 TEST_F(CameraDeviceSessionTests, Create) {
-  auto session = CameraDeviceSession::Create(/*device_session_hwl=*/nullptr,
-                                             external_session_factory_entries_);
+  auto session = CameraDeviceSession::Create(
+      /*device_session_hwl=*/nullptr, external_session_factory_entries_);
   EXPECT_EQ(session, nullptr);
 
   uint32_t num_sessions = 5;
@@ -359,7 +365,10 @@ TEST_F(CameraDeviceSessionTests, ConfigurePreviewStream) {
   for (auto& resolution : preview_resolutions) {
     test_utils::GetPreviewOnlyStreamConfiguration(
         &preview_config, resolution.first, resolution.second);
-    res = session->ConfigureStreams(preview_config, &hal_configured_streams);
+    ConfigureStreamsReturn hal_config;
+    res = session->ConfigureStreams(preview_config, /*interfaceV3*/ false,
+                                    &hal_config);
+    hal_configured_streams = std::move(hal_config.hal_streams);
     EXPECT_EQ(res, OK);
   }
 }
@@ -384,10 +393,16 @@ TEST_F(CameraDeviceSessionTests, PreviewRequests) {
   std::vector<HalStream> hal_configured_streams;
 
   // Set up session callback.
+  // Needs to capture the test class as the callback function references the
+  // member variables of the class
   CameraDeviceSessionCallback session_callback = {
       .process_capture_result =
           [&](std::unique_ptr<CaptureResult> result) {
             ProcessCaptureResult(std::move(result));
+          },
+      .process_batch_capture_result =
+          [&](std::vector<std::unique_ptr<CaptureResult>> results) {
+            ProcessBatchCaptureResult(std::move(results));
           },
       .notify = [&](const NotifyMessage& message) { Notify(message); },
   };
@@ -408,8 +423,11 @@ TEST_F(CameraDeviceSessionTests, PreviewRequests) {
 
   test_utils::GetPreviewOnlyStreamConfiguration(&preview_config, kPreviewWidth,
                                                 kPreviewHeight);
-  ASSERT_EQ(session->ConfigureStreams(preview_config, &hal_configured_streams),
+  ConfigureStreamsReturn hal_config;
+  ASSERT_EQ(session->ConfigureStreams(preview_config, /*interfaceV3*/ false,
+                                      &hal_config),
             OK);
+  hal_configured_streams = std::move(hal_config.hal_streams);
   ASSERT_EQ(hal_configured_streams.size(), static_cast<uint32_t>(1));
 
   // Allocate buffers.
@@ -473,5 +491,6 @@ TEST_F(CameraDeviceSessionTests, PreviewRequests) {
   allocator->FreeBuffers(&preview_buffers);
 }
 
+}  // namespace
 }  // namespace google_camera_hal
 }  // namespace android

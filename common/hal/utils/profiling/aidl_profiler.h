@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef HARDWARE_GOOGLE_CAMERA_HAL_AIDL_SERVICE_AIDL_PROFILER_H_
-#define HARDWARE_GOOGLE_CAMERA_HAL_AIDL_SERVICE_AIDL_PROFILER_H_
+#ifndef HARDWARE_GOOGLE_CAMERA_UTIL_AIDL_SERVICE_AIDL_PROFILER_H_
+#define HARDWARE_GOOGLE_CAMERA_UTIL_AIDL_SERVICE_AIDL_PROFILER_H_
 
+#include <functional>
 #include <memory>
+#include <string>
 
 #include "profiler.h"
+#include "profiler_util.h"
 
 namespace android {
-namespace hardware {
-namespace camera {
-namespace implementation {
+namespace google_camera_hal {
 
 class AidlScopedProfiler {
  public:
@@ -43,19 +44,13 @@ class AidlScopedProfiler {
 
 class AidlProfiler {
  public:
-  enum class ScopedType {
-    kOpen,
-    kConfigureStream,
-    kFlush,
-    kClose,
-  };
   virtual ~AidlProfiler() = default;
 
   static std::shared_ptr<AidlProfiler> Create(uint32_t camera_id);
 
   // Make a ScopedProfiler for given type.
   virtual std::unique_ptr<AidlScopedProfiler> MakeScopedProfiler(
-      ScopedType type,
+      EventType type,
       std::unique_ptr<google::camera_common::Profiler> custom_latency_profiler,
       std::unique_ptr<google::camera_common::Profiler> custom_fps_profiler) = 0;
 
@@ -65,20 +60,30 @@ class AidlProfiler {
   // Call when all bufer in first frame is received.
   virtual void FirstFrameEnd() = 0;
 
+  // Call when a request is made for a reprocess capture.
+  // Provide a profiler for custom implementation, or a default will be created.
+  // Repeated calls create a new profiler if there is none set.
+  virtual void ReprocessingRequestStart(
+      std::unique_ptr<google::camera_common::Profiler> custom_reprocessing_profiler,
+      int32_t id) = 0;
+
+  // Call when reprocess capture result is received.
+  // Delete reprocessing profiler if all open requests have ended.
+  virtual void ReprocessingResultEnd(int32_t id) = 0;
+
   // Call to profile frame rate for each stream.
   virtual void ProfileFrameRate(const std::string& name) = 0;
 
   virtual uint32_t GetCameraId() const = 0;
   virtual int32_t GetLatencyFlag() const = 0;
   virtual int32_t GetFpsFlag() const = 0;
+  virtual int32_t GetReprocessLatencyFlag() const = 0;
 
  protected:
   AidlProfiler() = default;
 };
 
-}  // namespace implementation
-}  // namespace camera
-}  // namespace hardware
+}  // namespace google_camera_hal
 }  // namespace android
 
-#endif  // HARDWARE_GOOGLE_CAMERA_HAL_AIDL_SERVICE_AIDL_PROFILER_H_
+#endif  // HARDWARE_GOOGLE_CAMERA_UTIL_AIDL_SERVICE_AIDL_PROFILER_H_

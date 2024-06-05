@@ -23,6 +23,7 @@
 #include "camera_device_session_hwl.h"
 #include "hal_camera_metadata.h"
 #include "hal_types.h"
+#include "physical_camera_info_hwl.h"
 #include "profiler.h"
 
 namespace android {
@@ -33,7 +34,7 @@ namespace google_camera_hal {
 // a single physical camera. It provides methods to query static information
 // about the associated camera devices. It does not hold any states of the
 // camera device.
-class CameraDeviceHwl {
+class CameraDeviceHwl : public PhysicalCameraInfoHwl {
  public:
   virtual ~CameraDeviceHwl() = default;
 
@@ -47,6 +48,21 @@ class CameraDeviceHwl {
   // characteristics will be filled by CameraDeviceHwl.
   virtual status_t GetCameraCharacteristics(
       std::unique_ptr<HalCameraMetadata>* characteristics) const = 0;
+
+  // For certain feature combinations, some keys in camera characteristics
+  // have more limited support range compared with that returned by
+  // GetCameraCharacterics. This function will return the limited values of the
+  // keys listed in CameraCharacteristics#getAvailableSessionCharacteristicsKeys
+  // for the input StreamConfiguration.
+  //
+  // stream_config includes the requested streams and session settings for
+  // which we are going to fetch the characteristics.
+  //
+  // session_characteristic will be filled with the session characteristics keys
+  // with their limited ranges.
+  virtual status_t GetSessionCharacteristics(
+      const StreamConfiguration& session_config,
+      std::unique_ptr<HalCameraMetadata>& characteristics) const = 0;
 
   // Get the characteristics of the physical camera of this camera device.
   // characteristics will be filled by CameraDeviceHwl.
@@ -69,6 +85,11 @@ class CameraDeviceHwl {
     return UNKNOWN_TRANSACTION;
   }
 
+  // Construct default request settings
+  virtual status_t ConstructDefaultRequestSettings(
+      RequestTemplate type,
+      std::unique_ptr<HalCameraMetadata>* request_settings) = 0;
+
   // Dump the camera device states in fd, using dprintf() or write().
   virtual status_t DumpState(int fd) = 0;
 
@@ -82,10 +103,15 @@ class CameraDeviceHwl {
       CameraBufferAllocatorHwl* camera_allocator_hwl,
       std::unique_ptr<CameraDeviceSessionHwl>* session) = 0;
 
-  // Query whether a particular logical and physical streams combination are
-  // supported. stream_config contains the stream configurations.
+  // Query whether a particular streams configuration is supported.
+  // stream_config: It contains the stream info and session settings.
+  // check_settings: When check_settings is true, this function will check if
+  // the input session settings in stream_config is supported. The keys camera
+  // hwl has to scan for reporting support status is defined in framework by
+  // CameraCharacteristics#INFO_SESSION_CONFIGURATION_QUERY_VERSION.
   virtual bool IsStreamCombinationSupported(
-      const StreamConfiguration& stream_config) = 0;
+      const StreamConfiguration& stream_config,
+      const bool check_settings) const = 0;
 
   // Get customized profiler
   virtual std::unique_ptr<google::camera_common::Profiler> GetProfiler(

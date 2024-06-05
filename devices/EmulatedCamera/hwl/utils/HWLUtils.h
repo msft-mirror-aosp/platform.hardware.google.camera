@@ -43,6 +43,9 @@ typedef unordered_map<uint32_t, pair<CameraDeviceStatus, unique_ptr<HalCameraMet
 typedef std::unique_ptr<PhysicalDeviceMap> PhysicalDeviceMapPtr;
 
 // Metadata utility functions start
+
+status_t SupportsSessionHalBufManager(const HalCameraMetadata* metadata,
+                                      bool* result /*out*/);
 status_t GetSensorCharacteristics(const HalCameraMetadata* metadata,
                                   SensorCharacteristics* sensor_chars /*out*/);
 PhysicalDeviceMapPtr ClonePhysicalDeviceMap(const PhysicalDeviceMapPtr& src);

@@ -60,6 +60,16 @@ class MockDeviceHwl : public CameraDeviceHwl {
     return OK;
   }
 
+  status_t GetSessionCharacteristics(
+      const StreamConfiguration& /*session_config*/,
+      std::unique_ptr<HalCameraMetadata>& characteristics) const {
+    characteristics = HalCameraMetadata::Clone(characteristics_.get());
+    if (characteristics.get() == nullptr) {
+      return NO_MEMORY;
+    }
+    return OK;
+  }
+
   status_t GetPhysicalCameraCharacteristics(
       uint32_t physical_camera_id,
       std::unique_ptr<HalCameraMetadata>* characteristics) const {
@@ -97,6 +107,12 @@ class MockDeviceHwl : public CameraDeviceHwl {
     return OK;
   }
 
+  status_t ConstructDefaultRequestSettings(
+      RequestTemplate /*type*/,
+      std::unique_ptr<HalCameraMetadata>* /*request_settings*/) {
+    return OK;
+  }
+
   // Dump the camera device states in fd, using dprintf() or write().
   status_t DumpState(int fd) {
     if (fd < 0) {
@@ -125,7 +141,8 @@ class MockDeviceHwl : public CameraDeviceHwl {
     return OK;
   }
 
-  bool IsStreamCombinationSupported(const StreamConfiguration& /*stream_config*/) {
+  bool IsStreamCombinationSupported(const StreamConfiguration& /*stream_config*/,
+                                    const bool /*check_settings*/) const {
     return true;
   }
 

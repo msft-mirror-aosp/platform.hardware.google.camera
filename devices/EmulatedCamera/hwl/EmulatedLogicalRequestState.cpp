@@ -35,11 +35,11 @@ EmulatedLogicalRequestState::~EmulatedLogicalRequestState() {
 }
 
 status_t EmulatedLogicalRequestState::Initialize(
-    std::unique_ptr<HalCameraMetadata> static_meta,
+    std::unique_ptr<EmulatedCameraDeviceInfo> device_info,
     PhysicalDeviceMapPtr physical_devices) {
   if ((physical_devices.get() != nullptr) && (!physical_devices->empty())) {
     zoom_ratio_physical_camera_info_ = GetZoomRatioPhysicalCameraInfo(
-        static_meta.get(), physical_devices.get());
+        device_info->static_metadata_.get(), physical_devices.get());
 
     physical_device_map_ = std::move(physical_devices);
 
@@ -59,8 +59,9 @@ status_t EmulatedLogicalRequestState::Initialize(
       for (const auto& it : *physical_device_map_) {
         std::unique_ptr<EmulatedRequestState> physical_request_state =
             std::make_unique<EmulatedRequestState>(it.first);
-        auto ret = physical_request_state->Initialize(
-            HalCameraMetadata::Clone(it.second.second.get()));
+        auto ret =
+            physical_request_state->Initialize(EmulatedCameraDeviceInfo::Create(
+                HalCameraMetadata::Clone(it.second.second.get())));
         if (ret != OK) {
           ALOGE("%s: Physical device: %u request state initialization failed!",
                 __FUNCTION__, it.first);
@@ -72,7 +73,7 @@ status_t EmulatedLogicalRequestState::Initialize(
     }
   }
 
-  return logical_request_state_->Initialize(std::move(static_meta));
+  return logical_request_state_->Initialize(std::move(device_info));
 }
 
 status_t EmulatedLogicalRequestState::GetDefaultRequest(
@@ -99,9 +100,15 @@ void EmulatedLogicalRequestState::UpdateActivePhysicalId(
 
 std::unique_ptr<HwlPipelineResult>
 EmulatedLogicalRequestState::InitializeLogicalResult(uint32_t pipeline_id,
-                                                     uint32_t frame_number) {
-  auto ret = logical_request_state_->InitializeResult(pipeline_id, frame_number);
-  if (is_logical_device_) {
+                                                     uint32_t frame_number,
+                                                     bool is_partial_result) {
+  auto ret =
+      is_partial_result
+          ? logical_request_state_->InitializePartialResult(pipeline_id,
+                                                            frame_number)
+          : logical_request_state_->InitializeResult(pipeline_id, frame_number);
+
+  if (is_logical_device_ && !is_partial_result) {
     if ((physical_camera_output_ids_.get() != nullptr) &&
         (!physical_camera_output_ids_->empty())) {
       ret->physical_camera_results.reserve(physical_camera_output_ids_->size());
@@ -116,6 +123,32 @@ EmulatedLogicalRequestState::InitializeLogicalResult(uint32_t pipeline_id,
     }
 
     UpdateActivePhysicalId(ret->result_metadata.get(), current_physical_camera_);
+
+    // The logical camera result lens intrinsic calibration must reflect
+    // calibration of the currently active physical device.
+    const auto& physical_device = physical_device_map_->find(current_physical_camera_);
+    if (physical_device != physical_device_map_->end()) {
+        camera_metadata_ro_entry_t entry, physical_entry;
+        if ((ret->result_metadata->Get(ANDROID_LENS_INTRINSIC_CALIBRATION,
+                                       &entry) == OK) &&
+            (entry.count > 0)) {
+          if ((physical_device->second.second->Get(
+                   ANDROID_LENS_INTRINSIC_CALIBRATION, &physical_entry) == OK) &&
+              (physical_entry.count > 0)) {
+            ret->result_metadata->Set(ANDROID_LENS_INTRINSIC_CALIBRATION,
+                                      physical_entry.data.f,
+                                      physical_entry.count);
+          } else {
+            ALOGE(
+                "%s: Logical camera %d supports lens intrinsic calibration but "
+                "physical device: %d does not!",
+                __FUNCTION__, logical_camera_id_, current_physical_camera_);
+          }
+        }
+    } else {
+      ALOGE("%s: Couldn't find physical device id: %d", __FUNCTION__,
+            current_physical_camera_);
+    }
   }
 
   return ret;

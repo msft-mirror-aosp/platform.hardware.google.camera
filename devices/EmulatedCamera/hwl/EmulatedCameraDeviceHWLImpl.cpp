@@ -102,6 +102,15 @@ status_t EmulatedCameraDeviceHwlImpl::Initialize() {
 
   default_torch_strength_level_ = GetDefaultTorchStrengthLevel();
   maximum_torch_strength_level_ = GetMaximumTorchStrengthLevel();
+
+  device_info_ = EmulatedCameraDeviceInfo::Create(
+      HalCameraMetadata::Clone(static_metadata_.get()));
+  if (device_info_ == nullptr) {
+    ALOGE("%s: Unable to create device info for camera %d", __FUNCTION__,
+          camera_id_);
+    return NO_INIT;
+  }
+
   return OK;
 }
 
@@ -122,6 +131,30 @@ status_t EmulatedCameraDeviceHwlImpl::GetCameraCharacteristics(
   *characteristics = HalCameraMetadata::Clone(static_metadata_.get());
 
   return OK;
+}
+
+// For EmulatedCameraDevice, we return the static characteristics directly.
+// In GCH, it will retrieve the entries corresponding to Available Keys listed
+// in CameraCharacteristics#getAvailableSessionCharacteristicsKeys and generate
+// the session characteristics to be returned.
+status_t EmulatedCameraDeviceHwlImpl::GetSessionCharacteristics(
+    const StreamConfiguration& /*session_config*/,
+    std::unique_ptr<HalCameraMetadata>& characteristics) const {
+  characteristics = HalCameraMetadata::Clone(static_metadata_.get());
+  return OK;
+}
+
+std::vector<uint32_t> EmulatedCameraDeviceHwlImpl::GetPhysicalCameraIds() const {
+  std::vector<uint32_t> ret;
+  if (physical_device_map_.get() == nullptr ||
+      physical_device_map_->size() == 0) {
+    return ret;
+  }
+  ret.reserve(physical_device_map_->size());
+  for (const auto& entry : *physical_device_map_) {
+    ret.emplace_back(entry.first);
+  }
+  return ret;
 }
 
 status_t EmulatedCameraDeviceHwlImpl::GetPhysicalCameraCharacteristics(
@@ -194,6 +227,29 @@ status_t EmulatedCameraDeviceHwlImpl::GetTorchStrengthLevel(int32_t& torch_stren
   return OK;
 }
 
+status_t EmulatedCameraDeviceHwlImpl::ConstructDefaultRequestSettings(
+    RequestTemplate type, std::unique_ptr<HalCameraMetadata>* request_settings) {
+  if (request_settings == nullptr) {
+    ALOGE("%s requestSettings is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  auto idx = static_cast<size_t>(type);
+  if (idx >= kTemplateCount) {
+    ALOGE("%s: Unexpected request type: %d", __FUNCTION__, type);
+    return BAD_VALUE;
+  }
+
+  if (device_info_->default_requests_[idx].get() == nullptr) {
+    ALOGE("%s: Unsupported request type: %d", __FUNCTION__, type);
+    return BAD_VALUE;
+  }
+
+  *request_settings = HalCameraMetadata::Clone(
+      device_info_->default_requests_[idx]->GetRawCameraMetadata());
+  return OK;
+}
+
 status_t EmulatedCameraDeviceHwlImpl::DumpState(int /*fd*/) {
   return OK;
 }
@@ -206,11 +262,11 @@ status_t EmulatedCameraDeviceHwlImpl::CreateCameraDeviceSessionHwl(
     return BAD_VALUE;
   }
 
-  std::unique_ptr<HalCameraMetadata> meta =
-      HalCameraMetadata::Clone(static_metadata_.get());
+  std::unique_ptr<EmulatedCameraDeviceInfo> deviceInfo =
+      EmulatedCameraDeviceInfo::Clone(*device_info_);
   *session = EmulatedCameraDeviceSessionHwlImpl::Create(
-      camera_id_, std::move(meta), ClonePhysicalDeviceMap(physical_device_map_),
-      torch_state_);
+      camera_id_, std::move(deviceInfo),
+      ClonePhysicalDeviceMap(physical_device_map_), torch_state_);
   if (*session == nullptr) {
     ALOGE("%s: Cannot create EmulatedCameraDeviceSessionHWlImpl.", __FUNCTION__);
     return BAD_VALUE;
@@ -224,7 +280,8 @@ status_t EmulatedCameraDeviceHwlImpl::CreateCameraDeviceSessionHwl(
 }
 
 bool EmulatedCameraDeviceHwlImpl::IsStreamCombinationSupported(
-    const StreamConfiguration& stream_config) {
+    const StreamConfiguration& stream_config,
+    const bool /*check_settings*/) const {
   return EmulatedSensor::IsStreamCombinationSupported(
       camera_id_, stream_config, *stream_configuration_map_,
       *stream_configuration_map_max_resolution_,

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_ResultDispatcher"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 #include "result_dispatcher.h"
@@ -27,6 +27,7 @@
 #include <string>
 #include <string_view>
 
+#include "hal_types.h"
 #include "utils.h"
 
 namespace android {
@@ -34,12 +35,14 @@ namespace google_camera_hal {
 
 std::unique_ptr<ResultDispatcher> ResultDispatcher::Create(
     uint32_t partial_result_count,
-    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-    const StreamConfiguration& stream_config, std::string_view name) {
+    ProcessCaptureResultFunc process_capture_result,
+    ProcessBatchCaptureResultFunc process_batch_capture_result,
+    NotifyFunc notify, const StreamConfiguration& stream_config,
+    std::string_view name) {
   ATRACE_CALL();
-  auto dispatcher = std::unique_ptr<ResultDispatcher>(
-      new ResultDispatcher(partial_result_count, process_capture_result, notify,
-                           stream_config, name));
+  auto dispatcher = std::make_unique<ResultDispatcher>(
+      partial_result_count, process_capture_result,
+      process_batch_capture_result, notify, stream_config, name);
   if (dispatcher == nullptr) {
     ALOGE("[%s] %s: Creating ResultDispatcher failed.",
           std::string(name).c_str(), __FUNCTION__);
@@ -51,33 +54,29 @@ std::unique_ptr<ResultDispatcher> ResultDispatcher::Create(
 
 ResultDispatcher::ResultDispatcher(
     uint32_t partial_result_count,
-    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-    const StreamConfiguration& stream_config, std::string_view name)
+    ProcessCaptureResultFunc process_capture_result,
+    ProcessBatchCaptureResultFunc process_batch_capture_result,
+    NotifyFunc notify, const StreamConfiguration& stream_config,
+    std::string_view name)
     : kPartialResultCount(partial_result_count),
       name_(name),
       process_capture_result_(process_capture_result),
+      process_batch_capture_result_(process_batch_capture_result),
       notify_(notify) {
   ATRACE_CALL();
   notify_callback_thread_ =
       std::thread([this] { this->NotifyCallbackThreadLoop(); });
 
-  if (utils::SupportRealtimeThread()) {
-    status_t res =
-        utils::SetRealtimeThread(notify_callback_thread_.native_handle());
-    if (res != OK) {
-      ALOGE("[%s] %s: SetRealtimeThread fail", name_.c_str(), __FUNCTION__);
-    } else {
-      ALOGI("[%s] %s: SetRealtimeThread OK", name_.c_str(), __FUNCTION__);
-    }
+  // Assign higher priority to reduce the preemption when CPU usage is high
+  //
+  // As from b/295977499, we need to make it realtime for priority inheritance
+  // to avoid CameraServer thread being the bottleneck
+  status_t res =
+      utils::SetRealtimeThread(notify_callback_thread_.native_handle());
+  if (res != OK) {
+    ALOGE("[%s] %s: SetRealtimeThread fail", name_.c_str(), __FUNCTION__);
   } else {
-    // Assign higher priority to reduce the preemption when CPU usage is high
-    int32_t res = setpriority(
-        PRIO_PROCESS,
-        pthread_gettid_np(notify_callback_thread_.native_handle()), -20);
-    if (res != 0) {
-      ALOGE("[%s] %s: Set thread priority fail with error: %s", name_.c_str(),
-            __FUNCTION__, strerror(errno));
-    }
+    ALOGI("[%s] %s: SetRealtimeThread OK", name_.c_str(), __FUNCTION__);
   }
   InitializeGroupStreamIdsMap(stream_config);
 }
@@ -215,8 +214,7 @@ void ResultDispatcher::RemovePendingRequestLocked(uint32_t frame_number) {
   }
 }
 
-status_t ResultDispatcher::AddResult(std::unique_ptr<CaptureResult> result) {
-  ATRACE_CALL();
+status_t ResultDispatcher::AddResultImpl(std::unique_ptr<CaptureResult> result) {
   status_t res;
   bool failed = false;
   uint32_t frame_number = result->frame_number;
@@ -249,12 +247,39 @@ status_t ResultDispatcher::AddResult(std::unique_ptr<CaptureResult> result) {
       failed = true;
     }
   }
+
+  return failed ? UNKNOWN_ERROR : OK;
+}
+
+status_t ResultDispatcher::AddResult(std::unique_ptr<CaptureResult> result) {
+  ATRACE_CALL();
+  const status_t res = AddResultImpl(std::move(result));
   {
     std::unique_lock<std::mutex> lock(notify_callback_lock_);
     is_result_shutter_updated_ = true;
     notify_callback_condition_.notify_one();
   }
-  return failed ? UNKNOWN_ERROR : OK;
+  return res;
+}
+
+status_t ResultDispatcher::AddBatchResult(
+    std::vector<std::unique_ptr<CaptureResult>> results) {
+  // Send out the partial results immediately.
+  NotifyBatchPartialResultMetadata(results);
+
+  std::optional<status_t> last_error;
+  for (auto& result : results) {
+    const status_t res = AddResultImpl(std::move(result));
+    if (res != OK) {
+      last_error = res;
+    }
+  }
+  {
+    std::unique_lock<std::mutex> lock(notify_callback_lock_);
+    is_result_shutter_updated_ = true;
+    notify_callback_condition_.notify_one();
+  }
+  return last_error.value_or(OK);
 }
 
 status_t ResultDispatcher::AddShutter(uint32_t frame_number,
@@ -315,7 +340,7 @@ status_t ResultDispatcher::AddError(const ErrorMessage& error) {
   return OK;
 }
 
-void ResultDispatcher::NotifyResultMetadata(
+std::unique_ptr<CaptureResult> ResultDispatcher::MakeResultMetadata(
     uint32_t frame_number, std::unique_ptr<HalCameraMetadata> metadata,
     std::vector<PhysicalCameraMetadata> physical_metadata,
     uint32_t partial_result) {
@@ -325,9 +350,7 @@ void ResultDispatcher::NotifyResultMetadata(
   result->result_metadata = std::move(metadata);
   result->physical_metadata = std::move(physical_metadata);
   result->partial_result = partial_result;
-
-  std::lock_guard<std::mutex> lock(process_capture_result_lock_);
-  process_capture_result_(std::move(result));
+  return result;
 }
 
 status_t ResultDispatcher::AddFinalResultMetadata(
@@ -375,8 +398,11 @@ status_t ResultDispatcher::AddResultMetadata(
 
   if (partial_result < kPartialResultCount) {
     // Send out partial results immediately.
-    NotifyResultMetadata(frame_number, std::move(metadata),
-                         std::move(physical_metadata), partial_result);
+    std::vector<std::unique_ptr<CaptureResult>> results;
+    results.push_back(MakeResultMetadata(frame_number, std::move(metadata),
+                                         std::move(physical_metadata),
+                                         partial_result));
+    NotifyCaptureResults(std::move(results));
     return OK;
   }
 
@@ -539,6 +565,19 @@ void ResultDispatcher::NotifyShutters() {
   }
 }
 
+void ResultDispatcher::NotifyCaptureResults(
+    std::vector<std::unique_ptr<CaptureResult>> results) {
+  ATRACE_CALL();
+  std::lock_guard<std::mutex> lock(process_capture_result_lock_);
+  if (process_batch_capture_result_ != nullptr) {
+    process_batch_capture_result_(std::move(results));
+  } else {
+    for (auto& result : results) {
+      process_capture_result_(std::move(result));
+    }
+  }
+}
+
 status_t ResultDispatcher::GetReadyFinalMetadata(
     uint32_t* frame_number, std::unique_ptr<HalCameraMetadata>* final_metadata,
     std::vector<PhysicalCameraMetadata>* physical_metadata) {
@@ -566,18 +605,43 @@ status_t ResultDispatcher::GetReadyFinalMetadata(
   return OK;
 }
 
+void ResultDispatcher::NotifyBatchPartialResultMetadata(
+    std::vector<std::unique_ptr<CaptureResult>>& results) {
+  ATRACE_CALL();
+  std::vector<std::unique_ptr<CaptureResult>> metadata_results;
+  for (auto& result : results) {
+    if (result->result_metadata != nullptr &&
+        result->partial_result < kPartialResultCount) {
+      ALOGV("[%s] %s: Notify partial metadata for frame %u, result count %u",
+            name_.c_str(), __FUNCTION__, result->frame_number,
+            result->partial_result);
+      metadata_results.push_back(MakeResultMetadata(
+          result->frame_number, std::move(result->result_metadata),
+          std::move(result->physical_metadata), result->partial_result));
+    }
+  }
+  if (!metadata_results.empty()) {
+    NotifyCaptureResults(std::move(metadata_results));
+  }
+}
+
 void ResultDispatcher::NotifyFinalResultMetadata() {
   ATRACE_CALL();
   uint32_t frame_number;
   std::unique_ptr<HalCameraMetadata> final_metadata;
   std::vector<PhysicalCameraMetadata> physical_metadata;
+  std::vector<std::unique_ptr<CaptureResult>> results;
 
   while (GetReadyFinalMetadata(&frame_number, &final_metadata,
                                &physical_metadata) == OK) {
     ALOGV("[%s] %s: Notify final metadata for frame %u", name_.c_str(),
           __FUNCTION__, frame_number);
-    NotifyResultMetadata(frame_number, std::move(final_metadata),
-                         std::move(physical_metadata), kPartialResultCount);
+    results.push_back(
+        MakeResultMetadata(frame_number, std::move(final_metadata),
+                           std::move(physical_metadata), kPartialResultCount));
+  }
+  if (!results.empty()) {
+    NotifyCaptureResults(std::move(results));
   }
 }
 
@@ -620,6 +684,7 @@ status_t ResultDispatcher::GetReadyBufferResult(
 
 void ResultDispatcher::NotifyBuffers() {
   ATRACE_CALL();
+  std::vector<std::unique_ptr<CaptureResult>> results;
   std::unique_ptr<CaptureResult> result;
 
   while (GetReadyBufferResult(&result) == OK) {
@@ -627,8 +692,12 @@ void ResultDispatcher::NotifyBuffers() {
       ALOGE("[%s] %s: result is nullptr", name_.c_str(), __FUNCTION__);
       return;
     }
-    std::lock_guard<std::mutex> lock(process_capture_result_lock_);
-    process_capture_result_(std::move(result));
+    ALOGV("[%s] %s: Notify Buffer for frame %u", name_.c_str(), __FUNCTION__,
+          result->frame_number);
+    results.push_back(std::move(result));
+  }
+  if (!results.empty()) {
+    NotifyCaptureResults(std::move(results));
   }
 }
 

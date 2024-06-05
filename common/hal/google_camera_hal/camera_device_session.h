@@ -17,14 +17,11 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_CAMERA_DEVICE__SESSION_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_CAMERA_DEVICE__SESSION_H_
 
-#include <android/hardware/graphics/mapper/2.0/IMapper.h>
-#include <android/hardware/graphics/mapper/3.0/IMapper.h>
-#include <android/hardware/graphics/mapper/4.0/IMapper.h>
-
 #include <memory>
 #include <set>
 #include <shared_mutex>
 #include <vector>
+#include <map>
 
 #include "camera_buffer_allocator_hwl.h"
 #include "camera_device_session_hwl.h"
@@ -45,6 +42,9 @@ namespace google_camera_hal {
 struct CameraDeviceSessionCallback {
   // Callback to notify when a camera device produces a capture result.
   ProcessCaptureResultFunc process_capture_result;
+
+  // Callback to notify when a camera device produces a batched capture result.
+  ProcessBatchCaptureResultFunc process_batch_capture_result;
 
   // Callback to notify shutters or errors.
   NotifyFunc notify;
@@ -100,9 +100,11 @@ class CameraDeviceSession {
 
   // Configure streams.
   // stream_config is the requested stream configuration.
+  // v2 is whether the ConfigureStreams call is made by the configureStreamsV2
+  //    AIDL call or not.
   // hal_configured_streams is filled by this method with configured stream.
-  status_t ConfigureStreams(const StreamConfiguration& stream_config,
-                            std::vector<HalStream>* hal_configured_streams);
+  status_t ConfigureStreams(const StreamConfiguration& stream_config, bool v2,
+                            ConfigureStreamsReturn* configured_streams);
 
   // Process a capture request.
   // num_processed_requests is filled by this method with the number of
@@ -147,9 +149,6 @@ class CameraDeviceSession {
       CameraBufferAllocatorHwl* camera_allocator_hwl,
       std::vector<GetCaptureSessionFactoryFunc> external_session_factory_entries);
 
-  // Initialize the latest available gralloc buffer mapper.
-  status_t InitializeBufferMapper();
-
   // Initialize callbacks from HWL and callbacks to the client.
   void InitializeCallbacks();
 
@@ -158,7 +157,9 @@ class CameraDeviceSession {
 
   // Update all buffer handles in buffers with the imported buffer handles.
   // Must be protected by imported_buffer_handle_map_lock_.
-  status_t UpdateBufferHandlesLocked(std::vector<StreamBuffer>* buffers);
+  status_t UpdateBufferHandlesLocked(
+      std::vector<StreamBuffer>* buffers,
+      bool update_hal_buffer_managed_streams = false);
 
   // Import the buffer handles in the request.
   status_t ImportRequestBufferHandles(const CaptureRequest& request);
@@ -168,9 +169,7 @@ class CameraDeviceSession {
 
   // Import the buffer handle of a buffer.
   // Must be protected by imported_buffer_handle_map_lock_.
-  template <class T, class U>
-  status_t ImportBufferHandleLocked(const sp<T> buffer_mapper,
-                                    const StreamBuffer& buffer);
+  status_t ImportBufferHandleLocked(const StreamBuffer& buffer);
 
   // Create a request with updated buffer handles and modified settings.
   // Must be protected by session_lock_.
@@ -190,11 +189,9 @@ class CameraDeviceSession {
 
   // Free all imported buffer handles belonging to the stream id.
   // Must be protected by imported_buffer_handle_map_lock_.
-  template <class T>
-  void FreeBufferHandlesLocked(const sp<T> buffer_mapper, int32_t stream_id);
+  void FreeBufferHandlesLocked(int32_t stream_id);
 
-  template <class T>
-  void FreeImportedBufferHandles(const sp<T> buffer_mapper);
+  void FreeImportedBufferHandles();
 
   // Clean up stale streams with new stream configuration.
   // Must be protected by session_lock_.
@@ -239,6 +236,10 @@ class CameraDeviceSession {
   // Process the capture result returned from the HWL
   void ProcessCaptureResult(std::unique_ptr<CaptureResult> result);
 
+  // Process the batched capture result returned from the HWL
+  void ProcessBatchCaptureResult(
+      std::vector<std::unique_ptr<CaptureResult>> results);
+
   // Notify error message with error code for stream of frame[frame_number].
   // Caller is responsible to make sure this function is called only once for any frame.
   void NotifyErrorMessage(uint32_t frame_number, int32_t stream_id,
@@ -257,8 +258,8 @@ class CameraDeviceSession {
   status_t TryHandleDummyResult(CaptureResult* result, bool* result_handled);
 
   // Check if all streams in the current session are active in SBC manager
-  status_t HandleInactiveStreams(const CaptureRequest& request,
-                                 bool* all_active);
+  status_t HandleSBCInactiveStreams(const CaptureRequest& request,
+                                    bool* all_active);
 
   // Check the capture request before sending it to HWL. Only needed when HAL
   // Buffer Management is supported. The SBC manager determines if it is
@@ -287,13 +288,17 @@ class CameraDeviceSession {
   // within that group to one single stream ID for easier tracking.
   void DeriveGroupedStreamIdMap();
 
+  // Try handling a single capture result. Returns true when the result callback
+  // was sent in the function, or failed to handle it by running into an
+  // error. So the caller could skip sending the result callback when the
+  // function returned true.
+  bool TryHandleCaptureResult(std::unique_ptr<CaptureResult>& result);
+
+  // Tracks the returned buffers in capture results.
+  void TrackReturnedBuffers(const std::vector<StreamBuffer>& buffers);
+
   uint32_t camera_id_ = 0;
   std::unique_ptr<CameraDeviceSessionHwl> device_session_hwl_;
-
-  // Graphics buffer mapper used to import and free buffers.
-  sp<android::hardware::graphics::mapper::V2_0::IMapper> buffer_mapper_v2_;
-  sp<android::hardware::graphics::mapper::V3_0::IMapper> buffer_mapper_v3_;
-  sp<android::hardware::graphics::mapper::V4_0::IMapper> buffer_mapper_v4_;
 
   // Assuming callbacks to framework is thread-safe, the shared mutex is only
   // used to protect member variable writing and reading.
@@ -365,8 +370,19 @@ class CameraDeviceSession {
   // hwl allocator
   CameraBufferAllocatorHwl* camera_allocator_hwl_ = nullptr;
 
-  // If buffer management API support.
-  bool buffer_management_supported_ = false;
+  // If buffer management API support is used for the session configured
+  bool buffer_management_used_ = false;
+
+  // If session specific hal buffer manager is supported by the HAL
+  bool session_buffer_management_supported_ = false;
+
+  // The set of hal buffer managed stream ids. This is set during capture
+  // session creation time and is constant thereafter. As per the AIDL interface
+  // contract, the framework also does not every call configureStreams while
+  // captures are ongoing - i.e. all buffers and output metadata is not returned
+  // to the framework. Consequently, this does not need to be protected  after
+  // stream configuration is completed.
+  std::set<int32_t> hal_buffer_managed_stream_ids_;
 
   // Pending requests tracker used when buffer management API is enabled.
   // Protected by session_lock_.
@@ -387,7 +403,7 @@ class CameraDeviceSession {
   std::mutex request_record_lock_;
 
   // Map from frame number to a set of stream ids, which exist in
-  // request[frame number]
+  // request[frame number] - only used by hal buffer managed streams
   // Protected by request_record_lock_;
   std::map<uint32_t, std::set<int32_t>> pending_request_streams_;
 
@@ -402,9 +418,6 @@ class CameraDeviceSession {
   // The last shutter timestamp in nanoseconds if systrace is enabled. Reset
   // after stream configuration.
   int64_t last_timestamp_ns_for_trace_ = 0;
-
-  // Operation mode of stream configuration
-  StreamConfigurationMode operation_mode_ = StreamConfigurationMode::kNormal;
 
   // Whether this stream configuration is a multi-res reprocessing configuration
   bool multi_res_reprocess_ = false;
@@ -424,7 +437,7 @@ class CameraDeviceSession {
   std::set<uint32_t> ignore_shutters_;
 
   // Stream use cases supported by this camera device
-  std::set<int64_t> stream_use_cases_;
+  std::map<uint32_t, std::set<int64_t>> camera_id_to_stream_use_cases_;
 
   static constexpr int32_t kInvalidStreamId = -1;
 

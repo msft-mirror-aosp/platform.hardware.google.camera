@@ -20,8 +20,10 @@
 #include "camera_buffer_allocator_hwl.h"
 #include "camera_device_session_hwl.h"
 #include "capture_session.h"
+#include "hal_types.h"
 #include "hwl_types.h"
 #include "request_processor.h"
+#include "result_dispatcher.h"
 #include "result_processor.h"
 
 namespace android {
@@ -46,6 +48,8 @@ class BasicCaptureSession : public CaptureSession {
   // lifetime of BasicCaptureSession.
   // stream_config is the stream configuration.
   // process_capture_result is the callback function to notify results.
+  // process_batch_capture_result is the callback function to notify batched
+  // results.
   // notify is the callback function to notify messages.
   // hal_configured_streams will be filled with HAL configured streams.
   // camera_allocator_hwl is owned by the caller and must be valid during the
@@ -53,8 +57,9 @@ class BasicCaptureSession : public CaptureSession {
   static std::unique_ptr<CaptureSession> Create(
       CameraDeviceSessionHwl* device_session_hwl,
       const StreamConfiguration& stream_config,
-      ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-      HwlSessionCallback session_callback,
+      ProcessCaptureResultFunc process_capture_result,
+      ProcessBatchCaptureResultFunc process_batch_capture_result,
+      NotifyFunc notify, HwlSessionCallback session_callback,
       std::vector<HalStream>* hal_configured_streams,
       CameraBufferAllocatorHwl* camera_allocator_hwl = nullptr);
 
@@ -73,6 +78,7 @@ class BasicCaptureSession : public CaptureSession {
   status_t Initialize(CameraDeviceSessionHwl* device_session_hwl,
                       const StreamConfiguration& stream_config,
                       ProcessCaptureResultFunc process_capture_result,
+                      ProcessBatchCaptureResultFunc process_batch_capture_result,
                       NotifyFunc notify,
                       std::vector<HalStream>* hal_configured_streams);
 
@@ -90,11 +96,17 @@ class BasicCaptureSession : public CaptureSession {
                                std::unique_ptr<ProcessBlock> process_block,
                                std::unique_ptr<ResultProcessor> result_processor);
 
+  void ProcessCaptureResult(std::unique_ptr<CaptureResult> result);
+  void Notify(const NotifyMessage& message);
+  void ProcessBatchCaptureResult(
+      std::vector<std::unique_ptr<CaptureResult>> results);
+
   std::unique_ptr<RequestProcessor> request_processor_;
 
   // device_session_hwl_ is owned by the client.
   CameraDeviceSessionHwl* device_session_hwl_ = nullptr;
   std::unique_ptr<InternalStreamManager> internal_stream_manager_;
+  std::unique_ptr<ResultDispatcher> result_dispatcher_;
 };
 
 }  // namespace google_camera_hal

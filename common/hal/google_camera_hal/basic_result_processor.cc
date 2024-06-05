@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_BasicResultProcessor"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
+#include "basic_result_processor.h"
+
+#include <inttypes.h>
 #include <log/log.h>
 #include <utils/Trace.h>
 
-#include <inttypes.h>
-
-#include "basic_result_processor.h"
 #include "hal_utils.h"
 
 namespace android {
@@ -54,11 +54,13 @@ std::unique_ptr<BasicResultProcessor> BasicResultProcessor::Create() {
 }
 
 void BasicResultProcessor::SetResultCallback(
-    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify) {
+    ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
+    ProcessBatchCaptureResultFunc process_batch_capture_result) {
   ATRACE_CALL();
   std::lock_guard<std::mutex> lock(callback_lock_);
   process_capture_result_ = process_capture_result;
   notify_ = notify;
+  process_batch_capture_result_ = process_batch_capture_result;
 }
 
 status_t BasicResultProcessor::AddPendingRequests(
@@ -91,6 +93,29 @@ void BasicResultProcessor::ProcessResult(ProcessBlockResult block_result) {
   }
 
   process_capture_result_(std::move(block_result.result));
+}
+
+void BasicResultProcessor::ProcessBatchResult(
+    std::vector<ProcessBlockResult> block_results) {
+  ATRACE_CALL();
+  std::lock_guard<std::mutex> lock(callback_lock_);
+  if (process_capture_result_ == nullptr) {
+    ALOGE("%s: process_capture_result_ is nullptr. Dropping a result.",
+          __FUNCTION__);
+    return;
+  }
+
+  std::vector<std::unique_ptr<CaptureResult>> capture_results;
+  capture_results.reserve(block_results.size());
+  for (auto& block_result : block_results) {
+    if (block_result.result == nullptr) {
+      ALOGW("%s: Received a nullptr result.", __FUNCTION__);
+      continue;
+    }
+    capture_results.push_back(std::move(block_result.result));
+  }
+
+  process_batch_capture_result_(std::move(capture_results));
 }
 
 void BasicResultProcessor::Notify(const ProcessBlockNotifyMessage& block_message) {

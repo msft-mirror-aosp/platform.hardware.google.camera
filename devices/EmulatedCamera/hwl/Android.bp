@@ -9,6 +9,7 @@ cc_defaults {
     proprietary: true,
     srcs: [
         "EmulatedCameraProviderHWLImpl.cpp",
+        "EmulatedCameraDeviceInfo.cpp",
         "EmulatedCameraDeviceHWLImpl.cpp",
         "EmulatedCameraDeviceSessionHWLImpl.cpp",
         "EmulatedLogicalRequestState.cpp",
@@ -46,6 +47,7 @@ cc_defaults {
         "libjsoncpp",
         "liblog",
         "libsync",
+        "libui",
         "libutils",
         "libyuv",
     ],

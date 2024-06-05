@@ -107,7 +107,8 @@ struct StreamBufferRequestResult {
 class StreamBufferCacheManager {
  public:
   // Create an instance of the StreamBufferCacheManager
-  static std::unique_ptr<StreamBufferCacheManager> Create();
+  static std::unique_ptr<StreamBufferCacheManager> Create(
+      const std::set<int32_t>& hal_buffer_managed_stream_ids);
 
   virtual ~StreamBufferCacheManager();
 
@@ -143,7 +144,8 @@ class StreamBufferCacheManager {
   status_t IsStreamActive(int32_t stream_id, bool* is_active);
 
  protected:
-  StreamBufferCacheManager();
+  StreamBufferCacheManager(
+      const std::set<int32_t>& hal_buffer_managed_stream_ids);
 
  private:
   // Duration to wait for fence.
@@ -282,6 +284,9 @@ class StreamBufferCacheManager {
 
   // Guards the stream_buffer_caches_
   std::mutex caches_map_mutex_;
+
+  const std::set<int32_t>& hal_buffer_managed_streams_;
+
   // Mapping from a stream_id to the StreamBufferCache for that stream. Any
   // access to this map must be guarded by the caches_map_mutex.
   std::map<int32_t, std::unique_ptr<StreamBufferCache>> stream_buffer_caches_;

@@ -60,7 +60,7 @@ class EmulatedLogicalRequestState {
   EmulatedLogicalRequestState(uint32_t camera_id);
   virtual ~EmulatedLogicalRequestState();
 
-  status_t Initialize(std::unique_ptr<HalCameraMetadata> static_meta,
+  status_t Initialize(std::unique_ptr<EmulatedCameraDeviceInfo> device_info,
                       PhysicalDeviceMapPtr physical_device_map);
 
   status_t GetDefaultRequest(
@@ -68,7 +68,7 @@ class EmulatedLogicalRequestState {
       std::unique_ptr<HalCameraMetadata>* default_settings /*out*/);
 
   std::unique_ptr<HwlPipelineResult> InitializeLogicalResult(
-      uint32_t pipeline_id, uint32_t frame_number);
+      uint32_t pipeline_id, uint32_t frame_number, bool is_partial_result);
 
   status_t InitializeLogicalSettings(
       std::unique_ptr<HalCameraMetadata> request_settings,

@@ -20,6 +20,7 @@
 #include <camera_device_hwl.h>
 #include <hal_types.h>
 
+#include "EmulatedCameraDeviceInfo.h"
 #include "EmulatedSensor.h"
 #include "EmulatedTorchState.h"
 #include "utils/HWLUtils.h"
@@ -32,6 +33,8 @@ using google_camera_hal::CameraDeviceHwl;
 using google_camera_hal::CameraDeviceSessionHwl;
 using google_camera_hal::CameraResourceCost;
 using google_camera_hal::HalCameraMetadata;
+using google_camera_hal::kTemplateCount;
+using google_camera_hal::RequestTemplate;
 using google_camera_hal::StreamConfiguration;
 using google_camera_hal::TorchMode;
 
@@ -62,6 +65,10 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
 
   status_t GetTorchStrengthLevel(int32_t& torch_strength) const override;
 
+  status_t ConstructDefaultRequestSettings(
+      RequestTemplate type,
+      std::unique_ptr<HalCameraMetadata>* request_settings) override;
+
   status_t DumpState(int fd) override;
 
   status_t CreateCameraDeviceSessionHwl(
@@ -87,6 +94,7 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
   const uint32_t camera_id_ = 0;
 
   std::unique_ptr<HalCameraMetadata> static_metadata_;
+  std::unique_ptr<EmulatedCameraDeviceInfo> device_info_;
   std::unique_ptr<StreamConfigurationMap> stream_configuration_map_;
   std::unique_ptr<StreamConfigurationMap> stream_configuration_map_max_resolution_;
   PhysicalStreamConfigurationMap physical_stream_configuration_map_;

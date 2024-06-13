@@ -102,6 +102,15 @@ status_t EmulatedCameraDeviceHwlImpl::Initialize() {
 
   default_torch_strength_level_ = GetDefaultTorchStrengthLevel();
   maximum_torch_strength_level_ = GetMaximumTorchStrengthLevel();
+
+  device_info_ = EmulatedCameraDeviceInfo::Create(
+      HalCameraMetadata::Clone(static_metadata_.get()));
+  if (device_info_ == nullptr) {
+    ALOGE("%s: Unable to create device info for camera %d", __FUNCTION__,
+          camera_id_);
+    return NO_INIT;
+  }
+
   return OK;
 }
 
@@ -194,6 +203,29 @@ status_t EmulatedCameraDeviceHwlImpl::GetTorchStrengthLevel(int32_t& torch_stren
   return OK;
 }
 
+status_t EmulatedCameraDeviceHwlImpl::ConstructDefaultRequestSettings(
+    RequestTemplate type, std::unique_ptr<HalCameraMetadata>* request_settings) {
+  if (request_settings == nullptr) {
+    ALOGE("%s requestSettings is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  auto idx = static_cast<size_t>(type);
+  if (idx >= kTemplateCount) {
+    ALOGE("%s: Unexpected request type: %d", __FUNCTION__, type);
+    return BAD_VALUE;
+  }
+
+  if (device_info_->default_requests_[idx].get() == nullptr) {
+    ALOGE("%s: Unsupported request type: %d", __FUNCTION__, type);
+    return BAD_VALUE;
+  }
+
+  *request_settings = HalCameraMetadata::Clone(
+      device_info_->default_requests_[idx]->GetRawCameraMetadata());
+  return OK;
+}
+
 status_t EmulatedCameraDeviceHwlImpl::DumpState(int /*fd*/) {
   return OK;
 }
@@ -206,11 +238,11 @@ status_t EmulatedCameraDeviceHwlImpl::CreateCameraDeviceSessionHwl(
     return BAD_VALUE;
   }
 
-  std::unique_ptr<HalCameraMetadata> meta =
-      HalCameraMetadata::Clone(static_metadata_.get());
+  std::unique_ptr<EmulatedCameraDeviceInfo> deviceInfo =
+      EmulatedCameraDeviceInfo::Clone(*device_info_);
   *session = EmulatedCameraDeviceSessionHwlImpl::Create(
-      camera_id_, std::move(meta), ClonePhysicalDeviceMap(physical_device_map_),
-      torch_state_);
+      camera_id_, std::move(deviceInfo),
+      ClonePhysicalDeviceMap(physical_device_map_), torch_state_);
   if (*session == nullptr) {
     ALOGE("%s: Cannot create EmulatedCameraDeviceSessionHWlImpl.", __FUNCTION__);
     return BAD_VALUE;

@@ -19,6 +19,8 @@
 
 #include <utils/Errors.h>
 
+#include <set>
+
 #include "hal_camera_metadata.h"
 #include "hwl_types.h"
 #include "multicam_coordinator_hwl.h"
@@ -73,19 +75,17 @@ class CameraDeviceSessionHwl {
   // NO_INIT.
   virtual status_t BuildPipelines() = 0;
 
-  // If the HAL buffer manager should be used for this session configuration.
-  // This should only be called after the pipelines have been configured.
-  // Otherwise this method will return NO_INIT. If the operation is not
-  // supported INVALID_OPERATION is returned.
+  // Get the stream ids that should be HAL buffer managed.
   // This is an hwl level method since the hwl layer can make the best decision
   // about whether to use hal buffer manager for the session  configured - since
   // it has device specific context.
-  virtual status_t ShouldUseHalBufferManager(bool* result) {
-    if (result == nullptr) {
-      return BAD_VALUE;
+  virtual std::set<int32_t> GetHalBufferManagedStreams(
+      const StreamConfiguration& config) {
+    std::set<int32_t> ret;
+    for (const auto& stream : config.streams) {
+      ret.insert(stream.id);
     }
-    *result = false;
-    return INVALID_OPERATION;
+    return ret;
   }
 
   // Warm up pipeline to ready for taking request, this can be a NoOp for

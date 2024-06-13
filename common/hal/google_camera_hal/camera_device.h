@@ -50,6 +50,12 @@ class CameraDevice {
   status_t GetCameraCharacteristics(
       std::unique_ptr<HalCameraMetadata>* characteristics);
 
+  // Get the session characteristics of this camera device.
+  // characteristics will be filled only with the specific keys required from
+  // the HAL.
+  status_t GetSessionCharacteristics(
+      std::unique_ptr<HalCameraMetadata>* session_characteristics);
+
   // Get the characteristics of this camera device's physical camera if the
   // physical_camera_id belongs to this camera device.
   // characteristics will be filled with the physical camera ID's
@@ -69,6 +75,11 @@ class CameraDevice {
   // Get the flash unit strength level of this camera device.
   status_t GetTorchStrengthLevel(int32_t& torch_strength) const;
 
+  // Construct default request settings
+  status_t ConstructDefaultRequestSettings(
+      RequestTemplate type,
+      std::unique_ptr<HalCameraMetadata>* request_settings);
+
   // Create a CameraDeviceSession to handle capture requests. This method will
   // return ALREADY_EXISTS if previous session has not been destroyed.
   // Created CameraDeviceSession remain valid even after this CameraDevice
@@ -86,7 +97,8 @@ class CameraDevice {
 
   // Query whether a particular logical and physical streams combination are
   // supported. stream_config contains the stream configurations.
-  bool IsStreamCombinationSupported(const StreamConfiguration& stream_config);
+  bool IsStreamCombinationSupported(const StreamConfiguration& stream_config,
+                                    bool check_settings);
 
   status_t LoadExternalCaptureSession();
 

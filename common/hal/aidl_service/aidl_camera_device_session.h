@@ -53,8 +53,7 @@ class AidlCameraDeviceSession
       const std::shared_ptr<
           aidl::android::hardware::camera::device::ICameraDeviceCallback>& callback,
       std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session,
-      std::shared_ptr<android::hardware::camera::implementation::AidlProfiler>
-          aidl_profiler);
+      std::shared_ptr<android::google_camera_hal::AidlProfiler> aidl_profiler);
 
   virtual ~AidlCameraDeviceSession();
 
@@ -137,8 +136,7 @@ class AidlCameraDeviceSession
       const std::shared_ptr<
           aidl::android::hardware::camera::device::ICameraDeviceCallback>& callback,
       std::unique_ptr<google_camera_hal::CameraDeviceSession> device_session,
-      std::shared_ptr<android::hardware::camera::implementation::AidlProfiler>
-          aidl_profiler);
+      std::shared_ptr<android::google_camera_hal::AidlProfiler> aidl_profiler);
 
   // Create a metadata queue.
   // If override_size_property contains a valid size, it will create a metadata
@@ -232,8 +230,13 @@ class AidlCameraDeviceSession
   // Must be protected by pending_first_frame_buffers_mutex_
   size_t num_pending_first_frame_buffers_ = 0;
 
-  std::shared_ptr<android::hardware::camera::implementation::AidlProfiler>
-      aidl_profiler_;
+  std::shared_ptr<android::google_camera_hal::AidlProfiler> aidl_profiler_;
+
+  // The ID of preview stream.
+  int32_t preview_stream_id_ = -1;
+
+  // The timestamp of last preview image actually sent by HAL.
+  uint32_t preview_timestamp_last_ = 0;
 };
 
 }  // namespace implementation

@@ -25,11 +25,9 @@
 
 #include "basic_capture_session.h"
 #include "capture_session_utils.h"
-#include "dual_ir_capture_session.h"
 #include "hal_types.h"
 #include "hal_utils.h"
 #include "hdrplus_capture_session.h"
-#include "rgbird_capture_session.h"
 #include "system/camera_metadata.h"
 #include "ui/GraphicBufferMapper.h"
 #include "vendor_tag_defs.h"
@@ -51,13 +49,6 @@ std::vector<CaptureSessionEntryFuncs>
         {.IsStreamConfigurationSupported =
              HdrplusCaptureSession::IsStreamConfigurationSupported,
          .CreateSession = HdrplusCaptureSession::Create},
-        {.IsStreamConfigurationSupported =
-             RgbirdCaptureSession::IsStreamConfigurationSupported,
-         .CreateSession = RgbirdCaptureSession::Create},
-        {.IsStreamConfigurationSupported =
-             DualIrCaptureSession::IsStreamConfigurationSupported,
-         .CreateSession = DualIrCaptureSession::Create},
-        // BasicCaptureSession is supposed to be the last resort.
         {.IsStreamConfigurationSupported =
              BasicCaptureSession::IsStreamConfigurationSupported,
          .CreateSession = BasicCaptureSession::Create}};

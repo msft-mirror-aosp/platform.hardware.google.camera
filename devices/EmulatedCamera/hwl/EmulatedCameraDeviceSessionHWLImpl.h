@@ -79,7 +79,7 @@ class EmulatedCameraZoomRatioMapperHwlImpl : public ZoomRatioMapperHwl {
 class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
  public:
   static std::unique_ptr<EmulatedCameraDeviceSessionHwlImpl> Create(
-      uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta,
+      uint32_t camera_id, std::unique_ptr<EmulatedCameraDeviceInfo> device_info,
       PhysicalDeviceMapPtr physical_devices,
       std::shared_ptr<EmulatedTorchState> torch_state);
 
@@ -103,7 +103,8 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
 
   status_t BuildPipelines() override;
 
-  status_t ShouldUseHalBufferManager(bool* result) override;
+  std::set<int32_t> GetHalBufferManagedStreams(
+      const StreamConfiguration& config) override;
 
   status_t PreparePipeline(uint32_t /*pipeline_id*/,
                            uint32_t /*frame_number*/) override {
@@ -180,7 +181,7 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
 
  private:
   status_t Initialize(uint32_t camera_id,
-                      std::unique_ptr<HalCameraMetadata> static_meta);
+                      std::unique_ptr<EmulatedCameraDeviceInfo> device_info);
   status_t InitializeRequestProcessor();
 
   status_t CheckOutputFormatsForInput(
@@ -205,7 +206,7 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
   bool pipelines_built_ = false;
   bool has_raw_stream_ = false;
   bool supports_session_hal_buf_manager_ = false;
-  std::unique_ptr<HalCameraMetadata> static_metadata_;
+  std::unique_ptr<EmulatedCameraDeviceInfo> device_info_;
   std::vector<EmulatedPipeline> pipelines_;
   std::shared_ptr<EmulatedRequestProcessor> request_processor_;
   std::unique_ptr<StreamConfigurationMap> stream_configuration_map_;

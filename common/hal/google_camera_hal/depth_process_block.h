@@ -181,6 +181,7 @@ class DepthProcessBlock : public ProcessBlock {
   // configured
   bool buffer_management_used_ = false;
   bool session_buffer_management_supported_ = false;
+  std::set<int32_t> hal_buffer_managed_streams_;
 
   // Owned by the client calling Create()
   CameraDeviceSessionHwl* device_session_hwl_ = nullptr;

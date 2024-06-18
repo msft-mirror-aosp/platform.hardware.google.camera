@@ -88,7 +88,7 @@ class AidlCameraDevice : public BnCameraDevice {
   ScopedAStatus getTorchStrengthLevel(int32_t* strength_level) override;
 
   ScopedAStatus constructDefaultRequestSettings(
-      RequestTemplate requestTemplate, CameraMetadata* requestSettings) override;
+      RequestTemplate type, CameraMetadata* request_settings) override;
 
   ScopedAStatus isStreamCombinationWithSettingsSupported(
       const StreamConfiguration& streamConfiguration, bool* supported) override;
@@ -106,6 +106,10 @@ class AidlCameraDevice : public BnCameraDevice {
   std::unique_ptr<CameraDevice> google_camera_device_;
   uint32_t camera_id_ = 0;
   std::shared_ptr<AidlProfiler> aidl_profiler_;
+
+  ScopedAStatus isStreamCombinationSupportedInternal(
+      const StreamConfiguration& streamConfiguration, bool* supported,
+      bool checkSettings);
 };
 
 }  // namespace implementation

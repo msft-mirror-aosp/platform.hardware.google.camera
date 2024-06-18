@@ -1555,6 +1555,15 @@ status_t CameraDeviceSession::Flush() {
   return res;
 }
 
+void CameraDeviceSession::RepeatingRequestEnd(
+    int32_t frame_number, const std::vector<int32_t>& stream_ids) {
+  ATRACE_CALL();
+  std::shared_lock lock(capture_session_lock_);
+  if (capture_session_ != nullptr) {
+    capture_session_->RepeatingRequestEnd(frame_number, stream_ids);
+  }
+}
+
 void CameraDeviceSession::AppendOutputIntentToSettingsLocked(
     const CaptureRequest& request, CaptureRequest* updated_request) {
   if (updated_request == nullptr || updated_request->settings == nullptr) {

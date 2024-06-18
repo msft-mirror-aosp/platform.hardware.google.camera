@@ -605,6 +605,14 @@ status_t HdrplusCaptureSession::Flush() {
   return request_processor_->Flush();
 }
 
+void HdrplusCaptureSession::RepeatingRequestEnd(
+    int32_t frame_number, const std::vector<int32_t>& stream_ids) {
+  ATRACE_CALL();
+  if (request_processor_ != nullptr) {
+    return request_processor_->RepeatingRequestEnd(frame_number, stream_ids);
+  }
+}
+
 void HdrplusCaptureSession::ProcessCaptureResult(
     std::unique_ptr<CaptureResult> result) {
   ATRACE_CALL();

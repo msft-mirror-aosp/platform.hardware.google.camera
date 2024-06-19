@@ -18,8 +18,6 @@
 #define HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_REALTIME_ZSL_REQUEST_PROCESSOR_H_
 
 #include <shared_mutex>
-#include <vector>
-
 #include "process_block.h"
 #include "request_processor.h"
 #include "vendor_tag_types.h"
@@ -55,9 +53,6 @@ class RealtimeZslRequestProcessor : public RequestProcessor {
   status_t ProcessRequest(const CaptureRequest& request) override;
 
   status_t Flush() override;
-
-  void RepeatingRequestEnd(int32_t frame_number,
-                           const std::vector<int32_t>& stream_ids) override;
   // Override functions of RequestProcessor end.
 
  protected:

@@ -17,8 +17,6 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_HDRPLUS_PROCESS_BLOCK_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_HDRPLUS_PROCESS_BLOCK_H_
 
-#include <vector>
-
 #include "process_block.h"
 
 namespace android {
@@ -53,9 +51,6 @@ class HdrplusProcessBlock : public ProcessBlock {
       const CaptureRequest& remaining_session_request) override;
 
   status_t Flush() override;
-
-  void RepeatingRequestEnd(int32_t frame_number,
-                           const std::vector<int32_t>& stream_ids) override;
   // Override functions of ProcessBlock end.
 
  protected:

@@ -825,15 +825,6 @@ ndk::ScopedAStatus AidlCameraDeviceSession::flush() {
   return ndk::ScopedAStatus::ok();
 }
 
-ndk::ScopedAStatus AidlCameraDeviceSession::repeatingRequestEnd(
-    int32_t in_frameNumber, const std::vector<int32_t>& in_streamIds) {
-  ATRACE_NAME("AidlCameraDeviceSession::repeatingRequestEnd");
-  if (device_session_ != nullptr) {
-    device_session_->RepeatingRequestEnd(in_frameNumber, in_streamIds);
-  }
-  return ndk::ScopedAStatus::ok();
-}
-
 ndk::ScopedAStatus AidlCameraDeviceSession::close() {
   ATRACE_NAME("AidlCameraDeviceSession::close");
   if (device_session_ != nullptr) {

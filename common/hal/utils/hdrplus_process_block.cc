@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-// #define LOG_NDEBUG 0
+//#define LOG_NDEBUG 0
 #define LOG_TAG "GCH_HdrplusProcessBlock"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
-#include "hdrplus_process_block.h"
-
 #include <log/log.h>
 #include <utils/Trace.h>
 
 #include "hal_utils.h"
+#include "hdrplus_process_block.h"
 #include "result_processor.h"
 
 namespace android {
@@ -182,15 +181,6 @@ status_t HdrplusProcessBlock::Flush() {
   }
 
   return device_session_hwl_->Flush();
-}
-
-void HdrplusProcessBlock::RepeatingRequestEnd(
-    int32_t frame_number, const std::vector<int32_t>& stream_ids) {
-  ATRACE_CALL();
-  std::lock_guard<std::mutex> lock(configure_lock_);
-  if (is_configured_) {
-    device_session_hwl_->RepeatingRequestEnd(frame_number, stream_ids);
-  }
 }
 
 void HdrplusProcessBlock::NotifyHwlPipelineResult(

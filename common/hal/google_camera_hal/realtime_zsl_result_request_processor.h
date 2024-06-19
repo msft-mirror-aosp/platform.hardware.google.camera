@@ -19,7 +19,6 @@
 
 #include <cstdint>
 #include <shared_mutex>
-#include <vector>
 
 #include "hal_types.h"
 #include "internal_stream_manager.h"
@@ -59,9 +58,6 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
   status_t ProcessRequest(const CaptureRequest& request) override;
 
   status_t Flush() override;
-
-  void RepeatingRequestEnd(int32_t frame_number,
-                           const std::vector<int32_t>& stream_ids) override;
   // Override functions of RequestProcessor end.
 
   void UpdateOutputBufferCount(int32_t frame_number, int output_buffer_count,

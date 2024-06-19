@@ -206,10 +206,6 @@ status_t FakeCameraDeviceSessionHwl::Flush() {
   return OK;
 }
 
-void FakeCameraDeviceSessionHwl::RepeatingRequestEnd(
-    int32_t /*frame_number*/, const std::vector<int32_t>& /*stream_ids*/) {
-}
-
 uint32_t FakeCameraDeviceSessionHwl::GetCameraId() const {
   return kCameraId;
 }
@@ -343,10 +339,6 @@ void MockDeviceSessionHwl::DelegateCallsToFakeSession() {
   ON_CALL(*this, Flush())
       .WillByDefault(
           Invoke(&fake_session_hwl_, &FakeCameraDeviceSessionHwl::Flush));
-
-  ON_CALL(*this, RepeatingRequestEnd(_, _))
-      .WillByDefault(Invoke(&fake_session_hwl_,
-                            &FakeCameraDeviceSessionHwl::RepeatingRequestEnd));
 
   ON_CALL(*this, GetCameraId())
       .WillByDefault(

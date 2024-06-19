@@ -19,8 +19,6 @@
 
 #include <utils/Errors.h>
 
-#include <vector>
-
 #include "hal_types.h"
 #include "internal_stream_manager.h"
 #include "process_block.h"
@@ -68,9 +66,6 @@ class RequestProcessor {
 
   // Flush all pending requests.
   virtual status_t Flush() = 0;
-
-  virtual void RepeatingRequestEnd(int32_t frame_number,
-                                   const std::vector<int32_t>& stream_ids) = 0;
 };
 
 }  // namespace google_camera_hal

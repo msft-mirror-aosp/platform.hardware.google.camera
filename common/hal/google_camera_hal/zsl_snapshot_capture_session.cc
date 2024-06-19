@@ -879,15 +879,6 @@ status_t ZslSnapshotCaptureSession::Flush() {
   return realtime_request_processor_->Flush();
 }
 
-void ZslSnapshotCaptureSession::RepeatingRequestEnd(
-    int32_t frame_number, const std::vector<int32_t>& stream_ids) {
-  ATRACE_CALL();
-  if (realtime_request_processor_ != nullptr) {
-    return realtime_request_processor_->RepeatingRequestEnd(frame_number,
-                                                            stream_ids);
-  }
-}
-
 void ZslSnapshotCaptureSession::ProcessCaptureResult(
     std::unique_ptr<CaptureResult> result) {
   ATRACE_CALL();

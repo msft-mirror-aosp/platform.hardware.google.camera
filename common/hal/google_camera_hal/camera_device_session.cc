@@ -25,11 +25,9 @@
 
 #include "basic_capture_session.h"
 #include "capture_session_utils.h"
-#include "dual_ir_capture_session.h"
 #include "hal_types.h"
 #include "hal_utils.h"
 #include "hdrplus_capture_session.h"
-#include "rgbird_capture_session.h"
 #include "system/camera_metadata.h"
 #include "ui/GraphicBufferMapper.h"
 #include "vendor_tag_defs.h"
@@ -51,13 +49,6 @@ std::vector<CaptureSessionEntryFuncs>
         {.IsStreamConfigurationSupported =
              HdrplusCaptureSession::IsStreamConfigurationSupported,
          .CreateSession = HdrplusCaptureSession::Create},
-        {.IsStreamConfigurationSupported =
-             RgbirdCaptureSession::IsStreamConfigurationSupported,
-         .CreateSession = RgbirdCaptureSession::Create},
-        {.IsStreamConfigurationSupported =
-             DualIrCaptureSession::IsStreamConfigurationSupported,
-         .CreateSession = DualIrCaptureSession::Create},
-        // BasicCaptureSession is supposed to be the last resort.
         {.IsStreamConfigurationSupported =
              BasicCaptureSession::IsStreamConfigurationSupported,
          .CreateSession = BasicCaptureSession::Create}};
@@ -1562,6 +1553,15 @@ status_t CameraDeviceSession::Flush() {
   is_flushing_ = false;
 
   return res;
+}
+
+void CameraDeviceSession::RepeatingRequestEnd(
+    int32_t frame_number, const std::vector<int32_t>& stream_ids) {
+  ATRACE_CALL();
+  std::shared_lock lock(capture_session_lock_);
+  if (capture_session_ != nullptr) {
+    capture_session_->RepeatingRequestEnd(frame_number, stream_ids);
+  }
 }
 
 void CameraDeviceSession::AppendOutputIntentToSettingsLocked(

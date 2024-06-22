@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_RealtimeZslRequestProcessor"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 #include "realtime_zsl_request_processor.h"
@@ -377,6 +377,15 @@ status_t RealtimeZslRequestProcessor::Flush() {
   }
 
   return process_block_->Flush();
+}
+
+void RealtimeZslRequestProcessor::RepeatingRequestEnd(
+    int32_t frame_number, const std::vector<int32_t>& stream_ids) {
+  ATRACE_CALL();
+  std::shared_lock lock(process_block_lock_);
+  if (process_block_ != nullptr) {
+    process_block_->RepeatingRequestEnd(frame_number, stream_ids);
+  }
 }
 
 }  // namespace google_camera_hal

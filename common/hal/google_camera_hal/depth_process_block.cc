@@ -255,14 +255,8 @@ status_t DepthProcessBlock::ConfigureStreams(
   }
   if (session_buffer_management_supported_ &&
       device_session_hwl_->configure_streams_v2()) {
-    bool use_buf_manager = false;
-    auto ret = device_session_hwl_->ShouldUseHalBufferManager(&use_buf_manager);
-    if (ret != OK) {
-      ALOGE("%s: shouldUseHalBufManager() failed", __FUNCTION__);
-      return ret;
-    } else {
-      buffer_management_used_ = use_buf_manager;
-    }
+    hal_buffer_managed_streams_ =
+        device_session_hwl_->GetHalBufferManagedStreams(stream_config);
   }
   is_configured_ = true;
   return OK;
@@ -562,10 +556,6 @@ status_t DepthProcessBlock::UnmapBuffersForDepthGenerator(
 
 status_t DepthProcessBlock::RequestDepthStreamBuffer(
     StreamBuffer* incomplete_buffer, uint32_t frame_number) {
-  if (!buffer_management_used_) {
-    return OK;
-  }
-
   if (request_stream_buffers_ == nullptr) {
     ALOGE("%s: request_stream_buffers_ is nullptr", __FUNCTION__);
     return UNKNOWN_ERROR;
@@ -705,8 +695,9 @@ status_t DepthProcessBlock::PrepareDepthRequestInfo(
         request.output_buffers.size());
     return BAD_VALUE;
   }
-
-  if (buffer_management_used_) {
+  int32_t stream_id = request.output_buffers[0].stream_id;
+  if (buffer_management_used_ || (hal_buffer_managed_streams_.find(stream_id) !=
+                                  hal_buffer_managed_streams_.end())) {
     res = RequestDepthStreamBuffer(
         &(const_cast<CaptureRequest&>(request).output_buffers[0]),
         request.frame_number);

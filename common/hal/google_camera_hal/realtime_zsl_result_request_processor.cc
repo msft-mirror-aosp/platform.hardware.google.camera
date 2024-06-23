@@ -299,6 +299,15 @@ status_t RealtimeZslResultRequestProcessor::Flush() {
   return process_block_->Flush();
 }
 
+void RealtimeZslResultRequestProcessor::RepeatingRequestEnd(
+    int32_t frame_number, const std::vector<int32_t>& stream_ids) {
+  ATRACE_CALL();
+  std::shared_lock lock(process_block_shared_lock_);
+  if (process_block_ != nullptr) {
+    process_block_->RepeatingRequestEnd(frame_number, stream_ids);
+  }
+}
+
 void RealtimeZslResultRequestProcessor::Notify(
     const ProcessBlockNotifyMessage& block_message) {
   ATRACE_CALL();

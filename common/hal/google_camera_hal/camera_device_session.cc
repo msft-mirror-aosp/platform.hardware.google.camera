@@ -21,6 +21,7 @@
 
 #include <inttypes.h>
 #include <log/log.h>
+#include <system/graphics-base-v1.0.h>
 #include <utils/Trace.h>
 
 #include "basic_capture_session.h"
@@ -1687,11 +1688,15 @@ status_t CameraDeviceSession::RegisterStreamsIntoCacheManagerLocked(
     uint64_t producer_usage = 0;
     uint64_t consumer_usage = 0;
     int32_t stream_id = -1;
+    android_pixel_format_t stream_format = stream.format;
     for (auto& hal_stream : hal_streams) {
       if (hal_stream.id == stream.id) {
         producer_usage = hal_stream.producer_usage;
         consumer_usage = hal_stream.consumer_usage;
         stream_id = hal_stream.id;
+        if (stream_format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
+          stream_format = hal_stream.override_format;
+        }
       }
     }
     if (stream_id == -1) {
@@ -1751,7 +1756,7 @@ status_t CameraDeviceSession::RegisterStreamsIntoCacheManagerLocked(
                                          .stream_id = stream_id,
                                          .width = stream.width,
                                          .height = stream.height,
-                                         .format = stream.format,
+                                         .format = stream_format,
                                          .producer_flags = producer_usage,
                                          .consumer_flags = consumer_usage,
                                          .num_buffers_to_cache = 1};

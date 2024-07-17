@@ -30,6 +30,11 @@ const uint32_t kDepthStreamConfigurations =
 const uint32_t kDepthStreamConfigurationsMaxRes =
     ANDROID_DEPTH_AVAILABLE_DEPTH_STREAM_CONFIGURATIONS_MAXIMUM_RESOLUTION;
 
+const uint32_t kDynamicDepthStreamConfigurations =
+    ANDROID_DEPTH_AVAILABLE_DYNAMIC_DEPTH_STREAM_CONFIGURATIONS;
+const uint32_t kDynamicDepthStreamConfigurationsMaxRes =
+    ANDROID_DEPTH_AVAILABLE_DYNAMIC_DEPTH_STREAM_CONFIGURATIONS_MAXIMUM_RESOLUTION;
+
 const uint32_t kScalerMinFrameDurations =
     ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS;
 const uint32_t kScalerMinFrameDurationsMaxRes =
@@ -131,6 +136,14 @@ StreamConfigurationMap::StreamConfigurationMap(const HalCameraMetadata& chars,
 
   ret = chars.Get(maxResolution ? kDepthStreamConfigurationsMaxRes
                                 : kDepthStreamConfigurations,
+                  &entry);
+
+  if (ret == OK) {
+    AppendAvailableStreamConfigurations(entry);
+  }
+
+  ret = chars.Get(maxResolution ? kDynamicDepthStreamConfigurations
+                                : kDynamicDepthStreamConfigurationsMaxRes,
                   &entry);
 
   if (ret == OK) {

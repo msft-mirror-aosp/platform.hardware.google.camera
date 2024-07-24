@@ -19,6 +19,7 @@
 
 #include <cutils/native_handle.h>
 #include <system/graphics-base-v1.0.h>
+
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -170,6 +171,14 @@ struct HalStream {
   android_dataspace_t override_data_space = HAL_DATASPACE_UNKNOWN;
   bool is_physical_camera_stream = false;
   uint32_t physical_camera_id = 0;
+  bool is_hal_buffer_managed = false;
+};
+
+// Corresponds to the definition of ConfigureStreamsRet
+// parcelable in ConfigureStreamsRet.aidl. That is used as the
+// return type for ICameraDeviceSession.configureStreamsV2
+struct ConfigureStreamsReturn {
+  std::vector<HalStream> hal_streams;
 };
 
 // See the definition of
@@ -240,6 +249,12 @@ enum class RequestTemplate : uint32_t {
   kManual = 6,
   kVendorTemplateStart = 0x40000000,
 };
+
+static constexpr size_t kTemplateCount =
+    static_cast<size_t>(RequestTemplate::kManual) + 1;
+
+typedef std::array<std::unique_ptr<HalCameraMetadata>, kTemplateCount>
+    DefaultRequestsType;
 
 // See the definition of
 // ::android::hardware::camera::device::V3_2::MsgType
@@ -395,6 +410,10 @@ enum class DeviceState : uint64_t {
 // Callback function invoked to process capture results.
 using ProcessCaptureResultFunc =
     std::function<void(std::unique_ptr<CaptureResult> /*result*/)>;
+
+// Callback function invoked to process a batched capture result.
+using ProcessBatchCaptureResultFunc =
+    std::function<void(std::vector<std::unique_ptr<CaptureResult>> /*results*/)>;
 
 // Callback function invoked to notify messages.
 using NotifyFunc = std::function<void(const NotifyMessage& /*message*/)>;

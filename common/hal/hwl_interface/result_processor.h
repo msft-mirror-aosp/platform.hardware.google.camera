@@ -36,8 +36,9 @@ class ResultProcessor {
 
   // Set the callbacks to send the finished results. Must be called before
   // calling ProcessResult.
-  virtual void SetResultCallback(ProcessCaptureResultFunc process_capture_result,
-                                 NotifyFunc notify) = 0;
+  virtual void SetResultCallback(
+      ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
+      ProcessBatchCaptureResultFunc process_batch_capture_result) = 0;
 
   // Add pending requests to the result processor.
   //
@@ -56,6 +57,13 @@ class ResultProcessor {
 
   // Called by a ProcessBlock to send the capture results.
   virtual void ProcessResult(ProcessBlockResult block_result) = 0;
+
+  // Called by a ProcessBlock to send the batched capture results.
+  virtual void ProcessBatchResult(std::vector<ProcessBlockResult> block_results) {
+    for (auto& result : block_results) {
+      ProcessResult(std::move(result));
+    }
+  }
 
   // Called by a ProcessBlock to notify a message.
   virtual void Notify(const ProcessBlockNotifyMessage& block_message) = 0;

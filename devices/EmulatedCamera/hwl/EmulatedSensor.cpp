@@ -624,6 +624,9 @@ bool EmulatedSensor::IsStreamCombinationSupported(
     return false;
   }
 
+  // TODO: Check session parameters. For now assuming all combinations
+  // are supported.
+
   return true;
 }
 
@@ -682,6 +685,7 @@ status_t EmulatedSensor::ShutDown() {
 void EmulatedSensor::SetCurrentRequest(
     std::unique_ptr<LogicalCameraSettings> logical_settings,
     std::unique_ptr<HwlPipelineResult> result,
+    std::unique_ptr<HwlPipelineResult> partial_result,
     std::unique_ptr<Buffers> input_buffers,
     std::unique_ptr<Buffers> output_buffers) {
   Mutex::Autolock lock(control_mutex_);
@@ -689,6 +693,7 @@ void EmulatedSensor::SetCurrentRequest(
   current_result_ = std::move(result);
   current_input_buffers_ = std::move(input_buffers);
   current_output_buffers_ = std::move(output_buffers);
+  partial_result_ = std::move(partial_result);
 }
 
 bool EmulatedSensor::WaitForVSyncLocked(nsecs_t reltime) {
@@ -751,6 +756,13 @@ status_t EmulatedSensor::Flush() {
   return ret ? OK : TIMED_OUT;
 }
 
+nsecs_t EmulatedSensor::getSystemTimeWithSource(uint32_t timestamp_source) {
+  if (timestamp_source == ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME) {
+    return systemTime(SYSTEM_TIME_BOOTTIME);
+  }
+  return systemTime(SYSTEM_TIME_MONOTONIC);
+}
+
 bool EmulatedSensor::threadLoop() {
   ATRACE_CALL();
   /**
@@ -764,14 +776,20 @@ bool EmulatedSensor::threadLoop() {
   std::unique_ptr<Buffers> next_buffers;
   std::unique_ptr<Buffers> next_input_buffer;
   std::unique_ptr<HwlPipelineResult> next_result;
+  std::unique_ptr<HwlPipelineResult> partial_result;
   std::unique_ptr<LogicalCameraSettings> settings;
-  HwlPipelineCallback callback = {nullptr, nullptr};
+  HwlPipelineCallback callback = {
+      .process_pipeline_result = nullptr,
+      .process_pipeline_batch_result = nullptr,
+      .notify = nullptr,
+  };
   {
     Mutex::Autolock lock(control_mutex_);
     std::swap(settings, current_settings_);
     std::swap(next_buffers, current_output_buffers_);
     std::swap(next_input_buffer, current_input_buffers_);
     std::swap(next_result, current_result_);
+    std::swap(partial_result, partial_result_);
 
     // Signal VSync for start of readout
     ALOGVV("Sensor VSync");
@@ -781,13 +799,15 @@ bool EmulatedSensor::threadLoop() {
 
   auto frame_duration = EmulatedSensor::kSupportedFrameDurationRange[0];
   auto exposure_time = EmulatedSensor::kSupportedExposureTimeRange[0];
+  uint32_t timestamp_source = ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_UNKNOWN;
   // Frame duration must always be the same among all physical devices
   if ((settings.get() != nullptr) && (!settings->empty())) {
     frame_duration = settings->begin()->second.frame_duration;
     exposure_time = settings->begin()->second.exposure_time;
+    timestamp_source = settings->begin()->second.timestamp_source;
   }
 
-  nsecs_t start_real_time = systemTime();
+  nsecs_t start_real_time = getSystemTimeWithSource(timestamp_source);
   // Stagefright cares about system time for timestamps, so base simulated
   // time on that.
   nsecs_t frame_end_real_time = start_real_time + frame_duration;
@@ -919,6 +939,11 @@ bool EmulatedSensor::threadLoop() {
            (*next_input_buffer->begin())->format == PixelFormat::RAW16)
               ? false
               : reprocess_request;
+      ProcessType process_type = treat_as_reprocess ? REPROCESS
+                                 : (device_settings->second.edge_mode ==
+                                    ANDROID_EDGE_MODE_HIGH_QUALITY)
+                                     ? HIGH_QUALITY
+                                     : REGULAR;
 
       if ((*b)->color_space !=
           ANDROID_REQUEST_AVAILABLE_COLOR_SPACE_PROFILES_MAP_UNSPECIFIED) {
@@ -1059,14 +1084,8 @@ bool EmulatedSensor::threadLoop() {
                                    .height = jpeg_input->height,
                                    .planes = jpeg_input->yuv_planes};
 
-            bool rotate =
-                device_settings->second.rotate_and_crop == ANDROID_SCALER_ROTATE_AND_CROP_90;
-            ProcessType process_type =
-                treat_as_reprocess ? REPROCESS
-                                   : (device_settings->second.edge_mode ==
-                                      ANDROID_EDGE_MODE_HIGH_QUALITY)
-                                         ? HIGH_QUALITY
-                                         : REGULAR;
+            bool rotate = device_settings->second.rotate_and_crop ==
+                          ANDROID_SCALER_ROTATE_AND_CROP_90;
             auto ret = ProcessYUV420(yuv_input, yuv_output,
                                      device_settings->second.gain, process_type,
                                      device_settings->second.zoom_ratio, rotate,
@@ -1108,14 +1127,8 @@ bool EmulatedSensor::threadLoop() {
           YUV420Frame yuv_output{.width = (*b)->width,
                                  .height = (*b)->height,
                                  .planes = (*b)->plane.img_y_crcb};
-          bool rotate =
-              device_settings->second.rotate_and_crop == ANDROID_SCALER_ROTATE_AND_CROP_90;
-          ProcessType process_type = treat_as_reprocess
-                                         ? REPROCESS
-                                         : (device_settings->second.edge_mode ==
-                                            ANDROID_EDGE_MODE_HIGH_QUALITY)
-                                               ? HIGH_QUALITY
-                                               : REGULAR;
+          bool rotate = device_settings->second.rotate_and_crop ==
+                        ANDROID_SCALER_ROTATE_AND_CROP_90;
           auto ret =
               ProcessYUV420(yuv_input, yuv_output, device_settings->second.gain,
                             process_type, device_settings->second.zoom_ratio,
@@ -1146,10 +1159,13 @@ bool EmulatedSensor::threadLoop() {
             if (!reprocess_request) {
               bool rotate = device_settings->second.rotate_and_crop ==
                             ANDROID_SCALER_ROTATE_AND_CROP_90;
-              CaptureYUV420((*b)->plane.img_y_crcb, (*b)->width, (*b)->height,
-                            device_settings->second.gain,
-                            device_settings->second.zoom_ratio, rotate,
-                            (*b)->color_space, device_chars->second);
+              YUV420Frame yuv_input{};
+              YUV420Frame yuv_output{.width = (*b)->width,
+                                     .height = (*b)->height,
+                                     .planes = (*b)->plane.img_y_crcb};
+              ProcessYUV420(yuv_input, yuv_output, device_settings->second.gain,
+                            process_type, device_settings->second.zoom_ratio,
+                            rotate, (*b)->color_space, device_chars->second);
             } else {
               ALOGE(
                   "%s: Reprocess requests with output format %x no supported!",
@@ -1175,7 +1191,7 @@ bool EmulatedSensor::threadLoop() {
     next_input_buffer->clear();
   }
 
-  nsecs_t work_done_real_time = systemTime();
+  nsecs_t work_done_real_time = getSystemTimeWithSource(timestamp_source);
   // Returning the results at this point is not entirely correct from timing
   // perspective. Under ideal conditions where 'ReturnResults' completes
   // in less than 'time_accuracy' we need to return the results after the
@@ -1190,10 +1206,10 @@ bool EmulatedSensor::threadLoop() {
   // noticeable effect.
   if ((work_done_real_time + kReturnResultThreshod) > frame_end_real_time) {
     ReturnResults(callback, std::move(settings), std::move(next_result),
-                  reprocess_request);
+                  reprocess_request, std::move(partial_result));
   }
 
-  work_done_real_time = systemTime();
+  work_done_real_time = getSystemTimeWithSource(timestamp_source);
   ALOGVV("Sensor vertical blanking interval");
   const nsecs_t time_accuracy = 2e6;  // 2 ms of imprecision is ok
   if (work_done_real_time < frame_end_real_time - time_accuracy) {
@@ -1208,7 +1224,7 @@ bool EmulatedSensor::threadLoop() {
   }
 
   ReturnResults(callback, std::move(settings), std::move(next_result),
-                reprocess_request);
+                reprocess_request, std::move(partial_result));
 
   return true;
 };
@@ -1216,7 +1232,8 @@ bool EmulatedSensor::threadLoop() {
 void EmulatedSensor::ReturnResults(
     HwlPipelineCallback callback,
     std::unique_ptr<LogicalCameraSettings> settings,
-    std::unique_ptr<HwlPipelineResult> result, bool reprocess_request) {
+    std::unique_ptr<HwlPipelineResult> result, bool reprocess_request,
+    std::unique_ptr<HwlPipelineResult> partial_result) {
   if ((callback.process_pipeline_result != nullptr) &&
       (result.get() != nullptr) && (result->result_metadata.get() != nullptr)) {
     auto logical_settings = settings->find(logical_camera_id_);
@@ -1233,6 +1250,15 @@ void EmulatedSensor::ReturnResults(
     }
     result->result_metadata->Set(ANDROID_SENSOR_TIMESTAMP, &next_capture_time_,
                                  1);
+
+    camera_metadata_ro_entry_t lensEntry;
+    auto lensRet = result->result_metadata->Get(
+        ANDROID_STATISTICS_LENS_INTRINSIC_SAMPLES, &lensEntry);
+    if ((lensRet == OK) && (lensEntry.count > 0)) {
+      result->result_metadata->Set(ANDROID_STATISTICS_LENS_INTRINSIC_TIMESTAMPS,
+                                   &next_capture_time_, 1);
+    }
+
     uint8_t raw_binned_factor_used = false;
     if (sensor_binning_factor_info_.find(logical_camera_id_) !=
         sensor_binning_factor_info_.end()) {
@@ -1343,6 +1369,11 @@ void EmulatedSensor::ReturnResults(
       }
     }
 
+    // Partial result count for partial result is set to a value
+    // only when partial results are supported
+    if (partial_result->partial_result != 0) {
+      callback.process_pipeline_result(std::move(partial_result));
+    }
     callback.process_pipeline_result(std::move(result));
   }
 }
@@ -1749,6 +1780,7 @@ status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
     process_type = REGULAR;
   }
 
+  size_t bytes_per_pixel = output.planes.bytesPerPixel;
   switch (process_type) {
     case HIGH_QUALITY:
       CaptureYUV420(output.planes, output.width, output.height, gain,
@@ -1788,15 +1820,19 @@ status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
       zoom_ratio = std::max(1.f, zoom_ratio);
       input_width = EmulatedScene::kSceneWidth * aspect_ratio;
       input_height = EmulatedScene::kSceneHeight;
-      temp_yuv.reserve((input_width * input_height * 3) / 2);
+      temp_yuv.reserve((input_width * input_height * 3 * bytes_per_pixel) / 2);
       auto temp_yuv_buffer = temp_yuv.data();
       input_planes = {
           .img_y = temp_yuv_buffer,
-          .img_cb = temp_yuv_buffer + input_width * input_height,
-          .img_cr = temp_yuv_buffer + (input_width * input_height * 5) / 4,
-          .y_stride = static_cast<uint32_t>(input_width),
-          .cbcr_stride = static_cast<uint32_t>(input_width) / 2,
-          .cbcr_step = 1};
+          .img_cb =
+              temp_yuv_buffer + input_width * input_height * bytes_per_pixel,
+          .img_cr = temp_yuv_buffer +
+                    (input_width * input_height * bytes_per_pixel * 5) / 4,
+          .y_stride = static_cast<uint32_t>(input_width * bytes_per_pixel),
+          .cbcr_stride =
+              static_cast<uint32_t>(input_width * bytes_per_pixel) / 2,
+          .cbcr_step = 1,
+          .bytesPerPixel = bytes_per_pixel};
       CaptureYUV420(input_planes, input_width, input_height, gain, zoom_ratio,
                     rotate_and_crop, color_space, chars);
   }
@@ -1806,20 +1842,39 @@ status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
   // Treat the output UV space as planar first and then
   // interleave in the second step.
   if (output_planes.cbcr_step == 2) {
-    temp_output_uv.resize(output.width * output.height / 2);
+    temp_output_uv.resize(output.width * output.height * bytes_per_pixel / 2);
     auto temp_uv_buffer = temp_output_uv.data();
     output_planes.img_cb = temp_uv_buffer;
-    output_planes.img_cr = temp_uv_buffer + output.width * output.height / 4;
-    output_planes.cbcr_stride = output.width / 2;
+    output_planes.img_cr =
+        temp_uv_buffer + output.width * output.height * bytes_per_pixel / 4;
+    output_planes.cbcr_stride = output.width * bytes_per_pixel / 2;
   }
 
-  auto ret = I420Scale(
-      input_planes.img_y, input_planes.y_stride, input_planes.img_cb,
-      input_planes.cbcr_stride, input_planes.img_cr, input_planes.cbcr_stride,
-      input_width, input_height, output_planes.img_y, output_planes.y_stride,
-      output_planes.img_cb, output_planes.cbcr_stride, output_planes.img_cr,
-      output_planes.cbcr_stride, output.width, output.height,
-      libyuv::kFilterNone);
+  // NOTE: libyuv takes strides in pixels, not bytes.
+  int ret = 0;
+  if (bytes_per_pixel == 2) {
+    ret = I420Scale_16((const uint16_t*)input_planes.img_y,
+                       input_planes.y_stride / bytes_per_pixel,
+                       (const uint16_t*)input_planes.img_cb,
+                       input_planes.cbcr_stride / bytes_per_pixel,
+                       (const uint16_t*)input_planes.img_cr,
+                       input_planes.cbcr_stride / bytes_per_pixel, input_width,
+                       input_height, (uint16_t*)output_planes.img_y,
+                       output_planes.y_stride / bytes_per_pixel,
+                       (uint16_t*)output_planes.img_cb,
+                       output_planes.cbcr_stride / bytes_per_pixel,
+                       (uint16_t*)output_planes.img_cr,
+                       output_planes.cbcr_stride / bytes_per_pixel,
+                       output.width, output.height, libyuv::kFilterNone);
+  } else {
+    ret = I420Scale(input_planes.img_y, input_planes.y_stride,
+                    input_planes.img_cb, input_planes.cbcr_stride,
+                    input_planes.img_cr, input_planes.cbcr_stride, input_width,
+                    input_height, output_planes.img_y, output_planes.y_stride,
+                    output_planes.img_cb, output_planes.cbcr_stride,
+                    output_planes.img_cr, output_planes.cbcr_stride,
+                    output.width, output.height, libyuv::kFilterNone);
+  }
   if (ret != 0) {
     ALOGE("%s: Failed during YUV scaling: %d", __FUNCTION__, ret);
     return ret;
@@ -1828,15 +1883,37 @@ status_t EmulatedSensor::ProcessYUV420(const YUV420Frame& input,
   // Merge U/V Planes for the interleaved case
   if (output_planes.cbcr_step == 2) {
     if (output.planes.img_cb < output.planes.img_cr) {
-      libyuv::MergeUVPlane(output_planes.img_cb, output_planes.cbcr_stride,
-                           output_planes.img_cr, output_planes.cbcr_stride,
-                           output.planes.img_cb, output.planes.cbcr_stride,
-                           output.width / 2, output.height / 2);
+      if (bytes_per_pixel == 2) {
+        libyuv::MergeUVPlane_16((const uint16_t*)output_planes.img_cb,
+                                output_planes.cbcr_stride / bytes_per_pixel,
+                                (const uint16_t*)output_planes.img_cr,
+                                output_planes.cbcr_stride / bytes_per_pixel,
+                                (uint16_t*)output.planes.img_cb,
+                                output.planes.cbcr_stride / bytes_per_pixel,
+                                output.width / 2, output.height / 2,
+                                /*depth*/ 16);
+      } else {
+        libyuv::MergeUVPlane(output_planes.img_cb, output_planes.cbcr_stride,
+                             output_planes.img_cr, output_planes.cbcr_stride,
+                             output.planes.img_cb, output.planes.cbcr_stride,
+                             output.width / 2, output.height / 2);
+      }
     } else {
-      libyuv::MergeUVPlane(output_planes.img_cr, output_planes.cbcr_stride,
-                           output_planes.img_cb, output_planes.cbcr_stride,
-                           output.planes.img_cr, output.planes.cbcr_stride,
-                           output.width / 2, output.height / 2);
+      if (bytes_per_pixel == 2) {
+        libyuv::MergeUVPlane_16((const uint16_t*)output_planes.img_cr,
+                                output_planes.cbcr_stride / bytes_per_pixel,
+                                (const uint16_t*)output_planes.img_cb,
+                                output_planes.cbcr_stride / bytes_per_pixel,
+                                (uint16_t*)output.planes.img_cr,
+                                output.planes.cbcr_stride / bytes_per_pixel,
+                                output.width / 2, output.height / 2,
+                                /*depth*/ 16);
+      } else {
+        libyuv::MergeUVPlane(output_planes.img_cr, output_planes.cbcr_stride,
+                             output_planes.img_cb, output_planes.cbcr_stride,
+                             output.planes.img_cr, output.planes.cbcr_stride,
+                             output.width / 2, output.height / 2);
+      }
     }
   }
 

@@ -15,6 +15,7 @@
  */
 
 package {
+    default_team: "trendy_team_pixel_camera_system_software",
     // See: http://go/android-license-faq
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
@@ -55,9 +56,6 @@ cc_library {
     ],
     shared_libs: [
         "android.hardware.camera.provider@2.4",
-        "android.hardware.graphics.mapper@2.0",
-        "android.hardware.graphics.mapper@3.0",
-        "android.hardware.graphics.mapper@4.0",
         "lib_profiler",
         "libcamera_metadata",
         "libcutils",
@@ -95,9 +93,6 @@ cc_test {
         "libgooglecamerahal",
         "libgooglecamerahalutils",
         "android.hardware.camera.provider@2.4",
-        "android.hardware.graphics.mapper@2.0",
-        "android.hardware.graphics.mapper@3.0",
-        "android.hardware.graphics.mapper@4.0",
         "libcamera_metadata",
         "libcutils",
         "libhardware",

@@ -142,6 +142,8 @@ void AidlCameraDeviceSession::ProcessCaptureResult(
     return;
   }
   if (aidl_results[0].inputBuffer.streamId != -1) {
+    ALOGI("%s: reprocess_frame %d image complete", __FUNCTION__,
+          aidl_results[0].frameNumber);
     ATRACE_ASYNC_END("reprocess_frame", aidl_results[0].frameNumber);
     aidl_profiler_->ReprocessingResultEnd(aidl_results[0].frameNumber);
   }
@@ -183,6 +185,8 @@ void AidlCameraDeviceSession::ProcessBatchCaptureResult(
     }
 
     if (aidl_result.inputBuffer.streamId != -1) {
+      ALOGI("%s: reprocess_frame %d image complete", __FUNCTION__,
+            aidl_result.frameNumber);
       ATRACE_ASYNC_END("reprocess_frame", aidl_result.frameNumber);
       aidl_profiler_->ReprocessingResultEnd(aidl_result.frameNumber);
     }
@@ -725,6 +729,8 @@ ndk::ScopedAStatus AidlCameraDeviceSession::processCaptureRequest(
 
   for (const auto& request : requests) {
     if (request.inputBuffer.streamId != -1) {
+      ALOGI("%s: reprocess_frame %d request received", __FUNCTION__,
+            request.frameNumber);
       ATRACE_ASYNC_BEGIN("reprocess_frame", request.frameNumber);
       aidl_profiler_->ReprocessingRequestStart(
           device_session_->GetProfiler(

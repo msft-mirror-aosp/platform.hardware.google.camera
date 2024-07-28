@@ -129,6 +129,9 @@ void AidlCameraDeviceSession::ProcessCaptureResult(
         ATRACE_INT64("preview_timestamp_diff", timestamp_diff);
         ATRACE_INT("preview_frame_number", hal_result->frame_number);
       }
+      if (first_request_frame_number_ == hal_result->frame_number) {
+        ATRACE_ASYNC_END("first_preview_frame", 0);
+      }
       preview_timestamp_last_ = timestamp_now;
     }
   }
@@ -721,6 +724,9 @@ ndk::ScopedAStatus AidlCameraDeviceSession::processCaptureRequest(
     first_request_frame_number_ = requests[0].frameNumber;
     aidl_profiler_->FirstFrameStart();
     ATRACE_ASYNC_BEGIN("first_frame", 0);
+    if (preview_stream_id_ != -1) {
+      ATRACE_ASYNC_BEGIN("first_preview_frame", 0);
+    }
   }
 
   for (const auto& request : requests) {

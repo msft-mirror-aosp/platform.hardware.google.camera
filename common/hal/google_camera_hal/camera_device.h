@@ -40,7 +40,7 @@ class CameraDevice {
   static std::unique_ptr<CameraDevice> Create(
       std::unique_ptr<CameraDeviceHwl> camera_device_hwl,
       CameraBufferAllocatorHwl* camera_allocator_hwl = nullptr,
-      const std::vector<std::string>* configure_streams_libs = nullptr);
+      std::vector<std::string> libs_to_pin = {});
 
   virtual ~CameraDevice();
 
@@ -141,7 +141,7 @@ class CameraDevice {
   // Stream use cases supported by this camera device
   std::map<uint32_t, std::set<int64_t>> camera_id_to_stream_use_cases_;
 
-  const std::vector<std::string>* configure_streams_libs_ = nullptr;
+  bool pinned_memory_enabled_ = false;
 };
 
 }  // namespace google_camera_hal

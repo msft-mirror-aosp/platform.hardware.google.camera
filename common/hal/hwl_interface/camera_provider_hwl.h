@@ -73,6 +73,9 @@ class CameraProviderHwl {
       std::unique_ptr<CameraBufferAllocatorHwl>* camera_buffer_allocator_hwl) = 0;
 
   virtual status_t NotifyDeviceStateChange(DeviceState device_state) = 0;
+  virtual std::vector<std::string> GetLibrariesToPin() {
+    return {};
+  };
 };
 typedef CameraProviderHwl* (*CreateCameraProviderHwl_t)();
 }  // namespace google_camera_hal

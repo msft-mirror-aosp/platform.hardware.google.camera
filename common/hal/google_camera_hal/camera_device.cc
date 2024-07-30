@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_CameraDevice"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 #include "camera_device.h"
@@ -37,10 +37,17 @@ using android::meminfo::ProcMemInfo;
 using namespace android::meminfo;
 
 namespace android {
+namespace {
+enum class PreloadMode {
+  kMadvise = 0,
+  kMlockMadvise = 1,
+};
+}
 
 void MadviseFileForRange(size_t madvise_size_limit_bytes, size_t map_size_bytes,
                          const uint8_t* map_begin, const uint8_t* map_end,
-                         const std::string& file_name) {
+                         const std::string& file_name,
+                         PreloadMode preload_mode) {
   // Ideal blockTransferSize for madvising files (128KiB)
   static const size_t kIdealIoTransferSizeBytes = 128 * 1024;
   size_t target_size_bytes =
@@ -72,36 +79,49 @@ void MadviseFileForRange(size_t madvise_size_limit_bytes, size_t map_size_bytes,
     size_t madvise_length =
         std::min(kIdealIoTransferSizeBytes,
                  static_cast<size_t>(target_pos - madvise_start));
-    int status = madvise(madvise_addr, madvise_length, MADV_WILLNEED);
+    if (preload_mode == PreloadMode::kMlockMadvise) {
+      int status_mlock = mlock(madvise_addr, madvise_length);
+      // In case of error we stop mlocking rest of the file
+      if (status_mlock < 0) {
+        ALOGW(
+            "%s: Pinning memory by mlock failed! status=%i, errno=%i, "
+            "trace_tag=%s",
+            __FUNCTION__, status_mlock, errno, trace_tag.c_str());
+        break;
+      }
+    }
+    int status_madvise = madvise(madvise_addr, madvise_length, MADV_WILLNEED);
     // In case of error we stop madvising rest of the file
-    if (status < 0) {
+    if (status_madvise < 0) {
       break;
     }
   }
 }
 
-static void ReadAheadVma(const Vma& vma, const size_t madvise_size_limit_bytes) {
+static void ReadAheadVma(const Vma& vma, const size_t madvise_size_limit_bytes,
+                         PreloadMode preload_mode) {
   const uint8_t* map_begin = reinterpret_cast<uint8_t*>(vma.start);
   const uint8_t* map_end = reinterpret_cast<uint8_t*>(vma.end);
   MadviseFileForRange(madvise_size_limit_bytes,
                       static_cast<size_t>(map_end - map_begin), map_begin,
-                      map_end, vma.name);
+                      map_end, vma.name, preload_mode);
 }
 
-static void LoadLibraries(const std::vector<std::string>* libs) {
+static void LoadLibraries(std::vector<std::string> libs) {
   auto vmaCollectorCb = [&libs](const Vma& vma) {
     const static size_t kMadviseSizeLimitBytes =
         std::numeric_limits<size_t>::max();
     // Read ahead for anonymous VMAs and for specific files.
     // vma.flags represents a VMAs rwx bits.
     if (vma.inode == 0 && !vma.is_shared && vma.flags) {
-      ReadAheadVma(vma, kMadviseSizeLimitBytes);
-    } else if (vma.inode != 0 && libs != nullptr &&
-               std::any_of(libs->begin(), libs->end(),
+      // Do not pin memory for anonymous VMAs
+      ReadAheadVma(vma, kMadviseSizeLimitBytes, PreloadMode::kMadvise);
+    } else if (vma.inode != 0 && !libs.empty() &&
+               std::any_of(libs.begin(), libs.end(),
                            [&vma](std::string lib_name) {
                              return lib_name.compare(vma.name) == 0;
                            })) {
-      ReadAheadVma(vma, kMadviseSizeLimitBytes);
+      ReadAheadVma(vma, kMadviseSizeLimitBytes, PreloadMode::kMlockMadvise);
     }
     return true;
   };
@@ -125,7 +145,7 @@ constexpr char kExternalCaptureSessionDir[] =
 std::unique_ptr<CameraDevice> CameraDevice::Create(
     std::unique_ptr<CameraDeviceHwl> camera_device_hwl,
     CameraBufferAllocatorHwl* camera_allocator_hwl,
-    const std::vector<std::string>* configure_streams_libs) {
+    std::vector<std::string> libs_to_pin) {
   ATRACE_CALL();
   auto device = std::unique_ptr<CameraDevice>(new CameraDevice());
 
@@ -144,7 +164,13 @@ std::unique_ptr<CameraDevice> CameraDevice::Create(
 
   ALOGI("%s: Created a camera device for public(%u)", __FUNCTION__,
         device->GetPublicCameraId());
-  device->configure_streams_libs_ = configure_streams_libs;
+
+  if (!libs_to_pin.empty()) {
+    device->pinned_memory_enabled_ = true;
+    ALOGI("Pinning memory for %zu shared libraries.", libs_to_pin.size());
+    std::thread t(LoadLibraries, std::move(libs_to_pin));
+    t.detach();
+  }
 
   return device;
 }
@@ -360,8 +386,12 @@ status_t CameraDevice::CreateCameraDeviceSession(
     return UNKNOWN_ERROR;
   }
 
-  std::thread t(LoadLibraries, configure_streams_libs_);
-  t.detach();
+  if (!pinned_memory_enabled_) {
+    ALOGI("Pinning memory is disabled.");
+    std::vector<std::string> libs_to_pin;
+    std::thread t(LoadLibraries, libs_to_pin);
+    t.detach();
+  }
 
   return OK;
 }

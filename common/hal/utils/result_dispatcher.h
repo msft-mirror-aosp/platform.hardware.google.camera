@@ -124,32 +124,35 @@ class ResultDispatcher {
     bool ready = false;
   };
 
-  // Define a pending buffer that will be ready later when AddResult() is called.
+  // Define a pending buffer that will be ready later when AddResult() is
+  // called.
   struct PendingBuffer {
     StreamBuffer buffer = {};
     bool is_input = false;
     bool ready = false;
   };
 
-  // Define a pending final result metadata that will be ready later when
-  // AddResult() is called.
-  struct PendingFinalResultMetadata {
+  // Define a pending result metadata that will be ready later when AddResult()
+  // is called.
+  struct PendingResultMetadata {
     std::unique_ptr<HalCameraMetadata> metadata;
     std::vector<PhysicalCameraMetadata> physical_metadata;
+    uint32_t partial_result_count = 0;
     bool ready = false;
   };
 
   // Template class for pending data queues.
-  // Pending data can be shutter, final metadata, buffer, and each type of data
-  // has its own queue. Handles having multiple queues per request type, adds to
-  // the appropriate queue and checks all queues for ready data.
+  // Pending data can be shutter, early/final result metadata, buffer, and each
+  // type of data has its own queue. Handles having multiple queues per request
+  // type, adds to the appropriate queue and checks all queues for ready data.
   template <typename FrameData>
   class DispatchQueue {
    public:
     DispatchQueue(std::string_view dispatcher_name = "DefaultDispatcher",
                   std::string_view data_name = "DefaultData");
 
-    // Add a request to the dispatch queue that will later be populated with results.
+    // Add a request to the dispatch queue that will later be populated with
+    // results.
     status_t AddRequest(uint32_t frame_number, RequestType request_type);
 
     // Remove request for frame number from data queue
@@ -167,7 +170,8 @@ class ResultDispatcher {
    private:
     // Name of the dispatcher for debug messages
     std::string_view dispatcher_name_;
-    // Name of the data (shutter, metadata, buffer + stream key) for debug messages
+    // Name of the data (shutter, metadata, buffer + stream key) for debug
+    // messages
     std::string data_name_;
 
     // Queue for data of reprocess request types
@@ -203,15 +207,11 @@ class ResultDispatcher {
   // Invoke the capture result callback to notify capture results.
   void NotifyCaptureResults(std::vector<std::unique_ptr<CaptureResult>> results);
 
-  status_t AddFinalResultMetadata(
-      uint32_t frame_number, std::unique_ptr<HalCameraMetadata> final_metadata,
-      std::vector<PhysicalCameraMetadata> physical_metadata)
-      EXCLUDES(result_lock_);
-
   status_t AddResultMetadata(
       uint32_t frame_number, std::unique_ptr<HalCameraMetadata> metadata,
       std::vector<PhysicalCameraMetadata> physical_metadata,
-      uint32_t partial_result);
+      uint32_t partial_result) EXCLUDES(result_lock_);
+  ;
 
   status_t AddBuffer(uint32_t frame_number, StreamBuffer buffer, bool is_input)
       EXCLUDES(result_lock_);
@@ -219,13 +219,9 @@ class ResultDispatcher {
   // Check all pending shutters and invoke notify_ with shutters that are ready.
   void NotifyShutters() EXCLUDES(result_lock_);
 
-  // Send partial result callbacks if `results` contains partial result metadata.
-  void NotifyBatchPartialResultMetadata(
-      std::vector<std::unique_ptr<CaptureResult>>& results);
-
-  // Check all pending final result metadata and invoke the capture result
-  // callback with final result metadata that are ready.
-  void NotifyFinalResultMetadata() EXCLUDES(result_lock_);
+  // Check all pending result metadata and invoke the capture result callback
+  // with the result metadata that are ready.
+  void NotifyResultMetadata() EXCLUDES(result_lock_);
 
   // Get a result with a buffer that is ready to be notified via the capture
   // result callback.
@@ -241,7 +237,8 @@ class ResultDispatcher {
 
   void PrintTimeoutMessages() EXCLUDES(result_lock_);
 
-  // Initialize the group stream ids map if needed. Must be protected with result_lock_.
+  // Initialize the group stream ids map if needed. Must be protected with
+  // result_lock_.
   void InitializeGroupStreamIdsMap(const StreamConfiguration& stream_config)
       EXCLUDES(result_lock_);
 
@@ -252,8 +249,11 @@ class ResultDispatcher {
 
   // Queue for shutter data.
   DispatchQueue<PendingShutter> pending_shutters_ GUARDED_BY(result_lock_);
+  // Queue for early result metadata.
+  DispatchQueue<PendingResultMetadata> pending_early_metadata_
+      GUARDED_BY(result_lock_);
   // Queue for final result metadata.
-  DispatchQueue<PendingFinalResultMetadata> pending_final_metadata_
+  DispatchQueue<PendingResultMetadata> pending_final_metadata_
       GUARDED_BY(result_lock_);
 
   // Maps from a stream or stream group to a queue for buffer data.
@@ -282,7 +282,8 @@ class ResultDispatcher {
 
   std::mutex notify_callback_lock_;
 
-  // Condition to wake up notify_callback_thread_. Used with notify_callback_lock.
+  // Condition to wake up notify_callback_thread_. Used with
+  // notify_callback_lock.
   std::condition_variable notify_callback_condition_;
 
   // Protected by notify_callback_lock.

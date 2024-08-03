@@ -17,6 +17,7 @@
 // #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_ResultDispatcher"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
+
 #include "result_dispatcher.h"
 
 #include <inttypes.h>
@@ -65,8 +66,10 @@ ResultDispatcher::ResultDispatcher(
       notify_(notify) {
   ATRACE_CALL();
   pending_shutters_ = DispatchQueue<PendingShutter>(name_, "shutter");
+  pending_early_metadata_ =
+      DispatchQueue<PendingResultMetadata>(name_, "early result metadata");
   pending_final_metadata_ =
-      DispatchQueue<PendingFinalResultMetadata>(name_, "final result metadata");
+      DispatchQueue<PendingResultMetadata>(name_, "final result metadata");
 
   notify_callback_thread_ =
       std::thread([this] { this->NotifyCallbackThreadLoop(); });
@@ -133,9 +136,16 @@ status_t ResultDispatcher::AddPendingRequestLocked(
     return res;
   }
 
+  res = pending_early_metadata_.AddRequest(frame_number, request_type);
+  if (res != OK) {
+    ALOGE("[%s] %s: Adding pending early metadata for frame %u failed: %s(%d)",
+          name_.c_str(), __FUNCTION__, frame_number, strerror(-res), res);
+    return res;
+  }
+
   res = pending_final_metadata_.AddRequest(frame_number, request_type);
   if (res != OK) {
-    ALOGE("[%s] %s: Adding pending result metadata for frame %u failed: %s(%d)",
+    ALOGE("[%s] %s: Adding pending final metadata for frame %u failed: %s(%d)",
           name_.c_str(), __FUNCTION__, frame_number, strerror(-res), res);
     return res;
   }
@@ -178,6 +188,7 @@ status_t ResultDispatcher::AddPendingBufferLocked(uint32_t frame_number,
 void ResultDispatcher::RemovePendingRequestLocked(uint32_t frame_number) {
   ATRACE_CALL();
   pending_shutters_.RemoveRequest(frame_number);
+  pending_early_metadata_.RemoveRequest(frame_number);
   pending_final_metadata_.RemoveRequest(frame_number);
 
   for (auto& pending_buffers : stream_pending_buffers_map_) {
@@ -235,9 +246,6 @@ status_t ResultDispatcher::AddResult(std::unique_ptr<CaptureResult> result) {
 
 status_t ResultDispatcher::AddBatchResult(
     std::vector<std::unique_ptr<CaptureResult>> results) {
-  // Send out the partial results immediately.
-  NotifyBatchPartialResultMetadata(results);
-
   std::optional<status_t> last_error;
   for (auto& result : results) {
     const status_t res = AddResultImpl(std::move(result));
@@ -295,6 +303,7 @@ status_t ResultDispatcher::AddError(const ErrorMessage& error) {
   // No need to deliver the result metadata on a result metadata error
   if (error.error_code == ErrorCode::kErrorResult ||
       error.error_code == ErrorCode::kErrorRequest) {
+    pending_early_metadata_.RemoveRequest(frame_number);
     pending_final_metadata_.RemoveRequest(frame_number);
   }
 
@@ -319,20 +328,6 @@ std::unique_ptr<CaptureResult> ResultDispatcher::MakeResultMetadata(
   return result;
 }
 
-status_t ResultDispatcher::AddFinalResultMetadata(
-    uint32_t frame_number, std::unique_ptr<HalCameraMetadata> final_metadata,
-    std::vector<PhysicalCameraMetadata> physical_metadata) {
-  ATRACE_CALL();
-  std::lock_guard<std::mutex> lock(result_lock_);
-
-  return pending_final_metadata_.AddResult(
-      frame_number, PendingFinalResultMetadata{
-                        .metadata = std::move(final_metadata),
-                        .physical_metadata = std::move(physical_metadata),
-                        .ready = true,
-                    });
-}
-
 status_t ResultDispatcher::AddResultMetadata(
     uint32_t frame_number, std::unique_ptr<HalCameraMetadata> metadata,
     std::vector<PhysicalCameraMetadata> physical_metadata,
@@ -351,18 +346,17 @@ status_t ResultDispatcher::AddResultMetadata(
     return BAD_VALUE;
   }
 
-  if (partial_result < kPartialResultCount) {
-    // Send out partial results immediately.
-    std::vector<std::unique_ptr<CaptureResult>> results;
-    results.push_back(MakeResultMetadata(frame_number, std::move(metadata),
-                                         std::move(physical_metadata),
-                                         partial_result));
-    NotifyCaptureResults(std::move(results));
-    return OK;
-  }
-
-  return AddFinalResultMetadata(frame_number, std::move(metadata),
-                                std::move(physical_metadata));
+  std::lock_guard<std::mutex> lock(result_lock_);
+  DispatchQueue<PendingResultMetadata>& queue =
+      partial_result < kPartialResultCount ? pending_early_metadata_
+                                           : pending_final_metadata_;
+  return queue.AddResult(frame_number,
+                         PendingResultMetadata{
+                             .metadata = std::move(metadata),
+                             .physical_metadata = std::move(physical_metadata),
+                             .partial_result_count = partial_result,
+                             .ready = true,
+                         });
 }
 
 status_t ResultDispatcher::AddBuffer(uint32_t frame_number, StreamBuffer buffer,
@@ -395,7 +389,7 @@ void ResultDispatcher::NotifyCallbackThreadLoop() {
 
   while (1) {
     NotifyShutters();
-    NotifyFinalResultMetadata();
+    NotifyResultMetadata();
     NotifyBuffers();
 
     std::unique_lock<std::mutex> lock(notify_callback_lock_);
@@ -418,6 +412,7 @@ void ResultDispatcher::NotifyCallbackThreadLoop() {
 void ResultDispatcher::PrintTimeoutMessages() {
   std::lock_guard<std::mutex> lock(result_lock_);
   pending_shutters_.PrintTimeoutMessages();
+  pending_early_metadata_.PrintTimeoutMessages();
   pending_final_metadata_.PrintTimeoutMessages();
 
   for (auto& [stream_key, pending_buffers] : stream_pending_buffers_map_) {
@@ -459,7 +454,8 @@ std::string ResultDispatcher::DumpStreamKey(const StreamKey& stream_key) const {
 void ResultDispatcher::NotifyShutters() {
   ATRACE_CALL();
   NotifyMessage message = {};
-  // TODO: b/347771898 - Update to not depend on running faster than data is ready
+  // TODO: b/347771898 - Update to not depend on running faster than data is
+  // ready
   while (true) {
     uint32_t frame_number = 0;
     PendingShutter pending_shutter;
@@ -494,46 +490,41 @@ void ResultDispatcher::NotifyCaptureResults(
   }
 }
 
-void ResultDispatcher::NotifyBatchPartialResultMetadata(
-    std::vector<std::unique_ptr<CaptureResult>>& results) {
-  ATRACE_CALL();
-  std::vector<std::unique_ptr<CaptureResult>> metadata_results;
-  for (auto& result : results) {
-    if (result->result_metadata != nullptr &&
-        result->partial_result < kPartialResultCount) {
-      ALOGV("[%s] %s: Notify partial metadata for frame %u, result count %u",
-            name_.c_str(), __FUNCTION__, result->frame_number,
-            result->partial_result);
-      metadata_results.push_back(MakeResultMetadata(
-          result->frame_number, std::move(result->result_metadata),
-          std::move(result->physical_metadata), result->partial_result));
-    }
-  }
-  if (!metadata_results.empty()) {
-    NotifyCaptureResults(std::move(metadata_results));
-  }
-}
-
-void ResultDispatcher::NotifyFinalResultMetadata() {
+void ResultDispatcher::NotifyResultMetadata() {
   ATRACE_CALL();
   uint32_t frame_number = 0;
-  std::vector<std::unique_ptr<CaptureResult>> results;
-  PendingFinalResultMetadata final_result_metadata;
+  std::vector<std::unique_ptr<CaptureResult>> early_results;
+  std::vector<std::unique_ptr<CaptureResult>> final_results;
+  PendingResultMetadata early_result_metadata;
+  PendingResultMetadata final_result_metadata;
   // TODO: b/347771898 - Assess if notify can hold the lock for less time
   {
     std::lock_guard<std::mutex> lock(result_lock_);
+    while (pending_early_metadata_.GetReadyData(frame_number,
+                                                early_result_metadata) == OK) {
+      ALOGV("[%s] %s: Notify early metadata for frame %u", name_.c_str(),
+            __FUNCTION__, frame_number);
+      early_results.push_back(MakeResultMetadata(
+          frame_number, std::move(early_result_metadata.metadata),
+          std::move(early_result_metadata.physical_metadata),
+          early_result_metadata.partial_result_count));
+    }
+
     while (pending_final_metadata_.GetReadyData(frame_number,
                                                 final_result_metadata) == OK) {
       ALOGV("[%s] %s: Notify final metadata for frame %u", name_.c_str(),
             __FUNCTION__, frame_number);
-      results.push_back(MakeResultMetadata(
+      final_results.push_back(MakeResultMetadata(
           frame_number, std::move(final_result_metadata.metadata),
           std::move(final_result_metadata.physical_metadata),
-          kPartialResultCount));
+          final_result_metadata.partial_result_count));
     }
   }
-  if (!results.empty()) {
-    NotifyCaptureResults(std::move(results));
+  if (!early_results.empty()) {
+    NotifyCaptureResults(std::move(early_results));
+  }
+  if (!final_results.empty()) {
+    NotifyCaptureResults(std::move(final_results));
   }
 }
 
@@ -574,7 +565,8 @@ void ResultDispatcher::NotifyBuffers() {
   std::vector<std::unique_ptr<CaptureResult>> results;
   std::unique_ptr<CaptureResult> result;
 
-  // TODO: b/347771898 - Update to not depend on running faster than data is ready
+  // TODO: b/347771898 - Update to not depend on running faster than data is
+  // ready
   while (GetReadyBufferResult(&result) == OK) {
     if (result == nullptr) {
       ALOGE("[%s] %s: result is nullptr", name_.c_str(), __FUNCTION__);
@@ -683,7 +675,7 @@ void ResultDispatcher::DispatchQueue<FrameData>::PrintTimeoutMessages() {
 template class ResultDispatcher::DispatchQueue<ResultDispatcher::PendingShutter>;
 template class ResultDispatcher::DispatchQueue<ResultDispatcher::PendingBuffer>;
 template class ResultDispatcher::DispatchQueue<
-    ResultDispatcher::PendingFinalResultMetadata>;
+    ResultDispatcher::PendingResultMetadata>;
 
 }  // namespace google_camera_hal
 }  // namespace android

@@ -514,6 +514,10 @@ void ResultDispatcher::NotifyResultMetadata() {
                                                 final_result_metadata) == OK) {
       ALOGV("[%s] %s: Notify final metadata for frame %u", name_.c_str(),
             __FUNCTION__, frame_number);
+      // Removes the pending early metadata if it exists, in case the HAL only
+      // sent the final metadata
+      pending_early_metadata_.RemoveRequest(frame_number);
+
       final_results.push_back(MakeResultMetadata(
           frame_number, std::move(final_result_metadata.metadata),
           std::move(final_result_metadata.physical_metadata),

@@ -59,6 +59,9 @@ const uint32_t kDepthStallDurations =
 const uint32_t kDepthStallDurationsMaxRes =
     ANDROID_DEPTH_AVAILABLE_DEPTH_STALL_DURATIONS_MAXIMUM_RESOLUTION;
 
+const uint32_t kJpegRStreamConfigurations =
+    ANDROID_JPEGR_AVAILABLE_JPEG_R_STREAM_CONFIGURATIONS;
+
 void StreamConfigurationMap::AppendAvailableStreamConfigurations(
     const camera_metadata_ro_entry& entry) {
   for (size_t i = 0; i < entry.count; i += kStreamConfigurationSize) {
@@ -217,6 +220,25 @@ StreamConfigurationMap::StreamConfigurationMap(const HalCameraMetadata& chars,
   if (ret == OK) {
     AppendAvailableDynamicPhysicalStreamConfigurations(entry);
   }
+
+  ret = chars.Get(kJpegRStreamConfigurations, &entry);
+  if (ret == OK) {
+    AppendAvailableJpegRStreamConfigurations(entry);
+  }
 }
 
+void StreamConfigurationMap::AppendAvailableJpegRStreamConfigurations(
+    const camera_metadata_ro_entry& entry) {
+  for (size_t i = 0; i < entry.count; i += kStreamConfigurationSize) {
+    int32_t width = entry.data.i32[i + kStreamWidthOffset];
+    int32_t height = entry.data.i32[i + kStreamHeightOffset];
+    auto format = static_cast<android_pixel_format_t>(
+        entry.data.i32[i + kStreamFormatOffset]);
+    int32_t isInput = entry.data.i32[i + kStreamIsInputOffset];
+    if (!isInput) {
+      jpegr_stream_output_size_map_[format].insert(
+          std::make_pair(width, height));
+    }
+  }
+}
 }  // namespace android

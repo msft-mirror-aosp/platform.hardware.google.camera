@@ -23,6 +23,7 @@
 #include "camera_device_hwl.h"
 #include "camera_device_session.h"
 #include "hal_camera_metadata.h"
+#include "hwl_types.h"
 #include "profiler.h"
 
 namespace android {
@@ -39,8 +40,7 @@ class CameraDevice {
   // lifetime of CameraDevice
   static std::unique_ptr<CameraDevice> Create(
       std::unique_ptr<CameraDeviceHwl> camera_device_hwl,
-      CameraBufferAllocatorHwl* camera_allocator_hwl = nullptr,
-      std::vector<std::string> libs_to_pin = {});
+      CameraBufferAllocatorHwl* camera_allocator_hwl = nullptr);
 
   virtual ~CameraDevice();
 
@@ -106,6 +106,25 @@ class CameraDevice {
     return public_camera_id_;
   };
 
+  // Get the applied memory config for this camera device.
+  HwlMemoryConfig GetAppliedMemoryConfig() {
+    HwlMemoryConfig memory_config = applied_memory_config_;
+    // HwlMemoryConfig memory_config {
+    //     .pinned_libraries = applied_memory_config_.pinned_libraries,
+    //     .madvise_map_size_limit_bytes =
+    //         applied_memory_config_.madvise_map_size_limit_bytes};
+
+    // std::copy(applied_memory_config_.pinned_libraries.begin(),
+    //           applied_memory_config_.pinned_libraries.end(),
+    //           memory_config.pinned_libraries);
+    return memory_config;
+  }
+
+  // Set the applied memory config for this camera device.
+  void SetAppliedMemoryConfig(HwlMemoryConfig memory_config) {
+    applied_memory_config_ = memory_config;
+  }
+
   // Query whether a particular streams configuration is supported.
   // stream_config: It contains the stream info and a set of features, which are
   // described in the form of session settings.
@@ -128,6 +147,9 @@ class CameraDevice {
   status_t Initialize(std::unique_ptr<CameraDeviceHwl> camera_device_hwl,
                       CameraBufferAllocatorHwl* camera_allocator_hwl);
 
+  static HwlMemoryConfig applied_memory_config_;
+  static std::mutex applied_memory_config_mutex_;
+
   uint32_t public_camera_id_ = 0;
 
   std::unique_ptr<CameraDeviceHwl> camera_device_hwl_;
@@ -140,8 +162,6 @@ class CameraDevice {
   std::vector<void*> external_capture_session_lib_handles_;
   // Stream use cases supported by this camera device
   std::map<uint32_t, std::set<int64_t>> camera_id_to_stream_use_cases_;
-
-  bool pinned_memory_enabled_ = false;
 };
 
 }  // namespace google_camera_hal

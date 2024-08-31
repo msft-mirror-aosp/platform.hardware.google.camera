@@ -40,7 +40,6 @@ using namespace android::meminfo;
 
 namespace android {
 namespace {
-
 enum class PreloadMode {
   kMadvise = 0,
   kMlockMadvise = 1,
@@ -58,7 +57,8 @@ void MadviseFileForRange(size_t madvise_size_limit_bytes, size_t map_size_bytes,
   if (target_size_bytes == 0) {
     return;
   }
-  std::string trace_tag = file_name + " size=" + std::to_string(target_size_bytes);
+  std::string trace_tag =
+      file_name + " size=" + std::to_string(target_size_bytes);
   if (preload_mode == PreloadMode::kMadvise) {
     trace_tag = "madvising " + trace_tag;
   } else if (preload_mode == PreloadMode::kMlockMadvise) {
@@ -140,6 +140,9 @@ static void LoadLibraries(google_camera_hal::HwlMemoryConfig memory_config,
     // Read ahead for anonymous VMAs and for specific files.
     // vma.flags represents a VMAs rwx bits.
     if (vma.inode == 0 && !vma.is_shared && vma.flags) {
+      if (memory_config.madvise_map_size_limit_bytes == 0) {
+        return true;
+      }
       // Madvise anonymous memory, do not pin.
       ReadAheadVma(vma, memory_config.madvise_map_size_limit_bytes,
                    PreloadMode::kMadvise);
@@ -202,6 +205,7 @@ std::unique_ptr<CameraDevice> CameraDevice::Create(
 
   android::google_camera_hal::HwlMemoryConfig memory_config =
       device->camera_device_hwl_->GetMemoryConfig();
+  memory_config.madvise_map_size_limit_bytes = 0;
   ALOGI("Pinning memory for %zu shared libraries.",
         memory_config.pinned_libraries.size());
 

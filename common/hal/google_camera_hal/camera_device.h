@@ -109,14 +109,6 @@ class CameraDevice {
   // Get the applied memory config for this camera device.
   HwlMemoryConfig GetAppliedMemoryConfig() {
     HwlMemoryConfig memory_config = applied_memory_config_;
-    // HwlMemoryConfig memory_config {
-    //     .pinned_libraries = applied_memory_config_.pinned_libraries,
-    //     .madvise_map_size_limit_bytes =
-    //         applied_memory_config_.madvise_map_size_limit_bytes};
-
-    // std::copy(applied_memory_config_.pinned_libraries.begin(),
-    //           applied_memory_config_.pinned_libraries.end(),
-    //           memory_config.pinned_libraries);
     return memory_config;
   }
 

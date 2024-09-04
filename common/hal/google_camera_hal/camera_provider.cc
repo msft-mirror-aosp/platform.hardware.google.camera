@@ -277,9 +277,8 @@ status_t CameraProvider::CreateCameraDevice(
     return res;
   }
 
-  *device = CameraDevice::Create(std::move(camera_device_hwl),
-                                 camera_allocator_hwl_.get(),
-                                 camera_provider_hwl_->GetLibrariesToPin());
+  *device = CameraDevice::Create(
+      std::move(camera_device_hwl), camera_allocator_hwl_.get());
   if (*device == nullptr) {
     return NO_INIT;
   }

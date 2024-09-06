@@ -176,14 +176,26 @@ status_t CameraDevice::Initialize(
     return res;
   }
 
-  res = utils::GetStreamUseCases(static_metadata.get(), &stream_use_cases_);
+  res = utils::GetStreamUseCases(
+      static_metadata.get(),
+      &camera_id_to_stream_use_cases_[camera_device_hwl_->GetCameraId()]);
   if (res != OK) {
-    ALOGE("%s: Getting stream use cases failed: %s(%d)", __FUNCTION__,
-          strerror(-res), res);
+    ALOGE(
+        "%s: Initializing logical stream use case for camera id %u failed: "
+        "%s(%d)",
+        __FUNCTION__, camera_device_hwl_->GetCameraId(), strerror(-res), res);
     return res;
   }
+  res = utils::GetPhysicalCameraStreamUseCases(camera_device_hwl_.get(),
+                                               &camera_id_to_stream_use_cases_);
 
-  return OK;
+  if (res != OK) {
+    ALOGE(
+        "%s: Initializing physical stream use case for camera id %u failed: "
+        "%s(%d)",
+        __FUNCTION__, camera_device_hwl_->GetCameraId(), strerror(-res), res);
+  }
+  return res;
 }
 
 status_t CameraDevice::GetResourceCost(CameraResourceCost* cost) {
@@ -254,11 +266,12 @@ status_t generateSessionCharacteristics(
 }
 
 status_t CameraDevice::GetSessionCharacteristics(
-    std::unique_ptr<HalCameraMetadata>* session_characteristics) {
+    const StreamConfiguration& stream_config,
+    std::unique_ptr<HalCameraMetadata>& session_characteristics) {
   ATRACE_CALL();
   std::unique_ptr<HalCameraMetadata> camera_characteristics;
-  status_t res =
-      camera_device_hwl_->GetCameraCharacteristics(&camera_characteristics);
+  status_t res = camera_device_hwl_->GetSessionCharacteristics(
+      stream_config, camera_characteristics);
   if (res != OK) {
     ALOGE("%s: GetCameraCharacteristics() failed: %s (%d).", __FUNCTION__,
           strerror(-res), res);
@@ -266,10 +279,10 @@ status_t CameraDevice::GetSessionCharacteristics(
   }
 
   // Allocating space for 10 entries and 256 bytes.
-  *session_characteristics = HalCameraMetadata::Create(10, 256);
+  session_characteristics = HalCameraMetadata::Create(10, 256);
 
   return generateSessionCharacteristics(camera_characteristics.get(),
-                                        session_characteristics->get());
+                                        session_characteristics.get());
 }
 
 status_t CameraDevice::GetPhysicalCameraCharacteristics(
@@ -354,13 +367,14 @@ status_t CameraDevice::CreateCameraDeviceSession(
 }
 
 bool CameraDevice::IsStreamCombinationSupported(
-    const StreamConfiguration& stream_config, bool /*check_settings*/) {
-  if (!utils::IsStreamUseCaseSupported(stream_config, stream_use_cases_)) {
+    const StreamConfiguration& stream_config, bool check_settings) {
+  if (!utils::IsStreamUseCaseSupported(stream_config, public_camera_id_,
+                                       camera_id_to_stream_use_cases_)) {
     return false;
   }
 
-  bool supported =
-      camera_device_hwl_->IsStreamCombinationSupported(stream_config);
+  bool supported = camera_device_hwl_->IsStreamCombinationSupported(
+      stream_config, check_settings);
   if (!supported) {
     ALOGD("%s: stream config is not supported.", __FUNCTION__);
   }

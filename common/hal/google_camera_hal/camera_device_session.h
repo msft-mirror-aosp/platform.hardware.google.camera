@@ -21,6 +21,7 @@
 #include <set>
 #include <shared_mutex>
 #include <vector>
+#include <map>
 
 #include "camera_buffer_allocator_hwl.h"
 #include "camera_device_session_hwl.h"
@@ -436,7 +437,7 @@ class CameraDeviceSession {
   std::set<uint32_t> ignore_shutters_;
 
   // Stream use cases supported by this camera device
-  std::set<int64_t> stream_use_cases_;
+  std::map<uint32_t, std::set<int64_t>> camera_id_to_stream_use_cases_;
 
   static constexpr int32_t kInvalidStreamId = -1;
 

@@ -167,12 +167,6 @@ status_t RealtimeZslRequestProcessor::Initialize(
           res);
     return res;
   }
-  if (pixel_format_ == android_pixel_format_t::HAL_PIXEL_FORMAT_RAW10) {
-    res = characteristics->Get(VendorTagIds::kHdrUsageMode, &entry);
-    if (res == OK) {
-      hdr_mode_ = static_cast<HdrMode>(entry.data.u8[0]);
-    }
-  }
 
   return OK;
 }
@@ -282,20 +276,6 @@ status_t RealtimeZslRequestProcessor::ProcessRequest(
     return NO_INIT;
   }
 
-  if (is_hdrplus_zsl_enabled_ && request.settings != nullptr) {
-    camera_metadata_ro_entry entry = {};
-    status_t res =
-        request.settings->Get(VendorTagIds::kThermalThrottling, &entry);
-    if (res != OK || entry.count != 1) {
-      ALOGW("%s: Getting thermal throttling entry failed: %s(%d)", __FUNCTION__,
-            strerror(-res), res);
-    } else if (entry.data.u8[0] == true) {
-      // Disable HDR+ ZSL once thermal throttles.
-      is_hdrplus_zsl_enabled_ = false;
-      ALOGI("%s: HDR+ ZSL disabled due to thermal throttling", __FUNCTION__);
-    }
-  }
-
   // Update if preview intent has been requested.
   camera_metadata_ro_entry entry;
   if (!preview_intent_seen_ && request.settings != nullptr &&
@@ -324,8 +304,7 @@ status_t RealtimeZslRequestProcessor::ProcessRequest(
         HalCameraMetadata::Clone(physical_metadata.get());
   }
 
-  if (is_hdrplus_zsl_enabled_ ||
-      pixel_format_ == android_pixel_format_t::HAL_PIXEL_FORMAT_YCBCR_420_888) {
+  if (pixel_format_ == android_pixel_format_t::HAL_PIXEL_FORMAT_YCBCR_420_888) {
     // Get one bffer from internal stream manager
     StreamBuffer buffer = {};
     status_t result;
@@ -341,26 +320,6 @@ status_t RealtimeZslRequestProcessor::ProcessRequest(
     // Add output to capture request
     if (preview_intent_seen_) {
       block_request.output_buffers.push_back(buffer);
-    }
-
-    if (block_request.settings != nullptr && is_hdrplus_zsl_enabled_) {
-      bool enable_hybrid_ae =
-          (hdr_mode_ == HdrMode::kNonHdrplusMode ? false : true);
-      result = hal_utils::ModifyRealtimeRequestForHdrplus(
-          block_request.settings.get(), enable_hybrid_ae);
-      if (result != OK) {
-        ALOGE("%s: ModifyRealtimeRequestForHdrplus (%d) fail", __FUNCTION__,
-              request.frame_number);
-        return UNKNOWN_ERROR;
-      }
-
-      if (hdr_mode_ != HdrMode::kHdrplusMode) {
-        uint8_t processing_mode =
-            static_cast<uint8_t>(ProcessingMode::kIntermediateProcessing);
-        block_request.settings->Set(VendorTagIds::kProcessingMode,
-                                    &processing_mode,
-                                    /*data_count=*/1);
-      }
     }
   }
 

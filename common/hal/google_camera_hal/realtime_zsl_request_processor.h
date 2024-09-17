@@ -63,9 +63,7 @@ class RealtimeZslRequestProcessor : public RequestProcessor {
  protected:
   RealtimeZslRequestProcessor(android_pixel_format_t pixel_format,
                               CameraDeviceSessionHwl* device_session_hwl)
-      : pixel_format_(pixel_format),
-        device_session_hwl_(device_session_hwl),
-        is_hdrplus_zsl_enabled_(pixel_format == HAL_PIXEL_FORMAT_RAW10){};
+      : pixel_format_(pixel_format), device_session_hwl_(device_session_hwl) {};
 
  private:
   status_t Initialize(CameraDeviceSessionHwl* device_session_hwl);
@@ -81,11 +79,6 @@ class RealtimeZslRequestProcessor : public RequestProcessor {
   int32_t stream_id_ = -1;
   uint32_t active_array_width_ = 0;
   uint32_t active_array_height_ = 0;
-
-  HdrMode hdr_mode_ = HdrMode::kHdrplusMode;
-
-  // If HDR+ ZSL is enabled.
-  bool is_hdrplus_zsl_enabled_ = false;
 };
 
 }  // namespace google_camera_hal

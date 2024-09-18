@@ -31,7 +31,7 @@ namespace android {
 namespace google_camera_hal {
 
 // RealtimeZslResultRequestProcessor implements a RealtimeZslResultProcessor
-// that return filled raw buffer and metadata to internal stream manager. It
+// that return filled buffer and metadata to internal stream manager. It
 // also implements a RequestProcess to forward the results.
 class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
                                           RequestProcessor {
@@ -70,7 +70,7 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
  protected:
   RealtimeZslResultRequestProcessor(
       InternalStreamManager* internal_stream_manager, int32_t stream_id,
-      android_pixel_format_t pixel_format, uint32_t partial_result_count);
+      uint32_t partial_result_count);
 
  private:
   std::shared_mutex process_block_shared_lock_;
@@ -84,7 +84,7 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
     uint32_t partial_results_received = 0;
     bool zsl_buffer_received = false;
     int framework_buffer_count = INT_MAX;
-    // Whether there were filled raw buffers that have been returned to internal
+    // Whether there were filled buffers that have been returned to internal
     // stream manager.
     bool has_returned_output_to_internal_stream_manager = false;
   };

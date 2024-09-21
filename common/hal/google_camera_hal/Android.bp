@@ -76,7 +76,6 @@ cc_library_shared {
         "camera_provider.cc",
         "capture_session_utils.cc",
         "capture_session_wrapper_process_block.cc",
-        "hdrplus_capture_session.cc",
         "pending_requests_tracker.cc",
         "realtime_zsl_request_processor.cc",
         "realtime_zsl_result_processor.cc",

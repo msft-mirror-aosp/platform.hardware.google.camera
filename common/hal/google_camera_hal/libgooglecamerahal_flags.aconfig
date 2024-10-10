@@ -7,3 +7,10 @@ flag {
   description: "Enable HWL ZSL video processing and disable GCH processing"
   bug: "341748497"
 }
+
+flag {
+  name: "disable_capture_request_timeout"
+  namespace: "camera_hal"
+  description: "Disable capture request timeout logic in GCH layer"
+  bug: "372255560"
+}

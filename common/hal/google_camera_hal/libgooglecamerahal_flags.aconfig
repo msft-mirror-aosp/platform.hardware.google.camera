@@ -2,7 +2,7 @@ package: "libgooglecamerahal.flags"
 container: "vendor"
 
 flag {
-  name: "zsl_video_denoise_in_hwl"
+  name: "zsl_video_denoise_in_hwl_two"
   namespace: "camera_hal"
   description: "Enable HWL ZSL video processing and disable GCH processing"
   bug: "341748497"

@@ -28,7 +28,6 @@
 #include "capture_session_utils.h"
 #include "hal_types.h"
 #include "hal_utils.h"
-#include "hdrplus_capture_session.h"
 #include "system/camera_metadata.h"
 #include "ui/GraphicBufferMapper.h"
 #include "vendor_tag_defs.h"
@@ -47,9 +46,6 @@ static constexpr int64_t kAllocationThreshold = 33000000;  // 33ms
 
 std::vector<CaptureSessionEntryFuncs>
     CameraDeviceSession::kCaptureSessionEntries = {
-        {.IsStreamConfigurationSupported =
-             HdrplusCaptureSession::IsStreamConfigurationSupported,
-         .CreateSession = HdrplusCaptureSession::Create},
         {.IsStreamConfigurationSupported =
              BasicCaptureSession::IsStreamConfigurationSupported,
          .CreateSession = BasicCaptureSession::Create}};

@@ -247,8 +247,10 @@ ScopedAStatus AidlCameraProvider::getCameraIdList(
         "/" + kProviderName + "/" + std::to_string(camera_ids[i]);
   }
 #ifdef __ANDROID_APEX__
-  available_camera_ids_ =
-      std::unordered_set<uint32_t>(camera_ids.begin(), camera_ids.end());
+  if (!camera_device_initialized_ && available_camera_ids_.empty()) {
+    available_camera_ids_ =
+        std::unordered_set<uint32_t>(camera_ids.begin(), camera_ids.end());
+  }
 #endif
   return ScopedAStatus::ok();
 }
@@ -379,13 +381,10 @@ ScopedAStatus AidlCameraProvider::getCameraDeviceInterface(
   }
 
 #ifdef __ANDROID_APEX__
-  if (available_camera_ids_.erase(camera_id_int) == 0) {
-    ALOGE("%s: Camera ID %d is not available to open.", __FUNCTION__,
-          camera_id_int);
-    return ScopedAStatus::fromServiceSpecificError(
-        static_cast<int32_t>(Status::ILLEGAL_ARGUMENT));
-  }
-  if (available_camera_ids_.empty()) {
+  available_camera_ids_.erase(camera_id_int);
+  if (!camera_device_initialized_ && available_camera_ids_.empty()) {
+    camera_device_initialized_ = true;
+
     std::string ready_property_name = "vendor.camera.hal.ready.count";
     int ready_count = property_get_int32(ready_property_name.c_str(), 0);
     property_set(ready_property_name.c_str(),

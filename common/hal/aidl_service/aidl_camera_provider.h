@@ -95,6 +95,7 @@ class AidlCameraProvider : public BnCameraProvider {
 
 #ifdef __ANDROID_APEX__
   std::unordered_set<uint32_t> available_camera_ids_;
+  bool camera_device_initialized_ = false;
 #endif
 };
 

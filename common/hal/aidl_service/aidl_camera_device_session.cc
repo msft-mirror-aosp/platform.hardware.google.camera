@@ -213,7 +213,7 @@ void AidlCameraDeviceSession::NotifyHalMessage(
 
   std::vector<NotifyMsg> aidl_messages(1);
   status_t res =
-      aidl_utils::ConverToAidlNotifyMessage(hal_message, &aidl_messages[0]);
+      aidl_utils::ConvertToAidlNotifyMessage(hal_message, &aidl_messages[0]);
   if (res != OK) {
     ALOGE("%s: Converting to AIDL message failed: %s(%d)", __FUNCTION__,
           strerror(-res), res);

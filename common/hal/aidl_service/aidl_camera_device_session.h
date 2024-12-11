@@ -165,6 +165,9 @@ class AidlCameraDeviceSession
       bool v2, aidl::android::hardware::camera::device::ConfigureStreamsRet*);
   // Invoked when receiving a message from HAL.
   void NotifyHalMessage(const google_camera_hal::NotifyMessage& hal_message);
+  // Invoked when receiving a batched message from HAL.
+  void NotifyBatchHalMessage(
+      const std::vector<google_camera_hal::NotifyMessage>& hal_messages);
 
   // Invoked when requesting stream buffers from HAL.
   google_camera_hal::BufferRequestStatus RequestStreamBuffers(

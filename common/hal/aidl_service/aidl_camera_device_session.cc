@@ -33,6 +33,7 @@
 #include "aidl_profiler.h"
 #include "aidl_thermal_utils.h"
 #include "aidl_utils.h"
+#include "hal_types.h"
 #include "profiler_util.h"
 #include "tracked_profiler.h"
 
@@ -218,6 +219,33 @@ void AidlCameraDeviceSession::NotifyHalMessage(
     ALOGE("%s: Converting to AIDL message failed: %s(%d)", __FUNCTION__,
           strerror(-res), res);
     return;
+  }
+
+  auto aidl_res = aidl_device_callback_->notify(aidl_messages);
+  if (!aidl_res.isOk()) {
+    ALOGE("%s: notify transaction failed: %s.", __FUNCTION__,
+          aidl_res.getMessage());
+    return;
+  }
+}
+
+void AidlCameraDeviceSession::NotifyBatchHalMessage(
+    const std::vector<google_camera_hal::NotifyMessage>& hal_messages) {
+  std::shared_lock lock(aidl_device_callback_lock_);
+  if (aidl_device_callback_ == nullptr) {
+    ALOGE("%s: aidl_device_callback_ is nullptr", __FUNCTION__);
+    return;
+  }
+
+  std::vector<NotifyMsg> aidl_messages(hal_messages.size());
+  for (size_t i = 0; i < hal_messages.size(); ++i) {
+    status_t res = aidl_utils::ConvertToAidlNotifyMessage(hal_messages[i],
+                                                          &aidl_messages[i]);
+    if (res != OK) {
+      ALOGE("%s: Converting to AIDL message failed: %s(%d)", __FUNCTION__,
+            strerror(-res), res);
+      return;
+    }
   }
 
   auto aidl_res = aidl_device_callback_->notify(aidl_messages);
@@ -444,6 +472,10 @@ void AidlCameraDeviceSession::SetSessionCallbacks() {
       .notify = google_camera_hal::NotifyFunc(
           [this](const google_camera_hal::NotifyMessage& message) {
             NotifyHalMessage(message);
+          }),
+      .notify_batch = google_camera_hal::NotifyBatchFunc(
+          [this](const std::vector<google_camera_hal::NotifyMessage>& messages) {
+            NotifyBatchHalMessage(messages);
           }),
       .request_stream_buffers = google_camera_hal::RequestStreamBuffersFunc(
           [this](

@@ -14,3 +14,10 @@ flag {
   description: "Disable capture request timeout logic in GCH layer"
   bug: "372255560"
 }
+
+flag {
+  name: "batched_request_buffers"
+  namespace: "camera_hal"
+  description: "Request video buffers of batch size on HFR mode"
+  bug: "379919891"
+}

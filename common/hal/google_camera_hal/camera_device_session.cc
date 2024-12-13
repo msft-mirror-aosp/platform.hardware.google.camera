@@ -24,12 +24,17 @@
 #include <system/graphics-base-v1.0.h>
 #include <utils/Trace.h>
 
+#include <optional>
+
 #include "basic_capture_session.h"
 #include "capture_session_utils.h"
 #include "hal_types.h"
 #include "hal_utils.h"
+#include "libgooglecamerahal_flags.h"
+#include "stream_buffer_cache_manager.h"
 #include "system/camera_metadata.h"
 #include "ui/GraphicBufferMapper.h"
+#include "utils.h"
 #include "vendor_tag_defs.h"
 #include "vendor_tag_types.h"
 #include "vendor_tags.h"
@@ -1682,6 +1687,21 @@ status_t CameraDeviceSession::RegisterStreamsIntoCacheManagerLocked(
     const std::vector<HalStream>& hal_streams) {
   ATRACE_CALL();
 
+  std::optional<uint32_t> hfr_batch_size;
+  camera_metadata_ro_entry entry;
+  if (stream_config.operation_mode ==
+          StreamConfigurationMode::kConstrainedHighSpeed &&
+      stream_config.session_params != nullptr &&
+      stream_config.session_params->Get(ANDROID_CONTROL_AE_TARGET_FPS_RANGE,
+                                        &entry) == OK) {
+    uint32_t max_fps = entry.data.i32[1];
+    if (max_fps % 30 != 0) {
+      ALOGE("%s: max_fps(%u) must be multiple of 30", __FUNCTION__, max_fps);
+      return BAD_VALUE;
+    }
+    hfr_batch_size = max_fps / 30;
+  }
+
   for (auto& stream : stream_config.streams) {
     uint64_t producer_usage = 0;
     uint64_t consumer_usage = 0;
@@ -1749,15 +1769,22 @@ status_t CameraDeviceSession::RegisterStreamsIntoCacheManagerLocked(
           return OK;
         });
 
-    StreamBufferCacheRegInfo reg_info = {.request_func = session_request_func,
-                                         .return_func = session_return_func,
-                                         .stream_id = stream_id,
-                                         .width = stream.width,
-                                         .height = stream.height,
-                                         .format = stream_format,
-                                         .producer_flags = producer_usage,
-                                         .consumer_flags = consumer_usage,
-                                         .num_buffers_to_cache = 1};
+    const uint32_t num_buffers_to_cache =
+        libgooglecamerahal::flags::batched_request_buffers() &&
+                hfr_batch_size.has_value() && utils::IsVideoStream(stream)
+            ? *hfr_batch_size
+            : 1;
+
+    StreamBufferCacheRegInfo reg_info = {
+        .request_func = session_request_func,
+        .return_func = session_return_func,
+        .stream_id = stream_id,
+        .width = stream.width,
+        .height = stream.height,
+        .format = stream_format,
+        .producer_flags = producer_usage,
+        .consumer_flags = consumer_usage,
+        .num_buffers_to_cache = num_buffers_to_cache};
 
     status_t res = stream_buffer_cache_manager_->RegisterStream(reg_info);
     if (res != OK) {

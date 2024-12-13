@@ -25,7 +25,6 @@
 #include <fmq/AidlMessageQueue.h>
 #include <utils/StrongPointer.h>
 
-#include <shared_mutex>
 #include <vector>
 
 #include "aidl_profiler.h"
@@ -205,10 +204,8 @@ class AidlCameraDeviceSession
   // Metadata queue to write the result metadata to.
   std::unique_ptr<MetadataQueue> result_metadata_queue_;
 
-  // Assuming callbacks to framework is thread-safe, the shared mutex is only
-  // used to protect member variable writing and reading.
-  std::shared_mutex aidl_device_callback_lock_;
-  // Protected by aidl_device_callback_lock_
+  // Don't need to protect the callbacks to framework with a mutex, as they are
+  // thread-safe.
   std::shared_ptr<aidl::android::hardware::camera::device::ICameraDeviceCallback>
       aidl_device_callback_;
 

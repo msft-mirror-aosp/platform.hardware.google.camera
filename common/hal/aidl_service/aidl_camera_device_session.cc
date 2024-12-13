@@ -99,7 +99,6 @@ AidlCameraDeviceSession::~AidlCameraDeviceSession() {
 
 void AidlCameraDeviceSession::ProcessCaptureResult(
     std::unique_ptr<google_camera_hal::CaptureResult> hal_result) {
-  std::shared_lock lock(aidl_device_callback_lock_);
   if (aidl_device_callback_ == nullptr) {
     ALOGE("%s: aidl_device_callback_ is nullptr", __FUNCTION__);
     return;
@@ -162,7 +161,6 @@ void AidlCameraDeviceSession::ProcessCaptureResult(
 
 void AidlCameraDeviceSession::ProcessBatchCaptureResult(
     std::vector<std::unique_ptr<google_camera_hal::CaptureResult>> hal_results) {
-  std::shared_lock lock(aidl_device_callback_lock_);
   if (aidl_device_callback_ == nullptr) {
     ALOGE("%s: aidl_device_callback_ is nullptr", __FUNCTION__);
     return;
@@ -206,7 +204,6 @@ void AidlCameraDeviceSession::ProcessBatchCaptureResult(
 
 void AidlCameraDeviceSession::NotifyHalMessage(
     const google_camera_hal::NotifyMessage& hal_message) {
-  std::shared_lock lock(aidl_device_callback_lock_);
   if (aidl_device_callback_ == nullptr) {
     ALOGE("%s: aidl_device_callback_ is nullptr", __FUNCTION__);
     return;
@@ -231,7 +228,6 @@ void AidlCameraDeviceSession::NotifyHalMessage(
 
 void AidlCameraDeviceSession::NotifyBatchHalMessage(
     const std::vector<google_camera_hal::NotifyMessage>& hal_messages) {
-  std::shared_lock lock(aidl_device_callback_lock_);
   if (aidl_device_callback_ == nullptr) {
     ALOGE("%s: aidl_device_callback_ is nullptr", __FUNCTION__);
     return;
@@ -266,7 +262,6 @@ google_camera_hal::BufferRequestStatus
 AidlCameraDeviceSession::RequestStreamBuffers(
     const std::vector<google_camera_hal::BufferRequest>& hal_buffer_requests,
     std::vector<google_camera_hal::BufferReturn>* hal_buffer_returns) {
-  std::shared_lock lock(aidl_device_callback_lock_);
   if (aidl_device_callback_ == nullptr) {
     ALOGE("%s: aidl_device_callback_ is nullptr", __FUNCTION__);
     return google_camera_hal::BufferRequestStatus::kFailedUnknown;
@@ -370,7 +365,6 @@ AidlCameraDeviceSession::RequestStreamBuffers(
 
 void AidlCameraDeviceSession::ReturnStreamBuffers(
     const std::vector<google_camera_hal::StreamBuffer>& return_hal_buffers) {
-  std::shared_lock lock(aidl_device_callback_lock_);
   if (aidl_device_callback_ == nullptr) {
     ALOGE("%s: aidl_device_callback_ is nullptr", __FUNCTION__);
     return;

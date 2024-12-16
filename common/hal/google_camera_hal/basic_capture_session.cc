@@ -222,10 +222,9 @@ status_t BasicCaptureSession::Initialize(
   std::string result_dispatcher_name =
       "Cam" + std::to_string(device_session_hwl_->GetCameraId()) +
       "_ResultDispatcher";
-  result_dispatcher_ =
-      ResultDispatcher::Create(partial_result_count, process_capture_result,
-                               process_batch_capture_result, notify,
-                               stream_config, result_dispatcher_name);
+  result_dispatcher_ = ResultDispatcher::Create(
+      partial_result_count, process_capture_result, process_batch_capture_result,
+      notify, /*notify_batch=*/nullptr, stream_config, result_dispatcher_name);
   if (result_dispatcher_ == nullptr) {
     ALOGE("Creating ResultDispatcher failed");
     return UNKNOWN_ERROR;
@@ -315,9 +314,7 @@ void BasicCaptureSession::ProcessCaptureResult(
 
 void BasicCaptureSession::Notify(const NotifyMessage& message) {
   if (message.type == MessageType::kShutter) {
-    result_dispatcher_->AddShutter(message.message.shutter.frame_number,
-                                   message.message.shutter.timestamp_ns,
-                                   message.message.shutter.readout_timestamp_ns);
+    result_dispatcher_->AddShutter(message.message.shutter);
   } else {
     result_dispatcher_->AddError(message.message.error);
   }

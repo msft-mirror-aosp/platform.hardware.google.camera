@@ -923,10 +923,7 @@ void ZslSnapshotCaptureSession::NotifyHalMessage(const NotifyMessage& message) {
   }
 
   if (message.type == MessageType::kShutter) {
-    status_t res = result_dispatcher_->AddShutter(
-        message.message.shutter.frame_number,
-        message.message.shutter.timestamp_ns,
-        message.message.shutter.readout_timestamp_ns);
+    status_t res = result_dispatcher_->AddShutter(message.message.shutter);
     if (res != OK) {
       ALOGE("%s: AddShutter for frame %u failed: %s (%d).", __FUNCTION__,
             message.message.shutter.frame_number, strerror(-res), res);

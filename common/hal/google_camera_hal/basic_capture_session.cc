@@ -48,7 +48,8 @@ std::unique_ptr<CaptureSession> BasicCaptureSession::Create(
     const StreamConfiguration& stream_config,
     ProcessCaptureResultFunc process_capture_result,
     ProcessBatchCaptureResultFunc process_batch_capture_result,
-    NotifyFunc notify, HwlSessionCallback /*session_callback*/,
+    NotifyFunc notify, NotifyBatchFunc notify_batch,
+    HwlSessionCallback /*session_callback*/,
     std::vector<HalStream>* hal_configured_streams,
     CameraBufferAllocatorHwl* /*camera_allocator_hwl*/) {
   ATRACE_CALL();
@@ -59,8 +60,9 @@ std::unique_ptr<CaptureSession> BasicCaptureSession::Create(
   }
 
   status_t res = session->Initialize(
-      device_session_hwl, stream_config, process_capture_result,
-      process_batch_capture_result, notify, hal_configured_streams);
+      device_session_hwl, stream_config, std::move(process_capture_result),
+      std::move(process_batch_capture_result), std::move(notify),
+      std::move(notify_batch), hal_configured_streams);
   if (res != OK) {
     ALOGE("%s: Initializing BasicCaptureSession failed: %s (%d).", __FUNCTION__,
           strerror(-res), res);
@@ -190,7 +192,8 @@ status_t BasicCaptureSession::Initialize(
     const StreamConfiguration& stream_config,
     ProcessCaptureResultFunc process_capture_result,
     ProcessBatchCaptureResultFunc process_batch_capture_result,
-    NotifyFunc notify, std::vector<HalStream>* hal_configured_streams) {
+    NotifyFunc notify, NotifyBatchFunc notify_batch,
+    std::vector<HalStream>* hal_configured_streams) {
   ATRACE_CALL();
   if (!IsStreamConfigurationSupported(device_session_hwl, stream_config)) {
     ALOGE("%s: stream configuration is not supported.", __FUNCTION__);
@@ -222,9 +225,12 @@ status_t BasicCaptureSession::Initialize(
   std::string result_dispatcher_name =
       "Cam" + std::to_string(device_session_hwl_->GetCameraId()) +
       "_ResultDispatcher";
+  // TODO: b/305978343 - Enable notify_batch with the flag.
+  notify_batch = nullptr;
   result_dispatcher_ = ResultDispatcher::Create(
-      partial_result_count, process_capture_result, process_batch_capture_result,
-      notify, /*notify_batch=*/nullptr, stream_config, result_dispatcher_name);
+      partial_result_count, std::move(process_capture_result),
+      std::move(process_batch_capture_result), std::move(notify),
+      std::move(notify_batch), stream_config, result_dispatcher_name);
   if (result_dispatcher_ == nullptr) {
     ALOGE("Creating ResultDispatcher failed");
     return UNKNOWN_ERROR;
@@ -245,8 +251,12 @@ status_t BasicCaptureSession::Initialize(
       [this](std::vector<std::unique_ptr<CaptureResult>> results) {
         ProcessBatchCaptureResult(std::move(results));
       };
+  auto notify_batch_cb = [this](const std::vector<NotifyMessage>& messages) {
+    NotifyBatch(messages);
+  };
   result_processor->SetResultCallback(process_capture_result_cb, notify_cb,
-                                      process_batch_capture_result_cb);
+                                      process_batch_capture_result_cb,
+                                      notify_batch_cb);
 
   // Create process block.
   auto process_block = RealtimeProcessBlock::Create(device_session_hwl_);
@@ -323,6 +333,19 @@ void BasicCaptureSession::Notify(const NotifyMessage& message) {
 void BasicCaptureSession::ProcessBatchCaptureResult(
     std::vector<std::unique_ptr<CaptureResult>> results) {
   result_dispatcher_->AddBatchResult(std::move(results));
+}
+
+void BasicCaptureSession::NotifyBatch(const std::vector<NotifyMessage>& messages) {
+  std::vector<ShutterMessage> shutter_messages;
+  shutter_messages.reserve(messages.size());
+  for (const NotifyMessage& message : messages) {
+    if (message.type == MessageType::kShutter) {
+      shutter_messages.push_back(message.message.shutter);
+    } else {
+      result_dispatcher_->AddError(message.message.error);
+    }
+  }
+  result_dispatcher_->AddBatchShutter(shutter_messages);
 }
 
 }  // namespace google_camera_hal

@@ -245,54 +245,25 @@ void CameraDeviceSession::ProcessBatchCaptureResult(
 }
 
 void CameraDeviceSession::Notify(const NotifyMessage& result) {
-  {
-    uint32_t frame_number = 0;
-    if (result.type == MessageType::kError) {
-      frame_number = result.message.error.frame_number;
-    } else if (result.type == MessageType::kShutter) {
-      frame_number = result.message.shutter.frame_number;
-    }
-    std::lock_guard<std::mutex> lock(request_record_lock_);
-    // Strip out results for frame number that has been notified
-    // ErrorCode::kErrorResult and ErrorCode::kErrorBuffer
-    if ((error_notified_requests_.find(frame_number) !=
-         error_notified_requests_.end()) &&
-        (result.type != MessageType::kShutter)) {
-      return;
-    }
+  if (ShouldSendNotifyMessage(result)) {
+    std::shared_lock lock(session_callback_lock_);
+    session_callback_.notify(result);
+  }
+}
 
-    if (result.type == MessageType::kError &&
-        result.message.error.error_code == ErrorCode::kErrorResult) {
-      pending_results_.erase(frame_number);
+void CameraDeviceSession::NotifyBatch(const std::vector<NotifyMessage>& results) {
+  std::vector<NotifyMessage> callback_results;
+  callback_results.reserve(results.size());
 
-      if (ignore_shutters_.find(frame_number) == ignore_shutters_.end()) {
-        ignore_shutters_.insert(frame_number);
-      }
-    }
-
-    if (result.type == MessageType::kShutter) {
-      if (ignore_shutters_.find(frame_number) != ignore_shutters_.end()) {
-        ignore_shutters_.erase(frame_number);
-        return;
-      }
+  for (const NotifyMessage& result : results) {
+    if (ShouldSendNotifyMessage(result)) {
+      callback_results.push_back(result);
     }
   }
-
-  if (ATRACE_ENABLED() && result.type == MessageType::kShutter) {
-    int64_t timestamp_ns_diff = 0;
-    int64_t current_timestamp_ns = result.message.shutter.timestamp_ns;
-    if (last_timestamp_ns_for_trace_ != 0) {
-      timestamp_ns_diff = current_timestamp_ns - last_timestamp_ns_for_trace_;
-    }
-
-    last_timestamp_ns_for_trace_ = current_timestamp_ns;
-
-    ATRACE_INT64("sensor_timestamp_diff", timestamp_ns_diff);
-    ATRACE_INT("timestamp_frame_number", result.message.shutter.frame_number);
+  if (!callback_results.empty()) {
+    std::shared_lock lock(session_callback_lock_);
+    session_callback_.notify_batch(callback_results);
   }
-
-  std::shared_lock lock(session_callback_lock_);
-  session_callback_.notify(result);
 }
 
 void CameraDeviceSession::InitializeCallbacks() {
@@ -333,7 +304,12 @@ void CameraDeviceSession::InitializeCallbacks() {
           });
 
   camera_device_session_callback_.notify =
-      NotifyFunc([this](const NotifyMessage& result) { Notify(result); });
+      NotifyFunc([this](const NotifyMessage& message) { Notify(message); });
+
+  camera_device_session_callback_.notify_batch =
+      NotifyBatchFunc([this](const std::vector<NotifyMessage>& messages) {
+        NotifyBatch(messages);
+      });
 
   hwl_session_callback_.request_stream_buffers = HwlRequestBuffersFunc(
       [this](int32_t stream_id, uint32_t num_buffers,
@@ -2028,6 +2004,56 @@ void CameraDeviceSession::TrackReturnedBuffers(
       ALOGE("%s: Tracking requested quota buffers failed", __FUNCTION__);
     }
   }
+}
+
+bool CameraDeviceSession::ShouldSendNotifyMessage(const NotifyMessage& result) {
+  {
+    uint32_t frame_number = 0;
+    if (result.type == MessageType::kError) {
+      frame_number = result.message.error.frame_number;
+    } else if (result.type == MessageType::kShutter) {
+      frame_number = result.message.shutter.frame_number;
+    }
+    std::lock_guard<std::mutex> lock(request_record_lock_);
+    // Strip out results for frame number that has been notified
+    // ErrorCode::kErrorResult and ErrorCode::kErrorBuffer
+    if ((error_notified_requests_.find(frame_number) !=
+         error_notified_requests_.end()) &&
+        (result.type != MessageType::kShutter)) {
+      return false;
+    }
+
+    if (result.type == MessageType::kError &&
+        result.message.error.error_code == ErrorCode::kErrorResult) {
+      pending_results_.erase(frame_number);
+
+      if (ignore_shutters_.find(frame_number) == ignore_shutters_.end()) {
+        ignore_shutters_.insert(frame_number);
+      }
+    }
+
+    if (result.type == MessageType::kShutter) {
+      if (ignore_shutters_.find(frame_number) != ignore_shutters_.end()) {
+        ignore_shutters_.erase(frame_number);
+        return false;
+      }
+    }
+  }
+
+  if (ATRACE_ENABLED() && result.type == MessageType::kShutter) {
+    int64_t timestamp_ns_diff = 0;
+    int64_t current_timestamp_ns = result.message.shutter.timestamp_ns;
+    if (last_timestamp_ns_for_trace_ != 0) {
+      timestamp_ns_diff = current_timestamp_ns - last_timestamp_ns_for_trace_;
+    }
+
+    last_timestamp_ns_for_trace_ = current_timestamp_ns;
+
+    ATRACE_INT64("sensor_timestamp_diff", timestamp_ns_diff);
+    ATRACE_INT("timestamp_frame_number", result.message.shutter.frame_number);
+  }
+
+  return true;
 }
 
 }  // namespace google_camera_hal

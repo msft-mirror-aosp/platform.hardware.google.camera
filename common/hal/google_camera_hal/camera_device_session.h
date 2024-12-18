@@ -46,8 +46,11 @@ struct CameraDeviceSessionCallback {
   // Callback to notify when a camera device produces a batched capture result.
   ProcessBatchCaptureResultFunc process_batch_capture_result;
 
-  // Callback to notify shutters or errors.
+  // Callback to notify a shutter or error.
   NotifyFunc notify;
+
+  // Callback to notify a batched shutter or error.
+  NotifyBatchFunc notify_batch;
 
   // Callback to request stream buffers.
   RequestStreamBuffersFunc request_stream_buffers;
@@ -236,6 +239,9 @@ class CameraDeviceSession {
   // Process the notification returned from the HWL
   void Notify(const NotifyMessage& result);
 
+  // Process the batched notification returned from the HWL
+  void NotifyBatch(const std::vector<NotifyMessage>& results);
+
   // Process the capture result returned from the HWL
   void ProcessCaptureResult(std::unique_ptr<CaptureResult> result);
 
@@ -255,10 +261,11 @@ class CameraDeviceSession {
   void NotifyBufferError(uint32_t frame_number, int32_t stream_id,
                          uint64_t buffer_id);
 
-  // Try to check if result contains dummy buffer or dummy buffer from this
-  // result has been observed. If so, handle this result specifically. Set
-  // result_handled as true.
-  status_t TryHandleDummyResult(CaptureResult* result, bool* result_handled);
+  // Try to check if result contains placeholder buffer or placeholder buffer
+  // from this result has been observed. If so, handle this result specifically.
+  // Set result_handled as true.
+  status_t TryHandlePlaceholderResult(CaptureResult* result,
+                                      bool* result_handled);
 
   // Check if all streams in the current session are active in SBC manager
   status_t HandleSBCInactiveStreams(const CaptureRequest& request,
@@ -299,6 +306,10 @@ class CameraDeviceSession {
 
   // Tracks the returned buffers in capture results.
   void TrackReturnedBuffers(const std::vector<StreamBuffer>& buffers);
+
+  // Checks if `message` should be sent to the framework. It also updates the
+  // last shutter timestamp if systrace is enabled.
+  bool ShouldSendNotifyMessage(const NotifyMessage& message);
 
   uint32_t camera_id_ = 0;
   std::unique_ptr<CameraDeviceSessionHwl> device_session_hwl_;
@@ -415,8 +426,8 @@ class CameraDeviceSession {
   // Protected by request_record_lock_;
   std::set<uint32_t> error_notified_requests_;
 
-  // Set of dummy buffer observed
-  std::set<buffer_handle_t> dummy_buffer_observed_;
+  // Set of placeholder buffer observed
+  std::set<buffer_handle_t> placeholder_buffer_observed_;
 
   // The last shutter timestamp in nanoseconds if systrace is enabled. Reset
   // after stream configuration.

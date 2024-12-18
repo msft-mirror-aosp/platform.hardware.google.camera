@@ -21,15 +21,13 @@
 
 #include <inttypes.h>
 #include <log/log.h>
+#include <system/graphics-base-v1.0.h>
 #include <utils/Trace.h>
 
 #include "basic_capture_session.h"
 #include "capture_session_utils.h"
-#include "dual_ir_capture_session.h"
 #include "hal_types.h"
 #include "hal_utils.h"
-#include "hdrplus_capture_session.h"
-#include "rgbird_capture_session.h"
 #include "system/camera_metadata.h"
 #include "ui/GraphicBufferMapper.h"
 #include "vendor_tag_defs.h"
@@ -48,16 +46,6 @@ static constexpr int64_t kAllocationThreshold = 33000000;  // 33ms
 
 std::vector<CaptureSessionEntryFuncs>
     CameraDeviceSession::kCaptureSessionEntries = {
-        {.IsStreamConfigurationSupported =
-             HdrplusCaptureSession::IsStreamConfigurationSupported,
-         .CreateSession = HdrplusCaptureSession::Create},
-        {.IsStreamConfigurationSupported =
-             RgbirdCaptureSession::IsStreamConfigurationSupported,
-         .CreateSession = RgbirdCaptureSession::Create},
-        {.IsStreamConfigurationSupported =
-             DualIrCaptureSession::IsStreamConfigurationSupported,
-         .CreateSession = DualIrCaptureSession::Create},
-        // BasicCaptureSession is supposed to be the last resort.
         {.IsStreamConfigurationSupported =
              BasicCaptureSession::IsStreamConfigurationSupported,
          .CreateSession = BasicCaptureSession::Create}};
@@ -410,13 +398,24 @@ status_t CameraDeviceSession::Initialize(
     return res;
   }
 
-  res = utils::GetStreamUseCases(characteristics.get(), &stream_use_cases_);
+  res = utils::GetStreamUseCases(
+      characteristics.get(),
+      &camera_id_to_stream_use_cases_[device_session_hwl_->GetCameraId()]);
   if (res != OK) {
-    ALOGE("%s: Initializing stream use case failed: %s(%d)", __FUNCTION__,
-          strerror(-res), res);
+    ALOGE("%s: Initializing stream use case failed: %s(%d) for camera id %u",
+          __FUNCTION__, strerror(-res), res, device_session_hwl_->GetCameraId());
     return res;
   }
 
+  res = utils::GetPhysicalCameraStreamUseCases(device_session_hwl_.get(),
+                                               &camera_id_to_stream_use_cases_);
+  if (res != OK) {
+    ALOGE(
+        "%s: Initializing physical stream use cases failed: %s(%d) for camera "
+        "id %u",
+        __FUNCTION__, strerror(-res), res, device_session_hwl_->GetCameraId());
+    return res;
+  }
   res = InitializeBufferManagement(characteristics.get());
   if (res != OK) {
     ALOGE("%s: Initialize buffer management failed: %s(%d)", __FUNCTION__,
@@ -703,7 +702,8 @@ status_t CameraDeviceSession::ConfigureStreams(
   // IsStreamCombinationSupported doesn't match the
   // CameraDevice::IsStreamCombination. We should look at unifying the two for a
   // potentially cleaner code-base.
-  if (!utils::IsStreamUseCaseSupported(stream_config, stream_use_cases_)) {
+  if (!utils::IsStreamUseCaseSupported(stream_config, camera_id_,
+                                       camera_id_to_stream_use_cases_)) {
     return BAD_VALUE;
   }
   device_session_hwl_->setConfigureStreamsV2(v2);
@@ -1546,9 +1546,19 @@ status_t CameraDeviceSession::Flush() {
 
   is_flushing_ = true;
   status_t res = capture_session_->Flush();
+  stream_buffer_cache_manager_->NotifyFlushingAll();
   is_flushing_ = false;
 
   return res;
+}
+
+void CameraDeviceSession::RepeatingRequestEnd(
+    int32_t frame_number, const std::vector<int32_t>& stream_ids) {
+  ATRACE_CALL();
+  std::shared_lock lock(capture_session_lock_);
+  if (capture_session_ != nullptr) {
+    capture_session_->RepeatingRequestEnd(frame_number, stream_ids);
+  }
 }
 
 void CameraDeviceSession::AppendOutputIntentToSettingsLocked(
@@ -1674,11 +1684,15 @@ status_t CameraDeviceSession::RegisterStreamsIntoCacheManagerLocked(
     uint64_t producer_usage = 0;
     uint64_t consumer_usage = 0;
     int32_t stream_id = -1;
+    android_pixel_format_t stream_format = stream.format;
     for (auto& hal_stream : hal_streams) {
       if (hal_stream.id == stream.id) {
         producer_usage = hal_stream.producer_usage;
         consumer_usage = hal_stream.consumer_usage;
         stream_id = hal_stream.id;
+        if (stream_format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
+          stream_format = hal_stream.override_format;
+        }
       }
     }
     if (stream_id == -1) {
@@ -1738,7 +1752,7 @@ status_t CameraDeviceSession::RegisterStreamsIntoCacheManagerLocked(
                                          .stream_id = stream_id,
                                          .width = stream.width,
                                          .height = stream.height,
-                                         .format = stream.format,
+                                         .format = stream_format,
                                          .producer_flags = producer_usage,
                                          .consumer_flags = consumer_usage,
                                          .num_buffers_to_cache = 1};

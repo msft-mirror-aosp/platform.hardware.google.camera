@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+// #define LOG_NDEBUG 0
 #define LOG_TAG "GCH_ZslResultDispatcher"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
+#include "zsl_result_dispatcher.h"
+
+#include <inttypes.h>
 #include <log/log.h>
 #include <utils/Trace.h>
 
-#include <inttypes.h>
-
 #include "utils.h"
-#include "zsl_result_dispatcher.h"
 
 namespace android {
 namespace google_camera_hal {
@@ -67,7 +67,8 @@ status_t ZslResultDispatcher::Initialize(
 
   normal_result_dispatcher_ = std::unique_ptr<ResultDispatcher>(
       new ResultDispatcher(partial_result_count, process_capture_result_,
-                           notify_, stream_config, "ZslNormalDispatcher"));
+                           /*process_batch_capture_result=*/nullptr, notify_,
+                           stream_config, "ZslNormalDispatcher"));
   if (normal_result_dispatcher_ == nullptr) {
     ALOGE("%s: Creating normal_result_dispatcher_ failed.", __FUNCTION__);
     return BAD_VALUE;
@@ -75,7 +76,8 @@ status_t ZslResultDispatcher::Initialize(
 
   zsl_result_dispatcher_ = std::unique_ptr<ResultDispatcher>(
       new ResultDispatcher(partial_result_count, process_capture_result_,
-                           notify_, stream_config, "ZslZslDispatcher"));
+                           /*process_batch_capture_result=*/nullptr, notify_,
+                           stream_config, "ZslZslDispatcher"));
   if (zsl_result_dispatcher_ == nullptr) {
     ALOGE("%s: Creating zsl_result_dispatcher_ failed.", __FUNCTION__);
     return BAD_VALUE;

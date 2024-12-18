@@ -17,6 +17,7 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_CAMERA_DEVICE__SESSION_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_CAMERA_DEVICE__SESSION_H_
 
+#include <map>
 #include <memory>
 #include <set>
 #include <shared_mutex>
@@ -116,6 +117,9 @@ class CameraDeviceSession {
 
   // Flush all pending requests.
   status_t Flush();
+
+  void RepeatingRequestEnd(int32_t frame_number,
+                           const std::vector<int32_t>& stream_ids);
 
   // Check reconfiguration is required or not
   // old_session is old session parameter
@@ -436,7 +440,7 @@ class CameraDeviceSession {
   std::set<uint32_t> ignore_shutters_;
 
   // Stream use cases supported by this camera device
-  std::set<int64_t> stream_use_cases_;
+  std::map<uint32_t, std::set<int64_t>> camera_id_to_stream_use_cases_;
 
   static constexpr int32_t kInvalidStreamId = -1;
 

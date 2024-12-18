@@ -18,11 +18,13 @@
 //#define LOG_NDEBUG 0
 #include "aidl_camera_device.h"
 
+#include <android/binder_ibinder_platform.h>
 #include <log/log.h>
 
 #include "aidl_camera_device_session.h"
 #include "aidl_profiler.h"
 #include "aidl_utils.h"
+#include "profiler_util.h"
 
 namespace android {
 namespace hardware {
@@ -64,7 +66,7 @@ status_t AidlCameraDevice::Initialize(
 
   camera_id_ = google_camera_device->GetPublicCameraId();
   google_camera_device_ = std::move(google_camera_device);
-  aidl_profiler_ = AidlProfiler::Create(camera_id_);
+  aidl_profiler_ = google_camera_hal::AidlProfiler::Create(camera_id_);
   if (aidl_profiler_ == nullptr) {
     ALOGE("%s: Failed to create AidlProfiler.", __FUNCTION__);
     return UNKNOWN_ERROR;
@@ -182,10 +184,9 @@ ScopedAStatus AidlCameraDevice::constructDefaultRequestSettings(
   res = google_camera_device_->ConstructDefaultRequestSettings(hal_type,
                                                                &settings);
   if (res != OK) {
-    ALOGE("%s: Getting camera characteristics for camera %u failed: %s(%d)",
+    ALOGE("%s: ConstructDefaultRequestSettings for camera %u failed: %s(%d)",
           __FUNCTION__, camera_id_, strerror(-res), res);
-    return ScopedAStatus::fromServiceSpecificError(
-        static_cast<int32_t>(Status::INTERNAL_ERROR));
+    return aidl_utils::ConvertToAidlReturn(res);
   }
   if (settings == nullptr) {
     ALOGE("%s: Default request settings for camera %u is nullptr.",
@@ -225,8 +226,8 @@ ScopedAStatus AidlCameraDevice::getSessionCharacteristics(
   }
   characteristics_ret->metadata.clear();
   std::unique_ptr<HalCameraMetadata> session_characteristics;
-  res =
-      google_camera_device_->GetSessionCharacteristics(&session_characteristics);
+  res = google_camera_device_->GetSessionCharacteristics(
+      stream_config, session_characteristics);
   if (res != OK) {
     ALOGE("%s: Getting session characteristics for camera %u failed: %s(%d)",
           __FUNCTION__, camera_id_, strerror(-res), res);
@@ -289,7 +290,7 @@ ScopedAStatus AidlCameraDevice::open(
   }
   *session_ret = nullptr;
   auto profiler = aidl_profiler_->MakeScopedProfiler(
-      AidlProfiler::ScopedType::kOpen,
+      google_camera_hal::EventType::kOpen,
       google_camera_device_->GetProfiler(camera_id_,
                                          aidl_profiler_->GetLatencyFlag()),
       google_camera_device_->GetProfiler(camera_id_,
@@ -356,6 +357,11 @@ ScopedAStatus AidlCameraDevice::isStreamCombinationSupportedInternal(
   return ScopedAStatus::ok();
 }
 
+::ndk::SpAIBinder AidlCameraDevice::createBinder() {
+  auto binder = BnCameraDevice::createBinder();
+  AIBinder_setInheritRt(binder.get(), true);
+  return binder;
+}
 }  // namespace implementation
 }  // namespace device
 }  // namespace camera

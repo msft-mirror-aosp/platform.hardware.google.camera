@@ -133,6 +133,30 @@ status_t EmulatedCameraDeviceHwlImpl::GetCameraCharacteristics(
   return OK;
 }
 
+// For EmulatedCameraDevice, we return the static characteristics directly.
+// In GCH, it will retrieve the entries corresponding to Available Keys listed
+// in CameraCharacteristics#getAvailableSessionCharacteristicsKeys and generate
+// the session characteristics to be returned.
+status_t EmulatedCameraDeviceHwlImpl::GetSessionCharacteristics(
+    const StreamConfiguration& /*session_config*/,
+    std::unique_ptr<HalCameraMetadata>& characteristics) const {
+  characteristics = HalCameraMetadata::Clone(static_metadata_.get());
+  return OK;
+}
+
+std::vector<uint32_t> EmulatedCameraDeviceHwlImpl::GetPhysicalCameraIds() const {
+  std::vector<uint32_t> ret;
+  if (physical_device_map_.get() == nullptr ||
+      physical_device_map_->size() == 0) {
+    return ret;
+  }
+  ret.reserve(physical_device_map_->size());
+  for (const auto& entry : *physical_device_map_) {
+    ret.emplace_back(entry.first);
+  }
+  return ret;
+}
+
 status_t EmulatedCameraDeviceHwlImpl::GetPhysicalCameraCharacteristics(
     uint32_t physical_camera_id,
     std::unique_ptr<HalCameraMetadata>* characteristics) const {
@@ -156,6 +180,10 @@ status_t EmulatedCameraDeviceHwlImpl::GetPhysicalCameraCharacteristics(
       physical_device_map_->at(physical_camera_id).second.get());
 
   return OK;
+}
+
+google_camera_hal::HwlMemoryConfig EmulatedCameraDeviceHwlImpl::GetMemoryConfig() const {
+  return HwlMemoryConfig();
 }
 
 status_t EmulatedCameraDeviceHwlImpl::SetTorchMode(TorchMode mode) {
@@ -256,7 +284,8 @@ status_t EmulatedCameraDeviceHwlImpl::CreateCameraDeviceSessionHwl(
 }
 
 bool EmulatedCameraDeviceHwlImpl::IsStreamCombinationSupported(
-    const StreamConfiguration& stream_config) {
+    const StreamConfiguration& stream_config,
+    const bool /*check_settings*/) const {
   return EmulatedSensor::IsStreamCombinationSupported(
       camera_id_, stream_config, *stream_configuration_map_,
       *stream_configuration_map_max_resolution_,

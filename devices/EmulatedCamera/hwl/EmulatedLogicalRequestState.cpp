@@ -123,6 +123,32 @@ EmulatedLogicalRequestState::InitializeLogicalResult(uint32_t pipeline_id,
     }
 
     UpdateActivePhysicalId(ret->result_metadata.get(), current_physical_camera_);
+
+    // The logical camera result lens intrinsic calibration must reflect
+    // calibration of the currently active physical device.
+    const auto& physical_device = physical_device_map_->find(current_physical_camera_);
+    if (physical_device != physical_device_map_->end()) {
+        camera_metadata_ro_entry_t entry, physical_entry;
+        if ((ret->result_metadata->Get(ANDROID_LENS_INTRINSIC_CALIBRATION,
+                                       &entry) == OK) &&
+            (entry.count > 0)) {
+          if ((physical_device->second.second->Get(
+                   ANDROID_LENS_INTRINSIC_CALIBRATION, &physical_entry) == OK) &&
+              (physical_entry.count > 0)) {
+            ret->result_metadata->Set(ANDROID_LENS_INTRINSIC_CALIBRATION,
+                                      physical_entry.data.f,
+                                      physical_entry.count);
+          } else {
+            ALOGE(
+                "%s: Logical camera %d supports lens intrinsic calibration but "
+                "physical device: %d does not!",
+                __FUNCTION__, logical_camera_id_, current_physical_camera_);
+          }
+        }
+    } else {
+      ALOGE("%s: Couldn't find physical device id: %d", __FUNCTION__,
+            current_physical_camera_);
+    }
   }
 
   return ret;

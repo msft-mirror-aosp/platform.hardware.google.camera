@@ -17,11 +17,15 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_BASIC_CAPTURE_SESSION_H_
 #define HARDWARE_GOOGLE_CAMERA_HAL_GOOGLE_CAMERA_HAL_BASIC_CAPTURE_SESSION_H_
 
+#include <vector>
+
 #include "camera_buffer_allocator_hwl.h"
 #include "camera_device_session_hwl.h"
 #include "capture_session.h"
+#include "hal_types.h"
 #include "hwl_types.h"
 #include "request_processor.h"
+#include "result_dispatcher.h"
 #include "result_processor.h"
 
 namespace android {
@@ -69,6 +73,9 @@ class BasicCaptureSession : public CaptureSession {
   status_t Flush() override;
   // Override functions in CaptureSession end.
 
+  void RepeatingRequestEnd(int32_t frame_number,
+                           const std::vector<int32_t>& stream_ids) override;
+
  protected:
   BasicCaptureSession() = default;
 
@@ -94,11 +101,17 @@ class BasicCaptureSession : public CaptureSession {
                                std::unique_ptr<ProcessBlock> process_block,
                                std::unique_ptr<ResultProcessor> result_processor);
 
+  void ProcessCaptureResult(std::unique_ptr<CaptureResult> result);
+  void Notify(const NotifyMessage& message);
+  void ProcessBatchCaptureResult(
+      std::vector<std::unique_ptr<CaptureResult>> results);
+
   std::unique_ptr<RequestProcessor> request_processor_;
 
   // device_session_hwl_ is owned by the client.
   CameraDeviceSessionHwl* device_session_hwl_ = nullptr;
   std::unique_ptr<InternalStreamManager> internal_stream_manager_;
+  std::unique_ptr<ResultDispatcher> result_dispatcher_;
 };
 
 }  // namespace google_camera_hal

@@ -20,6 +20,8 @@
 #include <camera_device_hwl.h>
 #include <hal_types.h>
 
+#include <vector>
+
 #include "EmulatedCameraDeviceInfo.h"
 #include "EmulatedSensor.h"
 #include "EmulatedTorchState.h"
@@ -33,6 +35,7 @@ using google_camera_hal::CameraDeviceHwl;
 using google_camera_hal::CameraDeviceSessionHwl;
 using google_camera_hal::CameraResourceCost;
 using google_camera_hal::HalCameraMetadata;
+using google_camera_hal::HwlMemoryConfig;
 using google_camera_hal::kTemplateCount;
 using google_camera_hal::RequestTemplate;
 using google_camera_hal::StreamConfiguration;
@@ -55,9 +58,17 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
   status_t GetCameraCharacteristics(
       std::unique_ptr<HalCameraMetadata>* characteristics) const override;
 
+  status_t GetSessionCharacteristics(
+      const StreamConfiguration& session_config,
+      std::unique_ptr<HalCameraMetadata>& characteristics) const override;
+
+  std::vector<uint32_t> GetPhysicalCameraIds() const override;
+
   status_t GetPhysicalCameraCharacteristics(
       uint32_t physical_camera_id,
       std::unique_ptr<HalCameraMetadata>* characteristics) const override;
+
+  HwlMemoryConfig GetMemoryConfig() const override;
 
   status_t SetTorchMode(TorchMode mode) override;
 
@@ -75,8 +86,8 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
       CameraBufferAllocatorHwl* camera_allocator_hwl,
       std::unique_ptr<CameraDeviceSessionHwl>* session) override;
 
-  bool IsStreamCombinationSupported(
-      const StreamConfiguration& stream_config) override;
+  bool IsStreamCombinationSupported(const StreamConfiguration& stream_config,
+                                    const bool /*check_settings*/) const override;
 
   // End of override functions in CameraDeviceHwl.
 

@@ -69,6 +69,14 @@ class ResultProcessor {
   // Called by a ProcessBlock to notify a message.
   virtual void Notify(const ProcessBlockNotifyMessage& block_message) = 0;
 
+  // Called by a ProcessBlock to notify multiple notify messages.
+  virtual void NotifyBatch(
+      const std::vector<ProcessBlockNotifyMessage>& block_messages) {
+    for (const auto& message : block_messages) {
+      Notify(message);
+    };
+  }
+
   // Flush all pending workload.
   virtual status_t FlushPendingRequests() = 0;
 };

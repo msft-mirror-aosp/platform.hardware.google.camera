@@ -19,6 +19,7 @@
 
 #include <vector>
 
+#include "hal_types.h"
 #include "result_processor.h"
 
 namespace android {
@@ -35,7 +36,8 @@ class BasicResultProcessor : public ResultProcessor {
   // Override functions of ResultProcessor start.
   void SetResultCallback(
       ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
-      ProcessBatchCaptureResultFunc process_batch_capture_result) override;
+      ProcessBatchCaptureResultFunc process_batch_capture_result,
+      NotifyBatchFunc notify_batch) override;
 
   status_t AddPendingRequests(
       const std::vector<ProcessBlockRequest>& process_block_requests,

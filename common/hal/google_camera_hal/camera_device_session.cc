@@ -701,7 +701,8 @@ status_t CameraDeviceSession::ConfigureStreams(
       hwl_session_callback_, camera_allocator_hwl_, device_session_hwl_.get(),
       &hal_config, camera_device_session_callback_.process_capture_result,
       camera_device_session_callback_.notify,
-      camera_device_session_callback_.process_batch_capture_result);
+      camera_device_session_callback_.process_batch_capture_result,
+      camera_device_session_callback_.notify_batch);
 
   if (capture_session_ == nullptr) {
     ALOGE("%s: Cannot find a capture session compatible with stream config",

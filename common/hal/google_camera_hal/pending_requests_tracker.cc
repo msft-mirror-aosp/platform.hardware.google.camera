@@ -392,7 +392,8 @@ void PendingRequestsTracker::DumpStatus() {
   pending_acquisition_string += "}";
 
   ALOGI(
-      "%s: Buffers (including dummy) pending return from HWL: %s. Buffers "
+      "%s: Buffers (including placeholder) pending return from HWL: %s. "
+      "Buffers "
       "proactively acquired from the framework: %s.",
       __FUNCTION__, pending_requests_string.c_str(),
       pending_acquisition_string.c_str());

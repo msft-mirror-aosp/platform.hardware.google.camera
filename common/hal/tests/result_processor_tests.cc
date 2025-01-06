@@ -25,8 +25,8 @@
 namespace android {
 namespace google_camera_hal {
 
-static constexpr native_handle kDummyNativeHandle = {};
-static constexpr buffer_handle_t kDummyBufferHandle = &kDummyNativeHandle;
+static constexpr native_handle kTestNativeHandle = {};
+static constexpr buffer_handle_t kTestBufferHandle = &kTestNativeHandle;
 
 using ResultProcessorCreateFunc =
     std::function<std::unique_ptr<ResultProcessor>()>;
@@ -61,7 +61,7 @@ TEST(ResultProcessorTest, SetResultCallback) {
 
     result_processor->SetResultCallback(
         process_capture_result, notify,
-        /*process_batch_capture_result=*/nullptr);
+        /*process_batch_capture_result=*/nullptr, /*notify_batch=*/nullptr);
   }
 }
 
@@ -120,7 +120,7 @@ TEST(ResultProcessorTest, ProcessResultAndNotify) {
     // Test again after setting result callback.
     result_processor->SetResultCallback(
         process_capture_result, notify,
-        /*process_batch_capture_result=*/nullptr);
+        /*process_batch_capture_result=*/nullptr, /*notify_batch=*/nullptr);
     SendResultsAndMessages(result_processor.get());
   }
 }
@@ -140,7 +140,8 @@ TEST(ResultProcessorTest, BasicResultProcessorResultAndNotify) {
       [&](const NotifyMessage& /*message*/) { message_received = true; });
 
   result_processor->SetResultCallback(process_capture_result, notify,
-                                      /*process_batch_capture_result=*/nullptr);
+                                      /*process_batch_capture_result=*/nullptr,
+                                      /*notify_batch=*/nullptr);
 
   ProcessBlockResult null_result;
   result_processor->ProcessResult(std::move(null_result));
@@ -171,13 +172,14 @@ TEST(ResultProcessorTest, BasicResultProcessorAddPendingRequest) {
   NotifyFunc notify = NotifyFunc([&](const NotifyMessage& /*message*/) {});
 
   result_processor->SetResultCallback(process_capture_result, notify,
-                                      /*process_batch_capture_result=*/nullptr);
+                                      /*process_batch_capture_result=*/nullptr,
+                                      /*notify_batch=*/nullptr);
 
   std::vector<ProcessBlockRequest> requests(1);
   requests[0].request.output_buffers = {StreamBuffer{}};
 
   CaptureRequest remaining_request;
-  remaining_request.output_buffers.push_back({.buffer = kDummyBufferHandle});
+  remaining_request.output_buffers.push_back({.buffer = kTestBufferHandle});
   EXPECT_NE(result_processor->AddPendingRequests(requests, remaining_request), OK)
       << "Adding a pending request with a remaining output buffer that's not"
       << "included in the request should fail.";

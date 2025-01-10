@@ -49,6 +49,9 @@ class BasicResultProcessor : public ResultProcessor {
 
   void Notify(const ProcessBlockNotifyMessage& block_message) override;
 
+  void NotifyBatch(
+      const std::vector<ProcessBlockNotifyMessage>& block_messages) override;
+
   status_t FlushPendingRequests() override;
   // Override functions of ResultProcessor end.
 
@@ -62,6 +65,7 @@ class BasicResultProcessor : public ResultProcessor {
   ProcessCaptureResultFunc process_capture_result_;
   ProcessBatchCaptureResultFunc process_batch_capture_result_;
   NotifyFunc notify_;
+  NotifyBatchFunc notify_batch_;
 };
 
 }  // namespace google_camera_hal

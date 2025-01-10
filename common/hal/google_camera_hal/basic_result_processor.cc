@@ -23,6 +23,8 @@
 #include <log/log.h>
 #include <utils/Trace.h>
 
+#include <vector>
+
 #include "hal_types.h"
 #include "hal_utils.h"
 
@@ -57,12 +59,13 @@ std::unique_ptr<BasicResultProcessor> BasicResultProcessor::Create() {
 void BasicResultProcessor::SetResultCallback(
     ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
     ProcessBatchCaptureResultFunc process_batch_capture_result,
-    NotifyBatchFunc /*notify_batch*/) {
+    NotifyBatchFunc notify_batch) {
   ATRACE_CALL();
   std::lock_guard<std::mutex> lock(callback_lock_);
   process_capture_result_ = process_capture_result;
   notify_ = notify;
   process_batch_capture_result_ = process_batch_capture_result;
+  notify_batch_ = notify_batch;
 }
 
 status_t BasicResultProcessor::AddPendingRequests(
@@ -129,6 +132,24 @@ void BasicResultProcessor::Notify(const ProcessBlockNotifyMessage& block_message
   }
 
   notify_(block_message.message);
+}
+
+void BasicResultProcessor::NotifyBatch(
+    const std::vector<ProcessBlockNotifyMessage>& block_messages) {
+  ATRACE_CALL();
+  if (notify_batch_ == nullptr) {
+    ALOGE("%s: notify_batch_ is nullptr. Dropping messages.", __FUNCTION__);
+    return;
+  }
+
+  std::vector<NotifyMessage> notify_messages;
+  notify_messages.reserve(block_messages.size());
+  for (const ProcessBlockNotifyMessage& block_message : block_messages) {
+    notify_messages.push_back(block_message.message);
+  }
+
+  std::lock_guard<std::mutex> lock(callback_lock_);
+  notify_batch_(notify_messages);
 }
 
 status_t BasicResultProcessor::FlushPendingRequests() {

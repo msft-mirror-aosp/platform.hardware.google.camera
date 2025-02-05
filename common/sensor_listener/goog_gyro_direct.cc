@@ -16,23 +16,23 @@
 
 #define LOG_TAG "goog_gyro_direct"
 
-#include "goog_gyro_direct.h"
-
 #include <android/frameworks/sensorservice/1.0/ISensorManager.h>
 #include <android/frameworks/sensorservice/1.0/types.h>
 #include <android/hardware/sensors/1.0/types.h>
 #include <hardware/sensors.h>
-#include <pixel-gralloc/usage.h>
 #include <utils/Log.h>
 #include <utils/SystemClock.h>
 
 #include "goog_gralloc_wrapper.h"
+
+#include "goog_gyro_direct.h"
 
 namespace android {
 namespace camera_sensor_listener {
 
 using ::android::frameworks::sensorservice::V1_0::ISensorManager;
 using ::android::frameworks::sensorservice::V1_0::Result;
+using ::android::hardware::graphics::mapper::V3_0::IMapper;
 using ::android::hardware::sensors::V1_0::RateLevel;
 using ::android::hardware::sensors::V1_0::SensorFlagBits;
 using ::android::hardware::sensors::V1_0::SensorsEventFormatOffset;
@@ -137,22 +137,30 @@ status_t GoogGyroDirect::EnableDirectChannel() {
     size_t buffer_size =
         static_cast<size_t>(SensorsEventFormatOffset::TOTAL_LENGTH) *
         gyro_direct_buf_length_;
-    uint32_t width = buffer_size;
-    uint32_t height = 1;
-    uint64_t usage =
-        pixel::graphics::SENSOR_DIRECT_DATA | pixel::graphics::CPU_READ_OFTEN;
+
+    using android::hardware::graphics::common::V1_0::BufferUsage;
+    using android::hardware::graphics::common::V1_2::PixelFormat;
+    IMapper::BufferDescriptorInfo buf_desc_info = {
+        .width = static_cast<uint32_t>(buffer_size),
+        .height = 1,
+        .layerCount = 1,
+        .format = PixelFormat::BLOB,
+        .usage = static_cast<uint64_t>(BufferUsage::SENSOR_DIRECT_DATA |
+                                       BufferUsage::CPU_READ_OFTEN),
+    };
+
     gyro_direct_channel_native_buf_handle_ =
-        goog_gralloc_wrapper_ptr_->AllocateOneBuffer(
-            width, height, HAL_PIXEL_FORMAT_BLOB, /*layer_count=*/1, usage);
+        goog_gralloc_wrapper_ptr_->AllocateOneBuffer(buf_desc_info);
     if (gyro_direct_channel_native_buf_handle_ == nullptr) {
       ALOGE("%s %d Failed at allocating the channel native buffer", __func__,
             __LINE__);
       return NO_MEMORY;
     }
 
-    Rect region(/*l=*/0, /*t=*/0, /*r=*/width, /*b=*/height);
+    IMapper::Rect region{0, 0, static_cast<int32_t>(buf_desc_info.width),
+                         static_cast<int32_t>(buf_desc_info.height)};
     gyro_direct_channel_addr_ = goog_gralloc_wrapper_ptr_->Lock(
-        gyro_direct_channel_native_buf_handle_, usage, region,
+        gyro_direct_channel_native_buf_handle_, buf_desc_info.usage, region,
         /*fence=*/-1);
     if (gyro_direct_channel_addr_ == nullptr) {
       goog_gralloc_wrapper_ptr_->FreeBuffer(

@@ -20,6 +20,7 @@
 #include <cutils/native_handle.h>
 #include <system/graphics-base-v1.0.h>
 
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>

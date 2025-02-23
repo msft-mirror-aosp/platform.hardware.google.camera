@@ -18,6 +18,7 @@
 #define HARDWARE_GOOGLE_CAMERA_HAL_HWL_INTERFACE_HWL_TYPES_H_
 
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <string>
 #include <unordered_set>

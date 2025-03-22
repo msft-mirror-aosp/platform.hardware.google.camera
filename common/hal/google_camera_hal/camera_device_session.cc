@@ -695,6 +695,16 @@ status_t CameraDeviceSession::ConfigureStreams(
       break;
     }
   }
+
+  // Check if the feature combination in the given StreamConfiguration is
+  // supported by current device.
+  // This is from the requirement that Feature Combination Query API should
+  // provide consistent output with the CreateCaptureSession result. b/401442279
+  if (!device_session_hwl_->IsFeatureCombinationSupported(stream_config)) {
+    ALOGE("%s: IsFeatureCombinationSupported returns false", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
   capture_session_ = CreateCaptureSession(
       stream_config, kWrapperCaptureSessionEntries,
       external_capture_session_entries_, kCaptureSessionEntries,

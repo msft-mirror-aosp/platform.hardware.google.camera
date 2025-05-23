@@ -278,6 +278,10 @@ status_t EmulatedCameraProviderHwlImpl::GetConcurrentStreamingCameraIds(
   return OK;
 }
 
+status_t EmulatedCameraProviderHwlImpl::DumpState(int /*fd*/) {
+  return OK;
+}
+
 status_t EmulatedCameraProviderHwlImpl::IsConcurrentStreamCombinationSupported(
     const std::vector<CameraIdAndStreamConfiguration>& configs,
     bool* is_supported) {

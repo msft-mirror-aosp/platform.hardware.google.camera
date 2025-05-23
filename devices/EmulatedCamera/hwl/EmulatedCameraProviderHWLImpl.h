@@ -63,6 +63,8 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
   status_t GetConcurrentStreamingCameraIds(
       std::vector<std::unordered_set<uint32_t>>*) override;
 
+  status_t DumpState(int fd) override;
+
   status_t IsConcurrentStreamCombinationSupported(
       const std::vector<CameraIdAndStreamConfiguration>&, bool*) override;
 

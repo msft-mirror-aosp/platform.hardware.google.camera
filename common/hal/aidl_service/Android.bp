@@ -124,7 +124,7 @@ cc_defaults {
     srcs: [
         "aidl_service.cc",
     ],
-    vintf_fragment_modules: ["lyric_apex_vintf"],
+    vintf_fragments: [":android.hardware.camera.provider@2.7-service-google.xml"],
 }
 
 cc_binary {

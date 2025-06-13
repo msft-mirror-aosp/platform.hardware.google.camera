@@ -30,7 +30,6 @@
 #include "capture_session_utils.h"
 #include "hal_types.h"
 #include "hal_utils.h"
-#include "libgooglecamerahal_flags.h"
 #include "stream_buffer_cache_manager.h"
 #include "system/camera_metadata.h"
 #include "ui/GraphicBufferMapper.h"
@@ -454,7 +453,8 @@ void CameraDeviceSession::InitializeZoomRatioMapper(
       active_array_size.right - active_array_size.left + 1,
       active_array_size.bottom - active_array_size.top + 1};
 
-  // Populate max-res dimension only if the logical camera have max-res resolution
+  // Populate max-res dimension only if the logical camera has max-res
+  // resolution
   (void)GetMaxResDimension(characteristics,
                            params.active_array_maximum_resolution_dimension);
 
@@ -1212,8 +1212,9 @@ void CameraDeviceSession::CheckRequestForStreamBufferCacheManager(
     const CaptureRequest& request, bool* need_to_process) {
   ATRACE_CALL();
 
-  // If any stream in the stream buffer cache manager has been labeld as inactive,
-  // return ERROR_REQUEST immediately. No need to send the request to HWL.
+  // If any stream in the stream buffer cache manager has been labeled as
+  // inactive, return ERROR_REQUEST immediately. No need to send the request to
+  // HWL.
   status_t res = HandleSBCInactiveStreams(request, need_to_process);
   if (res != OK) {
     ALOGE("%s: Failed to check if streams are active.", __FUNCTION__);
@@ -1757,8 +1758,7 @@ status_t CameraDeviceSession::RegisterStreamsIntoCacheManagerLocked(
         });
 
     const uint32_t num_buffers_to_cache =
-        libgooglecamerahal::flags::batched_request_buffers() &&
-                hfr_batch_size.has_value() && utils::IsVideoStream(stream)
+        hfr_batch_size.has_value() && utils::IsVideoStream(stream)
             ? *hfr_batch_size
             : 1;
 

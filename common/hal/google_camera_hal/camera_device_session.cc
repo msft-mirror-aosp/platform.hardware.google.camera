@@ -47,6 +47,7 @@ constexpr char kMeasureBufferAllocationProp[] =
 
 static constexpr int64_t kNsPerSec = 1000000000;
 static constexpr int64_t kAllocationThreshold = 33000000;  // 33ms
+static constexpr int kDefaultStreamBufferPrefetchSize = 1;
 
 std::vector<CaptureSessionEntryFuncs>
     CameraDeviceSession::kCaptureSessionEntries = {
@@ -1757,10 +1758,19 @@ status_t CameraDeviceSession::RegisterStreamsIntoCacheManagerLocked(
           return OK;
         });
 
+    int stream_buffer_prefetch_size =
+        device_session_hwl_->GetStreamBufferPrefetchSize();
+    if (stream_buffer_prefetch_size < 0) {
+      ALOGW(
+          "Invalid stream buffer prefetch size = %d. Use default value = %d "
+          "instead.",
+          stream_buffer_prefetch_size, kDefaultStreamBufferPrefetchSize);
+      stream_buffer_prefetch_size = kDefaultStreamBufferPrefetchSize;
+    }
     const uint32_t num_buffers_to_cache =
         hfr_batch_size.has_value() && utils::IsVideoStream(stream)
             ? *hfr_batch_size
-            : 1;
+            : stream_buffer_prefetch_size;
 
     StreamBufferCacheRegInfo reg_info = {
         .request_func = session_request_func,

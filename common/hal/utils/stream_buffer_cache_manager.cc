@@ -579,8 +579,8 @@ bool StreamBufferCacheManager::StreamBufferCache::RefillableLocked() const {
     return false;
   }
 
-  // Need to refill if the cache is empty.
-  return cached_buffers_.empty();
+  // Need to refill if the cache is not full
+  return cached_buffers_.size() < cache_info_.num_buffers_to_cache;
 }
 
 status_t

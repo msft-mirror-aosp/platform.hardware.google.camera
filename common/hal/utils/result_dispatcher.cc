@@ -543,7 +543,6 @@ void ResultDispatcher::NotifyBatchShutters() {
 void ResultDispatcher::NotifyCaptureResults(
     std::vector<std::unique_ptr<CaptureResult>> results) {
   ATRACE_CALL();
-  std::lock_guard<std::mutex> lock(process_capture_result_lock_);
   if (process_batch_capture_result_ != nullptr) {
     process_batch_capture_result_(std::move(results));
   } else {

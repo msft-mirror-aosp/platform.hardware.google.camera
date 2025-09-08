@@ -513,9 +513,11 @@ void ResultDispatcher::NotifyShutters() {
   // TODO: b/347771898 - Update to not depend on running faster than data is
   // ready
   while (true) {
-    std::lock_guard<std::mutex> lock(result_lock_);
-    if (GetPendingShutterNotificationLocked(message) != OK) {
-      break;
+    {
+      std::lock_guard<std::mutex> lock(result_lock_);
+      if (GetPendingShutterNotificationLocked(message) != OK) {
+        break;
+      }
     }
     notify_(message);
   }
@@ -527,12 +529,14 @@ void ResultDispatcher::NotifyBatchShutters() {
   NotifyMessage message = {};
   // TODO: b/347771898 - Update to not depend on running faster than data is
   // ready
-  std::lock_guard<std::mutex> lock(result_lock_);
-  while (true) {
-    if (GetPendingShutterNotificationLocked(message) != OK) {
-      break;
+  {
+    std::lock_guard<std::mutex> lock(result_lock_);
+    while (true) {
+      if (GetPendingShutterNotificationLocked(message) != OK) {
+        break;
+      }
+      messages.push_back(message);
     }
-    messages.push_back(message);
   }
 
   if (!messages.empty()) {

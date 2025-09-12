@@ -1,0 +1,20 @@
+{
+  "cameras": [
+    {
+      "type": "back",
+      "filename": "emu_camera_back.json"
+    },
+    {
+      "type": "front",
+      "filename": "emu_camera_front.json"
+    },
+    {
+      "type": "depth",
+      "filename": "emu_camera_depth.json"
+    },
+    {
+      "type": "external",
+      "filename": "emu_camera_external.json"
+    }
+  ]
+}

@@ -25,24 +25,22 @@
 #include <log/log.h>
 #include <sys/stat.h>
 
+#include <unordered_map>
+
 #include "EmulatedSensor.h"
 #include "utils/HWLUtils.h"
 #include "vendor_tag_defs.h"
 
 namespace android {
 
-// Location of the camera configuration files.
-constexpr std::string_view kCameraConfigBack = "emu_camera_back.json";
-constexpr std::string_view kCameraConfigFront = "emu_camera_front.json";
-constexpr std::string_view kCameraConfigExternal = "emu_camera_external.json";
-constexpr std::string_view kCameraConfigDepth = "emu_camera_depth.json";
-constexpr std::string_view kCameraConfigFiles[] = {
-    kCameraConfigBack, kCameraConfigFront, kCameraConfigExternal,
-    kCameraConfigDepth};
-
 constexpr std::string_view kConfigurationFileDirVendor = "/vendor/etc/config/";
 constexpr std::string_view kConfigurationFileDirApex =
     "/apex/com.google.emulated.camera.provider.hal/etc/config/";
+
+constexpr std::string_view kCameraTypeBack = "back";
+constexpr std::string_view kCameraTypeFront = "front";
+constexpr std::string_view kCameraTypeExternal = "external";
+constexpr std::string_view kCameraTypeDepth = "depth";
 
 status_t WaitForQemuSfFakeCameraPropertyAvailable() {
   // Camera service may start running before qemu-props sets
@@ -470,11 +468,6 @@ status_t GetCameraConfigurations(std::vector<CameraConfiguration>* configs) {
   }
   configs->clear();
 
-  std::string config_content;
-  uint32_t logical_id_counter = 0;
-  uint32_t physical_id_counter = ARRAY_SIZE(kCameraConfigFiles);
-
-  std::vector<std::string> config_file_locations;
   std::string config_dir = "";
   struct stat st;
   if (stat(kConfigurationFileDirApex.data(), &st) == 0) {
@@ -482,47 +475,81 @@ status_t GetCameraConfigurations(std::vector<CameraConfiguration>* configs) {
   } else {
     config_dir += kConfigurationFileDirVendor.data();
   }
+
+  const std::string main_config_path = config_dir + "emu_camera_main.json";
+  std::string config_content;
+  if (!android::base::ReadFileToString(main_config_path, &config_content)) {
+    ALOGE("%s: Could not open main configuration file: %s", __FUNCTION__,
+          main_config_path.c_str());
+    return BAD_VALUE;
+  }
+
+  Json::CharReaderBuilder builder;
+  std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+  Json::Value root;
+  std::string error_message;
+  if (!reader->parse(&*config_content.begin(), &*config_content.end(), &root,
+                     &error_message)) {
+    ALOGE("Could not parse main configuration file: %s", error_message.c_str());
+    return BAD_VALUE;
+  }
+
+  const Json::Value& cameras = root["cameras"];
+  if (!cameras.isArray()) {
+    ALOGE("Main configuration file is malformed: 'cameras' is not an array.");
+    return BAD_VALUE;
+  }
+
+  std::unordered_map<std::string, std::string> type_to_filename_map;
+  for (const auto& camera : cameras) {
+    type_to_filename_map[camera["type"].asString()] =
+        camera["filename"].asString();
+  }
+
+  std::vector<std::string> config_file_names;
+  uint32_t logical_id_counter = 0;
+
   char prop[PROPERTY_VALUE_MAX];
   if (!property_get_bool("ro.boot.qemu", false)) {
     // Cuttlefish
     property_get("ro.vendor.camera.config", prop, nullptr);
-    if (strcmp(prop, "external") == 0) {
-      config_file_locations.emplace_back(config_dir +
-                                         std::string(kCameraConfigExternal));
+    if (strcmp(prop, kCameraTypeExternal.data()) == 0) {
+      config_file_names.push_back(
+          type_to_filename_map.at(kCameraTypeExternal.data()));
       logical_id_counter = 1;
     } else {
       // Default phone layout.
-      config_file_locations.emplace_back(config_dir +
-                                         std::string(kCameraConfigBack));
-      config_file_locations.emplace_back(config_dir +
-                                         std::string(kCameraConfigFront));
-      config_file_locations.emplace_back(config_dir +
-                                         std::string(kCameraConfigDepth));
+      config_file_names.push_back(
+          type_to_filename_map.at(kCameraTypeBack.data()));
+      config_file_names.push_back(
+          type_to_filename_map.at(kCameraTypeFront.data()));
+      config_file_names.push_back(
+          type_to_filename_map.at(kCameraTypeDepth.data()));
     }
   } else {
     // Android Studio Emulator
     if (!property_get_bool("ro.boot.qemu.legacy_fake_camera", false)) {
       if (WaitForQemuSfFakeCameraPropertyAvailable() == OK) {
         property_get("vendor.qemu.sf.fake_camera", prop, nullptr);
-        if (strcmp(prop, "both") == 0) {
-          config_file_locations.emplace_back(config_dir +
-                                             std::string(kCameraConfigBack));
-          config_file_locations.emplace_back(config_dir +
-                                             std::string(kCameraConfigFront));
-        } else if (strcmp(prop, "front") == 0) {
-          config_file_locations.emplace_back(config_dir +
-                                             std::string(kCameraConfigFront));
-          logical_id_counter = 1;
-        } else if (strcmp(prop, "back") == 0) {
-          config_file_locations.emplace_back(config_dir +
-                                             std::string(kCameraConfigBack));
+        std::string fake_camera_prop(prop);
+        if (fake_camera_prop == "both") {
+          config_file_names.push_back(
+              type_to_filename_map.at(kCameraTypeBack.data()));
+          config_file_names.push_back(
+              type_to_filename_map.at(kCameraTypeFront.data()));
+        } else if (fake_camera_prop == kCameraTypeFront.data() ||
+                   fake_camera_prop == kCameraTypeBack.data()) {
+          config_file_names.push_back(type_to_filename_map.at(fake_camera_prop));
           logical_id_counter = 1;
         }
       }
     }
   }
 
-  for (const auto& config_path : config_file_locations) {
+  uint32_t physical_id_counter = cameras.size();
+
+  for (const auto& filename : config_file_names) {
+    const std::string config_path = config_dir + filename;
     if (!android::base::ReadFileToString(config_path, &config_content)) {
       ALOGW("%s: Could not open configuration file: %s", __FUNCTION__,
             config_path.c_str());
@@ -535,7 +562,8 @@ status_t GetCameraConfigurations(std::vector<CameraConfiguration>* configs) {
     std::string error_message;
     if (!config_reader->parse(&*config_content.begin(), &*config_content.end(),
                               &root, &error_message)) {
-      ALOGE("Could not parse configuration file: %s", error_message.c_str());
+      ALOGE("Could not parse configuration file %s: %s", filename.c_str(),
+            error_message.c_str());
       return BAD_VALUE;
     }
 

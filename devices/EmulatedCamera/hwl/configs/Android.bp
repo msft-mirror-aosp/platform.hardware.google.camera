@@ -48,3 +48,9 @@ prebuilt_etc {
     src: "emu_camera_external.json",
     defaults: ["emu_camera_config_defaults"],
 }
+
+prebuilt_etc {
+    name: "emu_camera_main.json",
+    src: "emu_camera_main.json",
+    defaults: ["emu_camera_config_defaults"],
+}

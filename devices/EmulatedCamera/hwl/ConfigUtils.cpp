@@ -25,6 +25,7 @@
 #include <log/log.h>
 #include <sys/stat.h>
 
+#include <cstdlib>
 #include <unordered_map>
 
 #include "EmulatedSensor.h"
@@ -476,7 +477,17 @@ status_t GetCameraConfigurations(std::vector<CameraConfiguration>* configs) {
     config_dir += kConfigurationFileDirVendor.data();
   }
 
-  const std::string main_config_path = config_dir + "emu_camera_main.json";
+  char prop[PROPERTY_VALUE_MAX];
+  property_get("ro.hardware.type", prop, "");
+  bool is_automotive = (strcmp(prop, "automotive") == 0);
+
+  std::string main_config_path = config_dir;
+  if (is_automotive) {
+    main_config_path += "emu_camera_automotive_main.json";
+  } else {
+    main_config_path += "emu_camera_main.json";
+  }
+
   std::string config_content;
   if (!android::base::ReadFileToString(main_config_path, &config_content)) {
     ALOGE("%s: Could not open main configuration file: %s", __FUNCTION__,
@@ -500,55 +511,75 @@ status_t GetCameraConfigurations(std::vector<CameraConfiguration>* configs) {
     return BAD_VALUE;
   }
 
-  std::unordered_map<std::string, std::string> type_to_filename_map;
-  for (const auto& camera : cameras) {
-    type_to_filename_map[camera["type"].asString()] =
-        camera["filename"].asString();
-  }
-
-  std::vector<std::string> config_file_names;
-  uint32_t logical_id_counter = 0;
-
-  char prop[PROPERTY_VALUE_MAX];
-  if (!property_get_bool("ro.boot.qemu", false)) {
-    // Cuttlefish
-    property_get("ro.vendor.camera.config", prop, nullptr);
-    if (strcmp(prop, kCameraTypeExternal.data()) == 0) {
-      config_file_names.push_back(
-          type_to_filename_map.at(kCameraTypeExternal.data()));
-      logical_id_counter = 1;
-    } else {
-      // Default phone layout.
-      config_file_names.push_back(
-          type_to_filename_map.at(kCameraTypeBack.data()));
-      config_file_names.push_back(
-          type_to_filename_map.at(kCameraTypeFront.data()));
-      config_file_names.push_back(
-          type_to_filename_map.at(kCameraTypeDepth.data()));
+  std::unordered_map<uint32_t, Json::Value> active_cameras;
+  if (is_automotive) {
+    for (const auto& camera : cameras) {
+      char* endptr;
+      errno = 0;
+      long int_value = strtol(camera["id"].asCString(), &endptr, 10);
+      if (*endptr != '\0' || errno == ERANGE || int_value < 0 ||
+          int_value > UINT32_MAX) {
+        ALOGE("%s: Invalid or out-of-range camera id: %s", __FUNCTION__,
+              camera["id"].asCString());
+        return BAD_VALUE;
+      }
+      uint32_t id = static_cast<uint32_t>(int_value);
+      active_cameras[id] = camera;
     }
   } else {
-    // Android Studio Emulator
-    if (!property_get_bool("ro.boot.qemu.legacy_fake_camera", false)) {
-      if (WaitForQemuSfFakeCameraPropertyAvailable() == OK) {
-        property_get("vendor.qemu.sf.fake_camera", prop, nullptr);
-        std::string fake_camera_prop(prop);
-        if (fake_camera_prop == "both") {
-          config_file_names.push_back(
-              type_to_filename_map.at(kCameraTypeBack.data()));
-          config_file_names.push_back(
-              type_to_filename_map.at(kCameraTypeFront.data()));
-        } else if (fake_camera_prop == kCameraTypeFront.data() ||
-                   fake_camera_prop == kCameraTypeBack.data()) {
-          config_file_names.push_back(type_to_filename_map.at(fake_camera_prop));
-          logical_id_counter = 1;
+    std::unordered_map<std::string, Json::Value> type_to_camera_map;
+    for (const auto& camera : cameras) {
+      type_to_camera_map[camera["type"].asString()] = camera;
+    }
+
+    uint32_t logical_id_counter = 0;
+    std::vector<Json::Value> filtered_camera_list;
+
+    if (!property_get_bool("ro.boot.qemu", false)) {
+      // Cuttlefish
+      property_get("ro.vendor.camera.config", prop, nullptr);
+      if (strcmp(prop, kCameraTypeExternal.data()) == 0) {
+        filtered_camera_list.push_back(
+            type_to_camera_map.at(kCameraTypeExternal.data()));
+        logical_id_counter = 1;
+      } else {
+        // Default phone layout.
+        filtered_camera_list.push_back(
+            type_to_camera_map.at(kCameraTypeBack.data()));
+        filtered_camera_list.push_back(
+            type_to_camera_map.at(kCameraTypeFront.data()));
+        filtered_camera_list.push_back(
+            type_to_camera_map.at(kCameraTypeDepth.data()));
+      }
+    } else {
+      // Android Studio Emulator
+      if (!property_get_bool("ro.boot.qemu.legacy_fake_camera", false)) {
+        if (WaitForQemuSfFakeCameraPropertyAvailable() == OK) {
+          property_get("vendor.qemu.sf.fake_camera", prop, nullptr);
+          std::string fake_camera_prop(prop);
+          if (fake_camera_prop == "both") {
+            filtered_camera_list.push_back(
+                type_to_camera_map.at(kCameraTypeBack.data()));
+            filtered_camera_list.push_back(
+                type_to_camera_map.at(kCameraTypeFront.data()));
+          } else if (fake_camera_prop == kCameraTypeFront.data() ||
+                     fake_camera_prop == kCameraTypeBack.data()) {
+            filtered_camera_list.push_back(
+                type_to_camera_map.at(fake_camera_prop));
+            logical_id_counter = 1;
+          }
         }
       }
+    }
+    for (const auto& camera : filtered_camera_list) {
+      active_cameras[logical_id_counter++] = camera;
     }
   }
 
   uint32_t physical_id_counter = cameras.size();
 
-  for (const auto& filename : config_file_names) {
+  for (const auto& [id, camera] : active_cameras) {
+    const std::string filename = camera["filename"].asString();
     const std::string config_path = config_dir + filename;
     if (!android::base::ReadFileToString(config_path, &config_content)) {
       ALOGW("%s: Could not open configuration file: %s", __FUNCTION__,
@@ -568,7 +599,7 @@ status_t GetCameraConfigurations(std::vector<CameraConfiguration>* configs) {
     }
 
     CameraConfiguration cam_config;
-    cam_config.id = logical_id_counter;
+    cam_config.id = id;
 
     if (root.isArray()) {
       auto device_iter = root.begin();
@@ -593,7 +624,6 @@ status_t GetCameraConfigurations(std::vector<CameraConfiguration>* configs) {
       }
     }
     configs->push_back(std::move(cam_config));
-    logical_id_counter++;
   }
 
   return OK;

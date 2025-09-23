@@ -731,16 +731,55 @@ status_t ResultDispatcher::DispatchQueue<FrameData>::GetReadyData(
 
 template <typename FrameData>
 void ResultDispatcher::DispatchQueue<FrameData>::PrintTimeoutMessages() {
-  for (auto& [frame_number, pending_data] : normal_request_map_) {
-    ALOGW("[%s] %s: pending %s for frame %u ready %d",
-          std::string(dispatcher_name_).c_str(), __FUNCTION__,
-          data_name_.c_str(), frame_number, pending_data.ready);
-  }
-  for (auto& [frame_number, pending_data] : reprocess_request_map_) {
-    ALOGW("[%s] %s: pending %s for frame %u ready %d",
-          std::string(dispatcher_name_).c_str(), __FUNCTION__,
-          data_name_.c_str(), frame_number, pending_data.ready);
-  }
+  const char* func_name = __FUNCTION__;
+  auto print_map = [this, func_name](const auto& request_map,
+                                     const char* map_name) {
+    if (request_map.empty()) {
+      return;
+    }
+
+    // Structure to hold a group of consecutive frames with the same ready state.
+    struct FrameGroup {
+      uint32_t start_frame = 0;
+      uint32_t end_frame = 0;
+      bool ready_state = false;
+    };
+    std::vector<FrameGroup> frame_groups;
+
+    for (const auto& [frame_number, frame_data] : request_map) {
+      const bool ready_state = frame_data.ready;
+      if (frame_groups.empty() ||
+          frame_number != frame_groups.back().end_frame + 1 ||
+          ready_state != frame_groups.back().ready_state) {
+        // Start a new group when the list is empty, or when the frame numbers
+        // are nonconsecutive, or when the ready state flips.
+        frame_groups.push_back({.start_frame = frame_number,
+                                .end_frame = frame_number,
+                                .ready_state = ready_state});
+      } else {
+        // Extend the current group
+        frame_groups.back().end_frame = frame_number;
+      }
+    }
+
+    // Print the grouped messages.
+    for (const FrameGroup& group : frame_groups) {
+      if (group.start_frame == group.end_frame) {
+        ALOGW("[%s] %s: %s: pending %s for frame %u ready %d",
+              std::string(dispatcher_name_).c_str(), func_name, map_name,
+              data_name_.c_str(), group.start_frame, group.ready_state);
+      } else {
+        ALOGW(
+            "[%s] %s: %s: pending %s for frames [%u - %u] (%u frames) ready %d",
+            std::string(dispatcher_name_).c_str(), func_name, map_name,
+            data_name_.c_str(), group.start_frame, group.end_frame,
+            group.end_frame - group.start_frame + 1, group.ready_state);
+      }
+    }
+  };
+
+  print_map(normal_request_map_, "normal_request_map");
+  print_map(reprocess_request_map_, "reprocess_request_map");
 }
 template class ResultDispatcher::DispatchQueue<ResultDispatcher::PendingShutter>;
 template class ResultDispatcher::DispatchQueue<ResultDispatcher::PendingBuffer>;

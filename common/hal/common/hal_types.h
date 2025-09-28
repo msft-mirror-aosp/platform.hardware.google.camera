@@ -165,7 +165,14 @@ struct CameraIdAndStreamConfiguration {
 };
 
 // See the definition of
-// ::android::hardware::camera::device::V3_4::HalStream
+// ::android::hardware::graphics::common::ExtendableType
+struct GrallocExtendableType {
+  std::string name;
+  int64_t value = 0;
+};
+
+// See the definition of
+// ::android::hardware::camera::device::HalStream
 struct HalStream {
   int32_t id = -1;
   android_pixel_format_t override_format = HAL_PIXEL_FORMAT_RGBA_8888;
@@ -176,6 +183,7 @@ struct HalStream {
   bool is_physical_camera_stream = false;
   uint32_t physical_camera_id = 0;
   bool is_hal_buffer_managed = false;
+  std::vector<GrallocExtendableType> additional_options;
 };
 
 // Corresponds to the definition of ConfigureStreamsRet

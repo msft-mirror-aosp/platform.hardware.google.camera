@@ -223,6 +223,14 @@ status_t ConvertToAidlHalStreamConfig(
 
     dst.maxBuffers = hal_config.hal_streams[i].max_buffers;
     dst.enableHalBufferManager = hal_config.hal_streams[i].is_hal_buffer_managed;
+
+    for (const auto& extra : hal_config.hal_streams[i].additional_options) {
+      if (!dst.additionalOptions.has_value()) {
+        dst.additionalOptions.emplace();
+      }
+      dst.additionalOptions->emplace_back(std::in_place, extra.name,
+                                          extra.value);
+    }
   }
   return OK;
 }

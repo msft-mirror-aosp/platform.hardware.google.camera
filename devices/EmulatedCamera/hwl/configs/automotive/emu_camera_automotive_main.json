@@ -1,0 +1,24 @@
+{
+  "cameras": [
+    {
+      "id": "0",
+      "type": "front",
+      "filename": "emu_camera_automotive_front.json"
+    },
+    {
+      "id": "1",
+      "type": "right",
+      "filename": "emu_camera_automotive_right.json"
+    },
+    {
+      "id": "2",
+      "type": "rear",
+      "filename": "emu_camera_automotive_rear.json"
+    },
+    {
+      "id": "3",
+      "type": "left",
+      "filename": "emu_camera_automotive_left.json"
+    }
+  ]
+}

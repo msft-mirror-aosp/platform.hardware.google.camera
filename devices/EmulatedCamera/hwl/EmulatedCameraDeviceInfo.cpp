@@ -1139,9 +1139,7 @@ status_t EmulatedCameraDeviceInfo::InitializeControlDefaults() {
         if (ae_lock_available_) {
           default_requests_[idx]->Set(ANDROID_CONTROL_AE_LOCK, &ae_lock, 1);
         }
-        if (awb_lock_available_) {
-          default_requests_[idx]->Set(ANDROID_CONTROL_AWB_LOCK, &awb_lock, 1);
-        }
+        default_requests_[idx]->Set(ANDROID_CONTROL_AWB_LOCK, &awb_lock, 1);
         if (scenes_supported_) {
           default_requests_[idx]->Set(ANDROID_CONTROL_SCENE_MODE, &scene_mode,
                                       1);

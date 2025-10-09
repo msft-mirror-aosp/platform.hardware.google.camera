@@ -518,7 +518,7 @@ status_t GetCameraConfigurations(std::vector<CameraConfiguration>* configs) {
       errno = 0;
       long int_value = strtol(camera["id"].asCString(), &endptr, 10);
       if (*endptr != '\0' || errno == ERANGE || int_value < 0 ||
-          int_value > UINT32_MAX) {
+          static_cast<unsigned long>(int_value) > UINT32_MAX) {
         ALOGE("%s: Invalid or out-of-range camera id: %s", __FUNCTION__,
               camera["id"].asCString());
         return BAD_VALUE;

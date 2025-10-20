@@ -19,8 +19,7 @@
 
 #include <camera_provider_hwl.h>
 #include <hal_types.h>
-#include <json/json.h>
-#include <json/reader.h>
+
 #include <future>
 
 namespace android {
@@ -80,15 +79,15 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
 
  private:
   status_t Initialize();
-  uint32_t ParseCharacteristics(const Json::Value& root, ssize_t id);
-  status_t GetTagFromName(const char* name, uint32_t* tag);
-  status_t WaitForQemuSfFakeCameraPropertyAvailable();
   bool SupportsMandatoryConcurrentStreams(uint32_t camera_id);
 
-  std::vector<std::unique_ptr<HalCameraMetadata>> static_metadata_;
+  // Static camera metadata, keyed by camera id.
+  std::unordered_map<uint32_t, std::unique_ptr<HalCameraMetadata>> static_metadata_;
   // Logical to physical camera Id mapping. Empty value vector in case
   // of regular non-logical device.
-  std::unordered_map<uint32_t, std::vector<std::pair<CameraDeviceStatus, uint32_t>>> camera_id_map_;
+  std::unordered_map<uint32_t,
+                     std::vector<std::pair<CameraDeviceStatus, uint32_t>>>
+      camera_id_map_;
   HwlTorchModeStatusChangeFunc torch_cb_;
   HwlPhysicalCameraDeviceStatusChangeFunc physical_camera_status_cb_;
 

@@ -1027,7 +1027,10 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
   if (info.ae_lock_available_ && info.report_ae_lock_) {
     result->result_metadata->Set(ANDROID_CONTROL_AE_LOCK, &info.ae_lock_, 1);
   }
-  if (info.awb_lock_available_ && info.report_awb_lock_) {
+  if (info.report_awb_lock_) {
+    if (!info.awb_lock_available_) {
+      info.awb_lock_ = ANDROID_CONTROL_AWB_LOCK_OFF;
+    }
     result->result_metadata->Set(ANDROID_CONTROL_AWB_LOCK, &info.awb_lock_, 1);
   }
   if (info.scenes_supported_) {

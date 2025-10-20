@@ -61,16 +61,27 @@ apex_defaults {
     prebuilts: [
         "com.google.emulated.camera.provider.hal.rc",
         "com.google.emulated.camera.provider.hal.xml", // vintf fragment
-        "android.hardware.camera.concurrent.prebuilt.xml",
-        "android.hardware.camera.flash-autofocus.prebuilt.xml",
-        "android.hardware.camera.front.prebuilt.xml",
-        "android.hardware.camera.full.prebuilt.xml",
-        "android.hardware.camera.raw.prebuilt.xml",
-        "emu_camera_back.json",
-        "emu_camera_depth.json",
-        "emu_camera_front.json",
-        "emu_camera_external.json",
-    ],
+    ] + select(soong_config_variable("ANDROID", "board_is_automotive"), {
+        true: [
+            "emu_camera_automotive_main.json",
+            "emu_camera_automotive_front.json",
+            "emu_camera_automotive_rear.json",
+            "emu_camera_automotive_left.json",
+            "emu_camera_automotive_right.json",
+        ],
+        default: [
+            "emu_camera_main.json",
+            "emu_camera_back.json",
+            "emu_camera_depth.json",
+            "emu_camera_front.json",
+            "emu_camera_external.json",
+            "android.hardware.camera.concurrent.prebuilt.xml",
+            "android.hardware.camera.flash-autofocus.prebuilt.xml",
+            "android.hardware.camera.front.prebuilt.xml",
+            "android.hardware.camera.full.prebuilt.xml",
+            "android.hardware.camera.raw.prebuilt.xml",
+        ],
+    }),
 }
 
 apex {

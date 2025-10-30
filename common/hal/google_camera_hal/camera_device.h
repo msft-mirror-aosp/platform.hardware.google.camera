@@ -127,6 +127,8 @@ class CameraDevice {
   bool IsStreamCombinationSupported(const StreamConfiguration& stream_config,
                                     bool check_settings);
 
+  void WarmUp();
+
   status_t LoadExternalCaptureSession();
 
   std::unique_ptr<google::camera_common::Profiler> GetProfiler(uint32_t camere_id,

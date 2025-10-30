@@ -150,6 +150,9 @@ class MockDeviceHwl : public CameraDeviceHwl {
     return true;
   }
 
+  void WarmUp() {
+  }
+
   std::unique_ptr<google::camera_common::Profiler> GetProfiler(
       uint32_t /* camera_id */, int /* option */) {
     return nullptr;

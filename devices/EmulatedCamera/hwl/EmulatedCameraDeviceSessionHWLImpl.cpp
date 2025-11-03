@@ -287,6 +287,17 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(
   emulated_pipeline.streams.reserve(request_config.streams.size());
   for (const auto& stream : request_config.streams) {
     bool is_input = stream.stream_type == google_camera_hal::StreamType::kInput;
+    android_dataspace data_space =
+        (stream.dynamic_profile ==
+         ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_HLG10) &&
+                (stream.format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED)
+            ? static_cast<android_dataspace_t>(Dataspace::BT2020_ITU_HLG)
+            : stream.data_space;
+
+    std::vector<google_camera_hal::GrallocExtendableType> extras{{
+        .name = "android.hardware.graphics.common.Dataspace",
+        .value = (int64_t)data_space,
+    }};
     emulated_pipeline.streams.emplace(
         stream.id,
         EmulatedStream(
@@ -301,16 +312,10 @@ status_t EmulatedCameraDeviceSessionHwlImpl::ConfigurePipeline(
                                                GRALLOC_USAGE_HW_CAMERA_READ,
               .consumer_usage = 0,
               .max_buffers = max_pipeline_depth_,
-              .override_data_space =
-                  (stream.dynamic_profile ==
-                   ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_HLG10) &&
-                          (stream.format ==
-                           HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED)
-                      ? static_cast<android_dataspace_t>(
-                            Dataspace::BT2020_ITU_HLG)
-                      : stream.data_space,
+              .override_data_space = data_space,
               .is_physical_camera_stream = stream.is_physical_camera_stream,
-              .physical_camera_id = stream.physical_camera_id},
+              .physical_camera_id = stream.physical_camera_id,
+              .additional_options = std::move(extras)},
              .width = stream.width,
              .height = stream.height,
              .buffer_size = stream.buffer_size,

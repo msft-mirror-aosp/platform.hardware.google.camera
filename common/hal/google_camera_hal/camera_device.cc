@@ -134,8 +134,9 @@ static void UnpinVma(const Vma& vma) {
 // Update memory configuration to match the new configuration. This includes
 // pinning new libraries, unpinning libraries that were pinned in the old
 // config but aren't any longer, and madvising anonymous VMAs.
-static void LoadLibraries(google_camera_hal::HwlMemoryConfig memory_config,
-                          google_camera_hal::HwlMemoryConfig old_memory_config) {
+static void MadviseOnAnonAndPinnedLibraries(
+    google_camera_hal::HwlMemoryConfig memory_config,
+    google_camera_hal::HwlMemoryConfig old_memory_config) {
   ALOGI("Pinning memory config is set to %zu shared libraries.",
         memory_config.pinned_libraries.size());
   auto vmaCollectorCb = [&memory_config, &old_memory_config](const Vma& vma) {
@@ -211,7 +212,8 @@ std::unique_ptr<CameraDevice> CameraDevice::Create(
   memory_config.madvise_map_size_limit_bytes = 0;
 
   std::lock_guard<std::mutex> lock(applied_memory_config_mutex_);
-  std::thread t(LoadLibraries, memory_config, device->GetAppliedMemoryConfig());
+  std::thread t(MadviseOnAnonAndPinnedLibraries, memory_config,
+                device->GetAppliedMemoryConfig());
   t.detach();
   device->SetAppliedMemoryConfig(memory_config);
 
@@ -431,7 +433,8 @@ status_t CameraDevice::CreateCameraDeviceSession(
 
   std::lock_guard<std::mutex> lock(applied_memory_config_mutex_);
   HwlMemoryConfig memory_config = camera_device_hwl_->GetMemoryConfig();
-  std::thread t(LoadLibraries, memory_config, GetAppliedMemoryConfig());
+  std::thread t(MadviseOnAnonAndPinnedLibraries, memory_config,
+                GetAppliedMemoryConfig());
   SetAppliedMemoryConfig(memory_config);
   t.detach();
 

@@ -38,8 +38,8 @@ using android::hardware::camera::common::V1_0::helper::HandleImporter;
 using ::android::hardware::sensors::V1_0::SensorInfo;
 using ::android::hardware::sensors::V1_0::SensorType;
 using google_camera_hal::ErrorCode;
+using google_camera_hal::ErrorMessage;
 using google_camera_hal::HwlPipelineResult;
-using google_camera_hal::MessageType;
 using google_camera_hal::NotifyMessage;
 
 EmulatedRequestProcessor::EmulatedRequestProcessor(
@@ -218,11 +218,9 @@ void EmulatedRequestProcessor::NotifyFailedRequest(const PendingRequest& request
     }
   }
 
-  NotifyMessage msg = {
-      .type = MessageType::kError,
-      .message.error = {.frame_number = request.frame_number,
-                        .error_stream_id = -1,
-                        .error_code = ErrorCode::kErrorRequest}};
+  NotifyMessage msg = ErrorMessage{.frame_number = request.frame_number,
+                                   .error_stream_id = -1,
+                                   .error_code = ErrorCode::kErrorRequest};
   request.callback.notify(request.pipeline_id, msg);
 }
 
@@ -423,6 +421,8 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::CreateSensorBuffer(
       buffer = nullptr;
     }
   }
+  buffer->group_id = stream.group_id;
+  buffer->group_concurrency_enabled = stream.group_concurrency_enabled;
 
   return buffer;
 }
@@ -526,24 +526,22 @@ void EmulatedRequestProcessor::RequestProcessorLoop() {
                 std::move(partial_result), std::move(input_buffers),
                 std::move(output_buffers));
           } else {
-            NotifyMessage msg{.type = MessageType::kError,
-                              .message.error = {
-                                  .frame_number = frame_number,
-                                  .error_stream_id = -1,
-                                  .error_code = ErrorCode::kErrorResult,
-                              }};
+            NotifyMessage msg = ErrorMessage{
+                .frame_number = frame_number,
+                .error_stream_id = -1,
+                .error_code = ErrorCode::kErrorResult,
+            };
 
             notify_callback.notify(pipeline_id, msg);
           }
         } else {
           // No further processing is needed, just fail the result which will
           // complete this request.
-          NotifyMessage msg{.type = MessageType::kError,
-                            .message.error = {
-                                .frame_number = frame_number,
-                                .error_stream_id = -1,
-                                .error_code = ErrorCode::kErrorResult,
-                            }};
+          NotifyMessage msg = ErrorMessage{
+              .frame_number = frame_number,
+              .error_stream_id = -1,
+              .error_code = ErrorCode::kErrorResult,
+          };
 
           notify_callback.notify(pipeline_id, msg);
         }

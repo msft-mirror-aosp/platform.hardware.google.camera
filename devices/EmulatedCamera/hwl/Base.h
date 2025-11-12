@@ -61,6 +61,8 @@ struct SensorBuffer {
   int acquire_fence_fd;
   bool is_input;
   bool is_failed_request;
+  int group_id;
+  bool group_concurrency_enabled;
 
   union Plane {
     SinglePlane img;
@@ -81,6 +83,8 @@ struct SensorBuffer {
         acquire_fence_fd(-1),
         is_input(false),
         is_failed_request(false),
+        group_id(-1),
+        group_concurrency_enabled(false),
         plane{} {
   }
 

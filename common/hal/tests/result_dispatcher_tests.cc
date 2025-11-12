@@ -83,15 +83,11 @@ class ResultDispatcherTests : public ::testing::Test {
 
   // Invoked when receiving a shutter from the result dispatcher.
   void Notify(const NotifyMessage& message) {
-    if (message.type != MessageType::kShutter) {
-      EXPECT_EQ(message.type, MessageType::kShutter)
-          << "Received a non-shutter message.";
-      return;
-    }
+    ASSERT_TRUE(std::holds_alternative<ShutterMessage>(message));
 
     std::lock_guard<std::mutex> lock(callback_lock_);
-    received_shutters_.push_back({message.message.shutter.frame_number,
-                                  message.message.shutter.timestamp_ns});
+    const ShutterMessage& shutter = std::get<ShutterMessage>(message);
+    received_shutters_.push_back({shutter.frame_number, shutter.timestamp_ns});
     callback_condition_.notify_one();
   }
 

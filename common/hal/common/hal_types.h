@@ -23,6 +23,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 #include "hal_camera_metadata.h"
@@ -139,6 +140,7 @@ struct Stream {
   StreamUseCase use_case = ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT;
   ColorSpaceProfile color_space =
       ANDROID_REQUEST_AVAILABLE_COLOR_SPACE_PROFILES_MAP_UNSPECIFIED;
+  bool group_streams_concurrent = false;
 };
 
 // See the definition of
@@ -269,13 +271,6 @@ typedef std::array<std::unique_ptr<HalCameraMetadata>, kTemplateCount>
     DefaultRequestsType;
 
 // See the definition of
-// ::android::hardware::camera::device::V3_2::MsgType
-enum class MessageType : uint32_t {
-  kError = 1,
-  kShutter = 2,
-};
-
-// See the definition of
 // ::android::hardware::camera::device::V3_2::ErrorCode
 enum class ErrorCode : uint32_t {
   kErrorDevice = 1,
@@ -293,23 +288,24 @@ struct ErrorMessage {
 };
 
 // See the definition of
+// android::hardware::camera::device::StreamGroupState
+struct StreamGroupState {
+  int32_t group_id = -1;
+  std::vector<int32_t> activeStreamIds;
+};
+
+// See the definition of
 // ::android::hardware::camera::device::V3_8::ShutterMsg
 struct ShutterMessage {
   uint32_t frame_number = 0;
   uint64_t timestamp_ns = 0;
   uint64_t readout_timestamp_ns = 0;
+  std::vector<StreamGroupState> stream_group_state;
 };
 
 // See the definition of
-// ::android::hardware::camera::device::V3_8::NotifyMsg
-struct NotifyMessage {
-  MessageType type = MessageType::kError;
-
-  union Message {
-    ErrorMessage error;
-    ShutterMessage shutter;
-  } message;
-};
+// ::android::hardware::camera::device::NotifyMsg
+using NotifyMessage = std::variant<ErrorMessage, ShutterMessage>;
 
 // See the definition of
 // ::android::hardware::camera::device::V3_4::PhysicalCameraMetadata

@@ -1019,10 +1019,9 @@ void CameraDeviceSession::NotifyErrorMessage(uint32_t frame_number,
           frame_number);
     stream_id = kInvalidStreamId;
   }
-  NotifyMessage message = {.type = MessageType::kError,
-                           .message.error = {.frame_number = frame_number,
-                                             .error_stream_id = stream_id,
-                                             .error_code = error_code}};
+  NotifyMessage message = ErrorMessage{.frame_number = frame_number,
+                                       .error_stream_id = stream_id,
+                                       .error_code = error_code};
 
   std::shared_lock lock(session_callback_lock_);
   session_callback_.notify(message);
@@ -2031,22 +2030,22 @@ void CameraDeviceSession::TrackReturnedBuffers(
 bool CameraDeviceSession::ShouldSendNotifyMessage(const NotifyMessage& result) {
   {
     uint32_t frame_number = 0;
-    if (result.type == MessageType::kError) {
-      frame_number = result.message.error.frame_number;
-    } else if (result.type == MessageType::kShutter) {
-      frame_number = result.message.shutter.frame_number;
+    if (std::holds_alternative<ErrorMessage>(result)) {
+      frame_number = std::get<ErrorMessage>(result).frame_number;
+    } else if (std::holds_alternative<ShutterMessage>(result)) {
+      frame_number = std::get<ShutterMessage>(result).frame_number;
     }
     std::lock_guard<std::mutex> lock(request_record_lock_);
     // Strip out results for frame number that has been notified
     // ErrorCode::kErrorResult and ErrorCode::kErrorBuffer
     if ((error_notified_requests_.find(frame_number) !=
          error_notified_requests_.end()) &&
-        (result.type != MessageType::kShutter)) {
+        (!std::holds_alternative<ShutterMessage>(result))) {
       return false;
     }
 
-    if (result.type == MessageType::kError &&
-        result.message.error.error_code == ErrorCode::kErrorResult) {
+    if (std::holds_alternative<ErrorMessage>(result) &&
+        std::get<ErrorMessage>(result).error_code == ErrorCode::kErrorResult) {
       pending_results_.erase(frame_number);
 
       if (ignore_shutters_.find(frame_number) == ignore_shutters_.end()) {
@@ -2054,7 +2053,7 @@ bool CameraDeviceSession::ShouldSendNotifyMessage(const NotifyMessage& result) {
       }
     }
 
-    if (result.type == MessageType::kShutter) {
+    if (std::holds_alternative<ShutterMessage>(result)) {
       if (ignore_shutters_.find(frame_number) != ignore_shutters_.end()) {
         ignore_shutters_.erase(frame_number);
         return false;
@@ -2062,9 +2061,10 @@ bool CameraDeviceSession::ShouldSendNotifyMessage(const NotifyMessage& result) {
     }
   }
 
-  if (ATRACE_ENABLED() && result.type == MessageType::kShutter) {
+  if (ATRACE_ENABLED() && std::holds_alternative<ShutterMessage>(result)) {
     int64_t timestamp_ns_diff = 0;
-    int64_t current_timestamp_ns = result.message.shutter.timestamp_ns;
+    const ShutterMessage& shutter = std::get<ShutterMessage>(result);
+    int64_t current_timestamp_ns = shutter.timestamp_ns;
     if (last_timestamp_ns_for_trace_ != 0) {
       timestamp_ns_diff = current_timestamp_ns - last_timestamp_ns_for_trace_;
     }
@@ -2072,7 +2072,7 @@ bool CameraDeviceSession::ShouldSendNotifyMessage(const NotifyMessage& result) {
     last_timestamp_ns_for_trace_ = current_timestamp_ns;
 
     ATRACE_INT64("sensor_timestamp_diff", timestamp_ns_diff);
-    ATRACE_INT("timestamp_frame_number", result.message.shutter.frame_number);
+    ATRACE_INT("timestamp_frame_number", shutter.frame_number);
   }
 
   return true;

@@ -321,10 +321,10 @@ void BasicCaptureSession::ProcessCaptureResult(
 }
 
 void BasicCaptureSession::Notify(const NotifyMessage& message) {
-  if (message.type == MessageType::kShutter) {
-    result_dispatcher_->AddShutter(message.message.shutter);
+  if (std::holds_alternative<ShutterMessage>(message)) {
+    result_dispatcher_->AddShutter(std::get<ShutterMessage>(message));
   } else {
-    result_dispatcher_->AddError(message.message.error);
+    result_dispatcher_->AddError(std::get<ErrorMessage>(message));
   }
 }
 
@@ -337,10 +337,10 @@ void BasicCaptureSession::NotifyBatch(const std::vector<NotifyMessage>& messages
   std::vector<ShutterMessage> shutter_messages;
   shutter_messages.reserve(messages.size());
   for (const NotifyMessage& message : messages) {
-    if (message.type == MessageType::kShutter) {
-      shutter_messages.push_back(message.message.shutter);
+    if (std::holds_alternative<ShutterMessage>(message)) {
+      shutter_messages.push_back(std::get<ShutterMessage>(message));
     } else {
-      result_dispatcher_->AddError(message.message.error);
+      result_dispatcher_->AddError(std::get<ErrorMessage>(message));
     }
   }
   result_dispatcher_->AddBatchShutter(shutter_messages);

@@ -223,13 +223,18 @@ bool EmulatedSensor::AreCharacteristicsSupported(
   }
 
   if (characteristics.is_10bit_dynamic_range_capable) {
-    // We support only HLG10 at the moment
-    const auto& hlg10_entry = characteristics.dynamic_range_profiles.find(
-        ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_HLG10);
-    if ((characteristics.dynamic_range_profiles.size() != 1) ||
-        (hlg10_entry == characteristics.dynamic_range_profiles.end())) {
-      ALOGE("%s: Only support for HLG10 is available!", __FUNCTION__);
-      return false;
+    for (const auto& profile : characteristics.dynamic_range_profiles) {
+      switch (profile.first) {
+        case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD:
+        case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_HLG10:
+        case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD_AGTM:
+        case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_HLG10_AGTM:
+          break;
+        default:
+          ALOGE("%s: Only support for HLG10 and AGTM is available!",
+                __FUNCTION__);
+          return false;
+      }
     }
   }
 
@@ -433,8 +438,10 @@ bool EmulatedSensor::IsStreamCombinationSupported(
         }
       }
 
-      if (stream.dynamic_profile !=
-          ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD) {
+      if ((stream.dynamic_profile !=
+           ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD) &&
+          (stream.dynamic_profile !=
+           ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD_AGTM)) {
         const SensorCharacteristics& sensor_char =
             stream.is_physical_camera_stream
                 ? sensor_chars.at(stream.physical_camera_id)

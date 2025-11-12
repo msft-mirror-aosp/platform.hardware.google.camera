@@ -273,6 +273,12 @@
  "android.request.availableDynamicRangeProfilesMap": [
   "2",
   "3",
+  "0",
+  "8192",
+  "0",
+  "0",
+  "16384",
+  "0",
   "0"
  ],
  "android.request.availableColorSpaceProfilesMap": [

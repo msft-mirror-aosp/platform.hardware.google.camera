@@ -199,11 +199,13 @@ class EmulatedSensor : private Thread, public virtual RefBase {
       android_pixel_format_t format, DynamicRangeProfile dynamic_range_profile) {
     switch (dynamic_range_profile) {
       case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD:
+      case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD_AGTM:
         if (format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
           return HAL_PIXEL_FORMAT_YCBCR_420_888;
         }
         break;
       case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_HLG10:
+      case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_HLG10_AGTM:
         if (format == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
           return static_cast<android_pixel_format_t>(
               HAL_PIXEL_FORMAT_YCBCR_P010);

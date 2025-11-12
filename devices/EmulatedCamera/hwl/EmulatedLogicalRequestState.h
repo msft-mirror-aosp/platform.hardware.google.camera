@@ -34,6 +34,7 @@ struct EmulatedStream : public HalStream {
   int32_t group_id;
   int64_t use_case;
   int32_t color_space;
+  uint64_t dynamic_profile;
 };
 
 struct EmulatedPipeline {

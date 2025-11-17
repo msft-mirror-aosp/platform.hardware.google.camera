@@ -117,6 +117,8 @@ class CameraDeviceHwl : public PhysicalCameraInfoHwl {
       const StreamConfiguration& stream_config,
       const bool check_settings) const = 0;
 
+  virtual void WarmUp() = 0;
+
   // Get customized profiler
   virtual std::unique_ptr<google::camera_common::Profiler> GetProfiler(
       uint32_t /* camera_id */, int /* option */) {

@@ -457,6 +457,10 @@ bool CameraDevice::IsStreamCombinationSupported(
   return supported;
 }
 
+void CameraDevice::WarmUp() {
+  camera_device_hwl_->WarmUp();
+}
+
 status_t CameraDevice::LoadExternalCaptureSession() {
   ATRACE_CALL();
 

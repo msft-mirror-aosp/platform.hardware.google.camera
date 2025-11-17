@@ -357,6 +357,12 @@ ScopedAStatus AidlCameraDevice::isStreamCombinationSupportedInternal(
   return ScopedAStatus::ok();
 }
 
+ScopedAStatus AidlCameraDevice::warmUp() {
+  ALOGV("%s: Received warmUp call for camera id %u", __FUNCTION__, camera_id_);
+  google_camera_device_->WarmUp();
+  return ScopedAStatus::ok();
+}
+
 ::ndk::SpAIBinder AidlCameraDevice::createBinder() {
   auto binder = BnCameraDevice::createBinder();
   AIBinder_setInheritRt(binder.get(), true);

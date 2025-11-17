@@ -89,6 +89,9 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
   bool IsStreamCombinationSupported(const StreamConfiguration& stream_config,
                                     const bool /*check_settings*/) const override;
 
+  void WarmUp() override {
+  }
+
   // End of override functions in CameraDeviceHwl.
 
  private:

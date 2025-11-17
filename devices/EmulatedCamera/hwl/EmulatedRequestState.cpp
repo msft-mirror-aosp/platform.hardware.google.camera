@@ -711,6 +711,13 @@ status_t EmulatedRequestState::InitializeSensorSettings(
     settings_overriding_frame_number_ = override_frame_number;
   }
 
+  // Check multiple metadata
+  ret = request_settings_->Get(ANDROID_LOGICAL_MULTI_CAMERA_ADDITIONAL_RESULTS,
+                               &entry);
+  if ((ret == OK) && (entry.count == 1)) {
+    info.logcial_multi_camera_additional_results_ = entry.data.u8[0];
+  }
+
   // Check rotate_and_crop setting
   ret = request_settings_->Get(ANDROID_SCALER_ROTATE_AND_CROP, &entry);
   if ((ret == OK) && (entry.count == 1)) {
@@ -970,6 +977,9 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
   result->result_metadata->Set(ANDROID_CONTROL_AWB_MODE, &info.awb_mode_, 1);
   result->result_metadata->Set(ANDROID_CONTROL_AWB_STATE, &info.awb_state_, 1);
   result->result_metadata->Set(ANDROID_CONTROL_AE_MODE, &info.ae_mode_, 1);
+  result->result_metadata->Set(ANDROID_LOGICAL_MULTI_CAMERA_ADDITIONAL_RESULTS,
+                               &info.logcial_multi_camera_additional_results_,
+                               1);
 
   if (info.ae_mode_ == ANDROID_CONTROL_AE_MODE_OFF) {
     // AE Priority mode should not work with AE mode OFF

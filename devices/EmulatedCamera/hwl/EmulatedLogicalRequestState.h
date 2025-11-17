@@ -110,6 +110,7 @@ class EmulatedLogicalRequestState {
   EmulatedLogicalRequestState(const EmulatedLogicalRequestState&) = delete;
   EmulatedLogicalRequestState& operator=(const EmulatedLogicalRequestState&) =
       delete;
+  bool is_logical_multi_camera_additional_results_ = false;
 };
 
 }  // namespace android

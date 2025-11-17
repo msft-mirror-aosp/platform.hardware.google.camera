@@ -22,6 +22,7 @@
 
 #include <log/log.h>
 
+#include "hal_camera_metadata.h"
 #include "vendor_tag_defs.h"
 
 namespace android {
@@ -109,6 +110,20 @@ EmulatedLogicalRequestState::InitializeLogicalResult(uint32_t pipeline_id,
           : logical_request_state_->InitializeResult(pipeline_id, frame_number);
 
   if (is_logical_device_ && !is_partial_result) {
+    if (is_logical_multi_camera_additional_results_) {
+      std::unique_ptr<std::set<uint32_t>> active_physical_camera_ids =
+          std::make_unique<std::set<uint32_t>>();
+      // emulated camera has only 1 physical camera for each focus range
+      active_physical_camera_ids->emplace(current_physical_camera_);
+      for (const auto& id : *active_physical_camera_ids) {
+        if (physical_camera_output_ids_->empty() ||
+            physical_camera_output_ids_->find(id) ==
+                physical_camera_output_ids_->end()) {
+          physical_camera_output_ids_->emplace(id);
+          ALOGV("insert physical camera id: %d to output ids", id);
+        }
+      }
+    }
     if ((physical_camera_output_ids_.get() != nullptr) &&
         (!physical_camera_output_ids_->empty())) {
       ret->physical_camera_results.reserve(physical_camera_output_ids_->size());
@@ -174,6 +189,15 @@ status_t EmulatedLogicalRequestState::InitializeLogicalSettings(
   if (is_logical_device_) {
     std::swap(physical_camera_output_ids_, physical_camera_output_ids);
 
+    // Check additional results
+    camera_metadata_ro_entry_t entry;
+    auto additional_results_ret = request_settings->Get(
+        ANDROID_LOGICAL_MULTI_CAMERA_ADDITIONAL_RESULTS, &entry);
+    if ((additional_results_ret == OK) && (entry.count == 1)) {
+      is_logical_multi_camera_additional_results_ =
+          entry.data.u8[0] == ANDROID_LOGICAL_MULTI_CAMERA_ADDITIONAL_RESULTS_ON;
+    }
+
     for (const auto& physical_request_state : physical_request_states_) {
       // All physical devices will receive requests and will keep
       // updating their respective request state.
@@ -191,8 +215,15 @@ status_t EmulatedLogicalRequestState::InitializeLogicalSettings(
         return ret;
       }
 
-      if (physical_camera_output_ids_->find(physical_request_state.first) !=
-          physical_camera_output_ids_->end()) {
+      // multiple metadata we collect all the physical sensor settings now, as
+      // we don't know the active sensors at the current moment, we add the
+      // active sensor id to the output_ids in the result compose, and add the
+      // physical settings to the result.
+      ALOGV("multiple_metadata set to %b",
+            is_logical_multi_camera_additional_results_);
+      if (is_logical_multi_camera_additional_results_ ||
+          physical_camera_output_ids_->find(physical_request_state.first) !=
+              physical_camera_output_ids_->end()) {
         logical_settings->emplace(physical_request_state.first,
                                   physical_sensor_settings);
         if (max_frame_duration < physical_sensor_settings.exposure_time) {

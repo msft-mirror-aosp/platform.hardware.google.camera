@@ -295,6 +295,7 @@ struct EmulatedCameraDeviceInfo {
   status_t InitializeControlefaults();
   status_t InitializeInfoDefaults();
   status_t InitializeLensDefaults();
+  status_t InitializeLogicalMultiCameraDefaults();
 
   bool SupportsCapability(uint8_t cap);
 };

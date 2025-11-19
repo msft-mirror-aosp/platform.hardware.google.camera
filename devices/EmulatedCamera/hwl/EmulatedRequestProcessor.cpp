@@ -326,6 +326,17 @@ status_t EmulatedRequestProcessor::LockSensorBuffer(
         return BAD_VALUE;
       }
       sensor_buffer->plane.img_y_crcb.bytesPerPixel = isP010 ? 2 : 1;
+      if (stream.dynamic_profile ==
+              ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD_AGTM ||
+          stream.dynamic_profile ==
+              ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_HLG10_AGTM) {
+        std::vector<uint8_t> meta = {'T', 'E', 'S', 'T', '\0'};
+        auto stat = importer_->setSmpte2094_50(buffer, meta);
+        if (stat != OK) {
+          ALOGE("%s: Failed to set SMPTE50_40 metadata for stream id %d !",
+                __FUNCTION__, stream.id);
+        }
+      }
     } else {
       ALOGE("%s: Failed to lock output buffer for stream id %d !", __FUNCTION__,
             stream.id);

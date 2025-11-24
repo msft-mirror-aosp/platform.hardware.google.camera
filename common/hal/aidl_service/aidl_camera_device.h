@@ -112,6 +112,8 @@ class AidlCameraDevice : public BnCameraDevice {
   ScopedAStatus isStreamCombinationSupportedInternal(
       const StreamConfiguration& streamConfiguration, bool* supported,
       bool checkSettings);
+
+  ScopedAStatus warmUp();
 };
 
 }  // namespace implementation

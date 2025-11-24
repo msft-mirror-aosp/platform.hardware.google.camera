@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
+#include "system/camera_metadata.h"
+#include "utils/Errors.h"
 #define LOG_TAG "EmulatedCameraDeviceInfo"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 
-#include "EmulatedCameraDeviceInfo.h"
-
 #include <inttypes.h>
 #include <log/log.h>
+
+#include "EmulatedCameraDeviceInfo.h"
 
 namespace android {
 
@@ -245,7 +247,7 @@ status_t EmulatedCameraDeviceInfo::InitializeSensorDefaults() {
                                 test_pattern_data, 4);
   }
 
-  return OK;
+  return InitializeLogicalMultiCameraDefaults();
 }
 
 status_t EmulatedCameraDeviceInfo::InitializeStatisticsDefaults() {
@@ -584,9 +586,11 @@ status_t EmulatedCameraDeviceInfo::InitializeControlAEDefaults() {
     return BAD_VALUE;
   }
 
-  ret = static_metadata_->Get(ANDROID_CONTROL_AE_AVAILABLE_PRIORITY_MODES, &entry);
+  ret = static_metadata_->Get(ANDROID_CONTROL_AE_AVAILABLE_PRIORITY_MODES,
+                              &entry);
   if (ret == OK) {
-    available_ae_priority_modes_.insert(entry.data.u8, entry.data.u8 + entry.count);
+    available_ae_priority_modes_.insert(entry.data.u8,
+                                        entry.data.u8 + entry.count);
   } else {
     ALOGV("%s: No available AE priority modes!", __FUNCTION__);
   }
@@ -2001,6 +2005,35 @@ status_t EmulatedCameraDeviceInfo::InitializeRequestDefaults() {
   }
 
   return InitializeInfoDefaults();
+}
+
+status_t EmulatedCameraDeviceInfo::InitializeLogicalMultiCameraDefaults() {
+  bool supports_logical_multi_camera = SupportsCapability(
+      ANDROID_REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA);
+
+  if (supports_logical_multi_camera) {
+    if (available_requests_.find(
+            ANDROID_LOGICAL_MULTI_CAMERA_ADDITIONAL_RESULTS) !=
+        available_requests_.end()) {
+      if (available_results_.find(
+              ANDROID_LOGICAL_MULTI_CAMERA_ADDITIONAL_RESULTS) !=
+          available_requests_.end()) {
+        for (size_t templateIdx = 0; templateIdx < kTemplateCount;
+             templateIdx++) {
+          if (default_requests_[templateIdx].get() == nullptr) {
+            continue;
+          }
+          uint8_t default_additional_results =
+              ANDROID_LOGICAL_MULTI_CAMERA_ADDITIONAL_RESULTS_OFF;
+          default_requests_[templateIdx]->Set(
+              ANDROID_LOGICAL_MULTI_CAMERA_ADDITIONAL_RESULTS,
+              &default_additional_results, 1);
+        }
+      }
+    }
+  }
+
+  return OK;
 }
 
 bool EmulatedCameraDeviceInfo::SupportsCapability(uint8_t cap) {

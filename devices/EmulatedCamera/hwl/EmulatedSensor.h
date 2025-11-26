@@ -96,6 +96,7 @@ using google_camera_hal::DynamicRangeProfile;
 using google_camera_hal::HwlPipelineCallback;
 using google_camera_hal::HwlPipelineResult;
 using google_camera_hal::StreamConfiguration;
+using google_camera_hal::StreamGroupState;
 
 using hardware::graphics::common::V1_2::Dataspace;
 
@@ -467,6 +468,9 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   static float GetBaseGainFactor(float max_raw_value) {
     return max_raw_value / EmulatedSensor::kSaturationElectrons;
   }
+
+  static std::vector<StreamGroupState> GetStreamGroupState(
+      const Buffers& output_buffers);
 
   nsecs_t getSystemTimeWithSource(uint32_t timestamp_source);
 };

@@ -485,11 +485,11 @@ void MultiCameraRtProcessBlock::NotifyHwlPipelineMessage(
     ALOGE("%s: result processor is nullptr. Dropping a message", __FUNCTION__);
     return;
   }
-  uint32_t frame_number = message.type == MessageType::kShutter
-                              ? message.message.shutter.frame_number
-                              : message.message.error.frame_number;
-  ALOGV("%s: pipeline id %u frame_number %u type %d", __FUNCTION__, pipeline_id,
-        frame_number, message.type);
+  uint32_t frame_number = std::holds_alternative<ShutterMessage>(message)
+                              ? std::get<ShutterMessage>(message).frame_number
+                              : std::get<ErrorMessage>(message).frame_number;
+  ALOGV("%s: pipeline id %u frame_number %u", __FUNCTION__, pipeline_id,
+        frame_number);
   uint32_t request_id = 0;
   status_t res = request_id_manager_->GetPipelineRequestId(
       pipeline_id, frame_number, &request_id);

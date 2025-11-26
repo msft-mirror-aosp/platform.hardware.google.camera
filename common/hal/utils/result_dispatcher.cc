@@ -263,13 +263,14 @@ status_t ResultDispatcher::AddBatchResult(
   return last_error.value_or(OK);
 }
 
-status_t ResultDispatcher::AddShutterLocked(uint32_t frame_number,
-                                            int64_t timestamp_ns,
-                                            int64_t readout_timestamp_ns) {
+status_t ResultDispatcher::AddShutterLocked(
+    uint32_t frame_number, int64_t timestamp_ns, int64_t readout_timestamp_ns,
+    const std::vector<StreamGroupState>& stream_group_state) {
   status_t res = pending_shutters_.AddResult(
       frame_number, PendingShutter{
                         .timestamp_ns = timestamp_ns,
                         .readout_timestamp_ns = readout_timestamp_ns,
+                        .stream_group_state = stream_group_state,
                         .ready = true,
                     });
   if (res != OK) {
@@ -286,9 +287,9 @@ status_t ResultDispatcher::AddShutter(const ShutterMessage& shutter) {
 
   {
     std::lock_guard lock(result_lock_);
-    if (status_t ret =
-            AddShutterLocked(shutter.frame_number, shutter.timestamp_ns,
-                             shutter.readout_timestamp_ns);
+    if (status_t ret = AddShutterLocked(
+            shutter.frame_number, shutter.timestamp_ns,
+            shutter.readout_timestamp_ns, shutter.stream_group_state);
         ret != OK) {
       return ret;
     }
@@ -306,9 +307,9 @@ status_t ResultDispatcher::AddBatchShutter(
   {
     std::lock_guard lock(result_lock_);
     for (const ShutterMessage& shutter : shutters) {
-      if (status_t ret =
-              AddShutterLocked(shutter.frame_number, shutter.timestamp_ns,
-                               shutter.readout_timestamp_ns);
+      if (status_t ret = AddShutterLocked(
+              shutter.frame_number, shutter.timestamp_ns,
+              shutter.readout_timestamp_ns, shutter.stream_group_state);
           ret != OK) {
         return ret;
       }
@@ -339,7 +340,7 @@ status_t ResultDispatcher::AddError(const ErrorMessage& error) {
     pending_final_metadata_.RemoveRequest(frame_number);
   }
 
-  NotifyMessage message = {.type = MessageType::kError, .message.error = error};
+  NotifyMessage message = error;
   ALOGV("[%s] %s: Notify error %u for frame %u stream %d", name_.c_str(),
         __FUNCTION__, error.error_code, frame_number, error.error_stream_id);
   notify_(message);
@@ -493,16 +494,16 @@ status_t ResultDispatcher::GetPendingShutterNotificationLocked(
   PendingShutter pending_shutter;
   status_t ret = pending_shutters_.GetReadyData(frame_number, pending_shutter);
   if (ret == OK) {
-    message.type = MessageType::kShutter;
-    message.message.shutter.frame_number = frame_number;
-    message.message.shutter.timestamp_ns = pending_shutter.timestamp_ns;
-    message.message.shutter.readout_timestamp_ns =
-        pending_shutter.readout_timestamp_ns;
+    message = ShutterMessage{
+        .frame_number = frame_number,
+        .timestamp_ns = static_cast<uint64_t>(pending_shutter.timestamp_ns),
+        .readout_timestamp_ns =
+            static_cast<uint64_t>(pending_shutter.readout_timestamp_ns),
+        .stream_group_state = std::move(pending_shutter.stream_group_state)};
     ALOGV("[%s] %s: Notify shutter for frame %u timestamp %" PRIu64
           " readout_timestamp %" PRIu64,
-          name_.c_str(), __FUNCTION__, message.message.shutter.frame_number,
-          message.message.shutter.timestamp_ns,
-          message.message.shutter.readout_timestamp_ns);
+          name_.c_str(), __FUNCTION__, frame_number,
+          pending_shutter.timestamp_ns, pending_shutter.readout_timestamp_ns);
   }
   return ret;
 }

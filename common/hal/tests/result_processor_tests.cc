@@ -69,11 +69,9 @@ TEST(ResultProcessorTest, SetResultCallback) {
 }
 
 void SendResultsAndMessages(ResultProcessor* result_processor) {
-  ProcessBlockNotifyMessage shutter_message = {
-      .message = {.type = MessageType::kShutter}};
+  ProcessBlockNotifyMessage shutter_message = {.message = ShutterMessage{}};
 
-  ProcessBlockNotifyMessage error_message = {
-      .message = {.type = MessageType::kError}};
+  ProcessBlockNotifyMessage error_message = {.message = ErrorMessage{}};
 
   // Verify it can handle various results.
   ProcessBlockResult null_result;

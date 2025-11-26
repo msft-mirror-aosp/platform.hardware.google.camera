@@ -31,7 +31,6 @@ namespace android {
 using google_camera_hal::CameraBlob;
 using google_camera_hal::CameraBlobId;
 using google_camera_hal::ErrorCode;
-using google_camera_hal::MessageType;
 using google_camera_hal::NotifyMessage;
 
 // All ICC profile data sourced from https://github.com/saucecontrol/Compact-ICC-Profiles

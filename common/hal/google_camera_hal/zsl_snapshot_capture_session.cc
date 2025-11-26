@@ -924,22 +924,24 @@ void ZslSnapshotCaptureSession::NotifyHalMessage(const NotifyMessage& message) {
     return;
   }
 
-  if (message.type == MessageType::kShutter) {
-    status_t res = result_dispatcher_->AddShutter(message.message.shutter);
+  if (std::holds_alternative<ShutterMessage>(message)) {
+    const ShutterMessage& shutter = std::get<ShutterMessage>(message);
+    status_t res = result_dispatcher_->AddShutter(shutter);
     if (res != OK) {
       ALOGE("%s: AddShutter for frame %u failed: %s (%d).", __FUNCTION__,
-            message.message.shutter.frame_number, strerror(-res), res);
+            shutter.frame_number, strerror(-res), res);
       return;
     }
-  } else if (message.type == MessageType::kError) {
-    status_t res = result_dispatcher_->AddError(message.message.error);
+  } else if (std::holds_alternative<ErrorMessage>(message)) {
+    const ErrorMessage& error = std::get<ErrorMessage>(message);
+    status_t res = result_dispatcher_->AddError(error);
     if (res != OK) {
       ALOGE("%s: AddError for frame %u failed: %s (%d).", __FUNCTION__,
-            message.message.error.frame_number, strerror(-res), res);
+            error.frame_number, strerror(-res), res);
       return;
     }
   } else {
-    ALOGW("%s: Unsupported message type: %u", __FUNCTION__, message.type);
+    ALOGW("%s: Unsupported message type", __FUNCTION__);
     device_session_notify_(message);
   }
 }

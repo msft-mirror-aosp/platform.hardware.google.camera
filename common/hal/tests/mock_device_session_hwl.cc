@@ -179,12 +179,11 @@ status_t FakeCameraDeviceSessionHwl::SubmitRequests(
     }
 
     // Notify shutter.
-    NotifyMessage shutter_message = {.type = MessageType::kShutter,
-                                     .message.shutter = {
-                                         .frame_number = frame_number,
-                                         .timestamp_ns = 0,
-                                         .readout_timestamp_ns = 0,
-                                     }};
+    NotifyMessage shutter_message = ShutterMessage{
+        .frame_number = frame_number,
+        .timestamp_ns = 0,
+        .readout_timestamp_ns = 0,
+    };
     callback->second.notify(request.pipeline_id, shutter_message);
 
     // Send out result.

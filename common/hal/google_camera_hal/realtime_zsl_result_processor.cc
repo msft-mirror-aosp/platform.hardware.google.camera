@@ -164,8 +164,8 @@ void RealtimeZslResultProcessor::Notify(
   }
 
   // Do not notify errors for internal streams
-  if (message.type == MessageType::kError &&
-      message.message.error.error_stream_id == stream_id_) {
+  if (std::holds_alternative<ErrorMessage>(message) &&
+      std::get<ErrorMessage>(message).error_stream_id == stream_id_) {
     return;
   }
 

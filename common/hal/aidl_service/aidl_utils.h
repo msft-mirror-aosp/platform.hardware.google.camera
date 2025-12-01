@@ -30,6 +30,7 @@
 #include <hal_types.h>
 
 #include <memory>
+#include <vector>
 
 #include "aidl_camera_provider.h"
 
@@ -65,6 +66,7 @@ using aidl::android::hardware::camera::device::StreamBufferRet;
 using aidl::android::hardware::camera::device::StreamBuffersVal;
 using aidl::android::hardware::camera::device::StreamConfiguration;
 using aidl::android::hardware::camera::device::StreamConfigurationMode;
+using aidl::android::hardware::camera::device::StreamGroupState;
 using aidl::android::hardware::camera::device::StreamRotation;
 using aidl::android::hardware::camera::device::StreamType;
 using aidl::android::hardware::camera::provider::ICameraProvider;
@@ -135,6 +137,10 @@ status_t ConvertToAidlCaptureResult(
 status_t ConvertToAidlStreamBuffer(
     const google_camera_hal::StreamBuffer& hal_buffer,
     StreamBuffer* aidl_buffer);
+
+status_t ConvertToAidlStreamGroupState(
+    const std::vector<google_camera_hal::StreamGroupState>& hal_stream_group_state,
+    std::vector<StreamGroupState>* aidl_stream_group_state);
 
 // Conversions from AIDL to HAL.
 status_t ConvertToHalTemplateType(

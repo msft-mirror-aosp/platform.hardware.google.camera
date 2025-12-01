@@ -323,27 +323,26 @@ void RealtimeZslResultRequestProcessor::Notify(
   }
 
   // Will return buffer for kErrorRequest and kErrorBuffer.
-  if (message.type == MessageType::kError) {
+  if (std::holds_alternative<ErrorMessage>(message)) {
     // May change to ALOGD for per-frame error messages.
+    const ErrorMessage& error = std::get<ErrorMessage>(message);
     ALOGV("%s: Received error message at frame: %d, error code (%d)",
-          __FUNCTION__, message.message.error.frame_number,
-          static_cast<int>(message.message.error.error_code));
-    if (message.message.error.error_code == ErrorCode::kErrorRequest ||
-        message.message.error.error_code == ErrorCode::kErrorBuffer) {
+          __FUNCTION__, error.frame_number, static_cast<int>(error.error_code));
+    if (error.error_code == ErrorCode::kErrorRequest ||
+        error.error_code == ErrorCode::kErrorBuffer) {
       pending_error_frames_.try_emplace(
-          message.message.error.frame_number,
+          error.frame_number,
           RequestEntry{.capture_request = std::make_unique<CaptureRequest>()});
-      if (message.message.error.error_code == ErrorCode::kErrorRequest) {
+      if (error.error_code == ErrorCode::kErrorRequest) {
         // ProcessCaptureResult is not called in the case of metadata error.
         // Therefore, treat it as if a metadata callback arrived so that we can
         // know when the request is complete.
-        pending_error_frames_[message.message.error.frame_number]
-            .partial_results_received++;
+        pending_error_frames_[error.frame_number].partial_results_received++;
       }
     }
     // Gives latched results (those that have arrived but are waiting for
     // AllDataCollected()) a chance to return their valid buffer.
-    uint32_t frame_number = message.message.error.frame_number;
+    uint32_t frame_number = error.frame_number;
     auto result = std::make_unique<CaptureResult>();
     result->frame_number = frame_number;
     if (pending_frame_number_to_requests_.find(frame_number) !=
@@ -357,17 +356,17 @@ void RealtimeZslResultRequestProcessor::Notify(
       }
     }
   } else {
+    const ShutterMessage& shutter = std::get<ShutterMessage>(message);
     // May change to ALOGD for per-frame shutter messages.
     ALOGV("%s: Received shutter message for frame %d, timestamp_ns: %" PRId64
           ", readout_timestamp_ns: %" PRId64,
-          __FUNCTION__, message.message.shutter.frame_number,
-          message.message.shutter.timestamp_ns,
-          message.message.shutter.readout_timestamp_ns);
+          __FUNCTION__, shutter.frame_number, shutter.timestamp_ns,
+          shutter.readout_timestamp_ns);
   }
 
   // Do not notify errors for internal streams
-  if (message.type == MessageType::kError &&
-      message.message.error.error_stream_id == stream_id_) {
+  if (std::holds_alternative<ErrorMessage>(message) &&
+      std::get<ErrorMessage>(message).error_stream_id == stream_id_) {
     return;
   }
 

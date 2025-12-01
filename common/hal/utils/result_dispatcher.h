@@ -23,6 +23,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
 
 #include "hal_types.h"
 
@@ -129,6 +130,7 @@ class ResultDispatcher {
   struct PendingShutter {
     int64_t timestamp_ns = 0;
     int64_t readout_timestamp_ns = 0;
+    std::vector<StreamGroupState> stream_group_state;
     bool ready = false;
   };
 
@@ -207,8 +209,10 @@ class ResultDispatcher {
   status_t AddResultImpl(std::unique_ptr<CaptureResult> result);
 
   // Add a shutter to `pending_shutters_`.
-  status_t AddShutterLocked(uint32_t frame_number, int64_t timestamp_ns,
-                            int64_t readout_timestamp_ns) REQUIRES(result_lock_);
+  status_t AddShutterLocked(
+      uint32_t frame_number, int64_t timestamp_ns, int64_t readout_timestamp_ns,
+      const std::vector<StreamGroupState>& stream_group_state)
+      REQUIRES(result_lock_);
 
   // Compose a capture result which contains a result metadata.
   std::unique_ptr<CaptureResult> MakeResultMetadata(

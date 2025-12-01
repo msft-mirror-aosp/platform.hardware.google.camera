@@ -275,8 +275,8 @@ class CameraDeviceSessionTests : public ::testing::Test {
   // Caller must lock callback_lock_
   bool IsShutterReceivedLocked(uint32_t frame_number) {
     for (auto& message : received_messages_) {
-      if (message.type == MessageType::kShutter &&
-          message.message.shutter.frame_number == frame_number) {
+      if (std::holds_alternative<ShutterMessage>(message) &&
+          std::get<ShutterMessage>(message).frame_number == frame_number) {
         return true;
       }
     }

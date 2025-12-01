@@ -28,8 +28,8 @@ namespace android {
 
 using android::google_camera_hal::BufferStatus;
 using android::google_camera_hal::ErrorCode;
+using android::google_camera_hal::ErrorMessage;
 using android::google_camera_hal::HwlPipelineResult;
-using android::google_camera_hal::MessageType;
 using android::google_camera_hal::NotifyMessage;
 using android::hardware::camera::common::V1_0::helper::HandleImporter;
 

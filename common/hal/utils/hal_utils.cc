@@ -745,14 +745,15 @@ void DumpCaptureResult(const CaptureResult& result, const std::string& title) {
 void DumpNotify(const NotifyMessage& message, const std::string& title) {
   std::string str = "======== " + title + " ========";
   ALOGI("%s", str.c_str());
-  if (message.type == MessageType::kShutter) {
-    ALOGI("== frame_number:%u", message.message.shutter.frame_number);
-    ALOGI("== time_stamp:%" PRIu64, message.message.shutter.timestamp_ns);
-    ALOGI("== readout_time_stamp:%" PRIu64,
-          message.message.shutter.readout_timestamp_ns);
-  } else if (message.type == MessageType::kError) {
-    ALOGI("== frame_number:%u", message.message.error.frame_number);
-    ALOGI("== error_code:%u", message.message.error.error_code);
+  if (std::holds_alternative<ShutterMessage>(message)) {
+    const ShutterMessage& shutter = std::get<ShutterMessage>(message);
+    ALOGI("== frame_number:%u", shutter.frame_number);
+    ALOGI("== time_stamp:%" PRIu64, shutter.timestamp_ns);
+    ALOGI("== readout_time_stamp:%" PRIu64, shutter.readout_timestamp_ns);
+  } else if (std::holds_alternative<ErrorMessage>(message)) {
+    const ErrorMessage& error = std::get<ErrorMessage>(message);
+    ALOGI("== frame_number:%u", error.frame_number);
+    ALOGI("== error_code:%u", error.error_code);
   }
   ALOGI("%s", str.c_str());
 }

@@ -29,11 +29,9 @@ GrallocSensorBuffer::~GrallocSensorBuffer() {
 
   if ((stream_buffer.status != BufferStatus::kOk) &&
       (callback.notify != nullptr) && (!is_failed_request)) {
-    NotifyMessage msg = {
-        .type = MessageType::kError,
-        .message.error = {.frame_number = frame_number,
-                          .error_stream_id = stream_buffer.stream_id,
-                          .error_code = ErrorCode::kErrorBuffer}};
+    NotifyMessage msg = ErrorMessage{.frame_number = frame_number,
+                                     .error_stream_id = stream_buffer.stream_id,
+                                     .error_code = ErrorCode::kErrorBuffer};
     callback.notify(pipeline_id, msg);
   }
 

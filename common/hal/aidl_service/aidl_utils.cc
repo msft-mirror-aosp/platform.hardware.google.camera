@@ -38,6 +38,8 @@ using AidlCameraDevice = device::implementation::AidlCameraDevice;
 using AidlStatus = aidl::android::hardware::camera::common::Status;
 using DynamicRangeProfile = google_camera_hal::DynamicRangeProfile;
 using ColorSpaceProfile = google_camera_hal::ColorSpaceProfile;
+using ErrorMessage = google_camera_hal::ErrorMessage;
+using ShutterMessage = google_camera_hal::ShutterMessage;
 
 ScopedAStatus ConvertToAidlReturn(status_t hal_status) {
   switch (hal_status) {
@@ -480,8 +482,8 @@ status_t ConvertToAidlCaptureResult(
   return OK;
 }
 
-status_t ConvertToAidlErrorMessage(
-    const google_camera_hal::ErrorMessage& hal_error, NotifyMsg* aidl_msg) {
+status_t ConvertToAidlErrorMessage(const ErrorMessage& hal_error,
+                                   NotifyMsg* aidl_msg) {
   using Tag = aidl::android::hardware::camera::device::NotifyMsg::Tag;
   if (aidl_msg == nullptr) {
     ALOGE("%s: aidl_msg is nullptr.", __FUNCTION__);
@@ -524,7 +526,33 @@ status_t ConvertToAidlShutterMessage(
   aidl_shutter.frameNumber = hal_shutter.frame_number;
   aidl_shutter.timestamp = hal_shutter.timestamp_ns;
   aidl_shutter.readoutTimestamp = hal_shutter.readout_timestamp_ns;
+
+  status_t res = ConvertToAidlStreamGroupState(hal_shutter.stream_group_state,
+                                               &aidl_shutter.streamGroupState);
+  if (res != OK) {
+    ALOGE("%s: Converting to AIDL StreamGroupState failed: %s(%d)",
+          __FUNCTION__, strerror(-res), res);
+    return res;
+  }
+
   aidl_msg->set<Tag::shutter>(aidl_shutter);
+  return OK;
+}
+
+status_t ConvertToAidlStreamGroupState(
+    const std::vector<google_camera_hal::StreamGroupState>& hal_stream_group_state,
+    std::vector<StreamGroupState>* aidl_stream_group_state) {
+  if (aidl_stream_group_state == nullptr) {
+    ALOGE("%s: aidl_stream_group_state is nullptr.", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  aidl_stream_group_state->reserve(hal_stream_group_state.size());
+  for (const google_camera_hal::StreamGroupState& hal_state :
+       hal_stream_group_state) {
+    aidl_stream_group_state->push_back(
+        {hal_state.group_id, hal_state.activeStreamIds});
+  }
   return OK;
 }
 
@@ -537,27 +565,25 @@ status_t ConvertToAidlNotifyMessage(
   }
 
   status_t res;
-  switch (hal_message.type) {
-    case google_camera_hal::MessageType::kError:
-      res = ConvertToAidlErrorMessage(hal_message.message.error, aidl_message);
-      if (res != OK) {
-        ALOGE("%s: Converting to AIDL error message failed: %s(%d)",
-              __FUNCTION__, strerror(-res), res);
-        return res;
-      }
-      break;
-    case google_camera_hal::MessageType::kShutter:
-      res = ConvertToAidlShutterMessage(hal_message.message.shutter,
-                                        aidl_message);
-      if (res != OK) {
-        ALOGE("%s: Converting to AIDL shutter message failed: %s(%d)",
-              __FUNCTION__, strerror(-res), res);
-        return res;
-      }
-      break;
-    default:
-      ALOGE("%s: Unknown message type: %u", __FUNCTION__, hal_message.type);
-      return BAD_VALUE;
+  if (std::holds_alternative<ErrorMessage>(hal_message)) {
+    res = ConvertToAidlErrorMessage(std::get<ErrorMessage>(hal_message),
+                                    aidl_message);
+    if (res != OK) {
+      ALOGE("%s: Converting to AIDL error message failed: %s(%d)", __FUNCTION__,
+            strerror(-res), res);
+      return res;
+    }
+  } else if (std::holds_alternative<ShutterMessage>(hal_message)) {
+    res = ConvertToAidlShutterMessage(std::get<ShutterMessage>(hal_message),
+                                      aidl_message);
+    if (res != OK) {
+      ALOGE("%s: Converting to AIDL shutter message failed: %s(%d)",
+            __FUNCTION__, strerror(-res), res);
+      return res;
+    }
+  } else {
+    ALOGE("%s: Unknown message", __FUNCTION__);
+    return BAD_VALUE;
   }
 
   return OK;
@@ -1088,6 +1114,7 @@ status_t ConvertToHalStream(const Stream& aidl_stream,
 
   hal_stream->buffer_size = aidl_stream.bufferSize;
   hal_stream->group_id = aidl_stream.groupId;
+  hal_stream->group_streams_concurrent = aidl_stream.concurrentGroup;
 
   hal_stream->intended_for_max_resolution_mode = sensorPixelModeContains(
       aidl_stream, ANDROID_SENSOR_PIXEL_MODE_MAXIMUM_RESOLUTION);

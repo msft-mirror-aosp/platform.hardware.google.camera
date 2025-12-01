@@ -399,6 +399,9 @@
    "33",
    "35"
   ],
+  "android.scaler.concurrentMultiResolutionFormats" : [
+   "34"
+  ],
   "android.reprocess.maxCaptureStall": [
    "2"
   ],

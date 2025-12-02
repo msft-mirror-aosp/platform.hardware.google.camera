@@ -408,17 +408,17 @@ std::unique_ptr<SensorBuffer> EmulatedRequestProcessor::CreateSensorBuffer(
                                 buffer->width, buffer->height, buffer.get());
     if (ret != OK) {
       buffer->is_failed_request = true;
-      buffer = nullptr;
+      return nullptr;
     }
   }
 
-  if ((buffer.get() != nullptr) && (stream_buffer.acquire_fence != nullptr)) {
+  if (stream_buffer.acquire_fence != nullptr) {
     auto fence_status = importer_->importFence(stream_buffer.acquire_fence,
                                                buffer->acquire_fence_fd);
     if (!fence_status) {
       ALOGE("%s: Failed importing acquire fence!", __FUNCTION__);
       buffer->is_failed_request = true;
-      buffer = nullptr;
+      return nullptr;
     }
   }
   buffer->group_id = stream.group_id;

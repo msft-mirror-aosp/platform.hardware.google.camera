@@ -548,6 +548,8 @@ status_t CameraDeviceSession::LoadExternalCaptureSession(
 }
 
 CameraDeviceSession::~CameraDeviceSession() {
+  std::lock_guard<std::mutex> lock(session_lock_);
+
   UnregisterThermalCallback();
 
   capture_session_ = nullptr;

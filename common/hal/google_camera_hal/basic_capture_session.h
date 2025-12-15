@@ -110,6 +110,9 @@ class BasicCaptureSession : public CaptureSession {
   void ProcessBatchCaptureResult(
       std::vector<std::unique_ptr<CaptureResult>> results);
   void NotifyBatch(const std::vector<NotifyMessage>& messages);
+  void NotifyOverridePendingBuffer(
+      uint32_t frame_number,
+      const std::vector<StreamGroupState>& stream_group_state);
 
   std::unique_ptr<RequestProcessor> request_processor_;
 

@@ -132,8 +132,6 @@ EmulatedLogicalRequestState::InitializeLogicalResult(uint32_t pipeline_id,
             std::move(physical_request_states_[it]
                           ->InitializeResult(pipeline_id, frame_number)
                           ->result_metadata);
-
-        UpdateActivePhysicalId(ret->physical_camera_results[it].get(), it);
       }
     }
 
@@ -357,6 +355,11 @@ status_t EmulatedLogicalRequestState::UpdateRequestForDynamicStreams(
       for (const auto& one_range : zoom_ratio_physical_camera_info_) {
         if (zoom_ratio >= one_range.min_zoom_ratio &&
             zoom_ratio <= one_range.max_zoom_ratio) {
+          if (one_range.physical_camera_id != current_physical_camera_) {
+            // Switched physical camera backing the logical camera.
+            follower_physical_camera_ = current_physical_camera_;
+            physical_camera_transition_counter_ = CAMERA_SWITCH_FRAME_COUNT;
+          }
           current_physical_camera_ = one_range.physical_camera_id;
           break;
         }
@@ -365,6 +368,7 @@ status_t EmulatedLogicalRequestState::UpdateRequestForDynamicStreams(
   }
 
   const auto& current_pipeline = pipelines[pipeline_id];
+  std::vector<StreamBuffer> follower_output_buffers;
   for (auto& output_buffer : request->output_buffers) {
     auto& current_stream = current_pipeline.streams.at(output_buffer.stream_id);
     if (current_stream.group_id == -1) continue;
@@ -388,7 +392,74 @@ status_t EmulatedLogicalRequestState::UpdateRequestForDynamicStreams(
     }
 
     output_buffer.stream_id = stream_id->second;
+
+    // For a MultiResolutionImageReader, there will only be one output_buffer
+    // for a given stream_group. But there could be more than one output_buffer
+    // being generated if concurrency is enabled.
+    if (!current_stream.group_concurrency_enabled) {
+      continue;
+    }
+    if (follower_physical_camera_ == -1) {
+      // No follower physical camera; skip
+      continue;
+    }
+
+    StreamBuffer follower_buffer;
+    auto ret = createFollowerOutputBuffer(
+        &follower_buffer, dynamic_stream_id_map, follower_physical_camera_,
+        current_stream.group_id);
+    if (ret != OK) {
+      ALOGE("%s: Failed to create follower output buffer!", __FUNCTION__);
+      continue;
+    }
+    follower_output_buffers.push_back(follower_buffer);
   }
+
+  request->output_buffers.insert(request->output_buffers.end(),
+                                 follower_output_buffers.begin(),
+                                 follower_output_buffers.end());
+
+  // Advance the physical camera transition counter
+  if (physical_camera_transition_counter_ > 0) {
+    physical_camera_transition_counter_--;
+    if (physical_camera_transition_counter_ == 0) {
+      follower_physical_camera_ = -1;
+    }
+  }
+
+  return OK;
+}
+
+status_t EmulatedLogicalRequestState::createFollowerOutputBuffer(
+    StreamBuffer* follower_buffer,
+    const DynamicStreamIdMapType& dynamic_stream_id_map,
+    int32_t follower_camera_id, int32_t group_id) {
+  if (follower_buffer == nullptr) {
+    ALOGE("%s: buffer is nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  const auto& stream_ids_for_camera =
+      dynamic_stream_id_map.find(follower_camera_id);
+  if (stream_ids_for_camera == dynamic_stream_id_map.end()) {
+    ALOGE("%s: Failed to find physical camera id %d in dynamic stream id map!",
+          __FUNCTION__, current_physical_camera_);
+    return BAD_VALUE;
+  }
+  const auto& stream_id = stream_ids_for_camera->second.find(group_id);
+  if (stream_id == stream_ids_for_camera->second.end()) {
+    ALOGE(
+        "%s: Failed to find group id %d in dynamic stream id map for camera "
+        "%d",
+        __FUNCTION__, group_id, current_physical_camera_);
+    return BAD_VALUE;
+  }
+
+  follower_buffer->stream_id = stream_id->second;
+  follower_buffer->buffer_id = 0;
+  follower_buffer->status = BufferStatus::kOk;
+  follower_buffer->acquire_fence = nullptr;
+  follower_buffer->release_fence = nullptr;
   return OK;
 }
 

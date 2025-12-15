@@ -32,7 +32,8 @@ class MockResultProcessor : public ResultProcessor {
               (ProcessCaptureResultFunc process_capture_result,
                NotifyFunc notify,
                ProcessBatchCaptureResultFunc process_batch_capture_result,
-               NotifyBatchFunc notify_batch),
+               NotifyBatchFunc notify_batch,
+               NotifyOverridePendingBufferFunc notify_override_pending_buffer),
               (override));
 
   MOCK_METHOD2(

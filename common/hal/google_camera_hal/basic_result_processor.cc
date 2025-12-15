@@ -59,13 +59,15 @@ std::unique_ptr<BasicResultProcessor> BasicResultProcessor::Create() {
 void BasicResultProcessor::SetResultCallback(
     ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
     ProcessBatchCaptureResultFunc process_batch_capture_result,
-    NotifyBatchFunc notify_batch) {
+    NotifyBatchFunc notify_batch,
+    NotifyOverridePendingBufferFunc notify_override_pending_buffer) {
   ATRACE_CALL();
   std::lock_guard<std::mutex> lock(callback_lock_);
   process_capture_result_ = process_capture_result;
   notify_ = notify;
   process_batch_capture_result_ = process_batch_capture_result;
   notify_batch_ = notify_batch;
+  notify_override_pending_buffer_ = notify_override_pending_buffer;
 }
 
 status_t BasicResultProcessor::AddPendingRequests(
@@ -150,6 +152,13 @@ void BasicResultProcessor::NotifyBatch(
 
   std::lock_guard<std::mutex> lock(callback_lock_);
   notify_batch_(notify_messages);
+}
+
+void BasicResultProcessor::NotifyOverridePendingBuffer(
+    uint32_t frame_number,
+    const std::vector<StreamGroupState>& stream_group_state) {
+  std::lock_guard<std::mutex> lock(callback_lock_);
+  notify_override_pending_buffer_(frame_number, stream_group_state);
 }
 
 status_t BasicResultProcessor::FlushPendingRequests() {

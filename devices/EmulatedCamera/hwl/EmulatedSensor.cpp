@@ -857,16 +857,23 @@ bool EmulatedSensor::threadLoop() {
 
   if ((next_buffers != nullptr) && (settings != nullptr)) {
     callback = next_buffers->at(0)->callback;
+    std::vector<StreamGroupState> stream_group_state =
+        GetStreamGroupState(*next_buffers);
+    uint32_t frame_number = next_buffers->at(0)->frame_number;
     if (callback.notify != nullptr) {
-      std::vector<StreamGroupState> stream_group_state =
-          GetStreamGroupState(*next_buffers);
       NotifyMessage msg = ShutterMessage{
-          .frame_number = next_buffers->at(0)->frame_number,
+          .frame_number = frame_number,
           .timestamp_ns = static_cast<uint64_t>(next_capture_time_),
           .readout_timestamp_ns = static_cast<uint64_t>(next_readout_time_),
           .stream_group_state = stream_group_state};
       callback.notify(next_result->pipeline_id, msg);
     }
+
+    if (callback.notify_override_pending_buffer != nullptr &&
+        stream_group_state.size() > 0) {
+      callback.notify_override_pending_buffer(frame_number, stream_group_state);
+    }
+
     auto b = next_buffers->begin();
     while (b != next_buffers->end()) {
       auto device_settings = settings->find((*b)->camera_id);

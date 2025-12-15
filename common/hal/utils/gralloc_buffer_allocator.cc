@@ -64,10 +64,6 @@ void GrallocBufferAllocator::ConvertHalBufferDescriptor(
       hal_buffer_descriptor.consumer_flags;
   gralloc_buffer_descriptor->num_buffers =
       hal_buffer_descriptor.immediate_num_buffers;
-  for (const GrallocExtendableType& additional_option :
-       hal_buffer_descriptor.additional_options)
-    gralloc_buffer_descriptor->extras.emplace_back(
-        additional_option.name.c_str(), additional_option.value);
 }
 
 status_t GrallocBufferAllocator::AllocateBuffers(
@@ -91,7 +87,6 @@ status_t GrallocBufferAllocator::AllocateBuffers(
             gralloc_buffer_descriptor.producer_flags,
             gralloc_buffer_descriptor.consumer_flags)),
         .requestorName = "GCHGrallocBufferAllocator",
-        .extras = gralloc_buffer_descriptor.extras,
     };
     GraphicBufferAllocator::AllocationResult result =
         GraphicBufferAllocator::get().allocate(request);

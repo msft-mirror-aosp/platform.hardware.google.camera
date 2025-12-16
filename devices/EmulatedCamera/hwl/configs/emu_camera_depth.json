@@ -90,6 +90,9 @@
  "android.info.supportedHardwareLevel": [
   "LIMITED"
  ],
+ "android.info.deviceType": [
+  "VIRTUAL"
+ ],
  "android.jpeg.maxSize": [
   "29942792"
  ],

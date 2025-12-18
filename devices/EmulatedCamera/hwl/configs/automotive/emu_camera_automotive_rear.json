@@ -130,6 +130,9 @@
  "android.info.supportedHardwareLevel": [
   "LIMITED"
  ],
+ "android.info.deviceType": [
+  "VIRTUAL"
+ ],
  "android.jpeg.availableThumbnailSizes": [
   "0",
   "0",

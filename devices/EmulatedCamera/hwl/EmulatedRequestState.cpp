@@ -981,6 +981,8 @@ std::unique_ptr<HwlPipelineResult> EmulatedRequestState::InitializeResult(
                                &info.logcial_multi_camera_additional_results_,
                                1);
 
+  result->result_metadata->Set(ANDROID_INFO_DEVICE_TYPE, &info.device_type_, 1);
+
   if (info.ae_mode_ == ANDROID_CONTROL_AE_MODE_OFF) {
     // AE Priority mode should not work with AE mode OFF
     uint8_t ae_priority_mode_off = ANDROID_CONTROL_AE_PRIORITY_MODE_OFF;

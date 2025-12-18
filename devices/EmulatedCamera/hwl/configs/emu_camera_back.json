@@ -173,6 +173,9 @@
  "android.info.supportedHardwareLevel": [
   "3"
  ],
+ "android.info.deviceType": [
+  "VIRTUAL"
+ ],
  "android.jpeg.availableThumbnailSizes": [
   "0",
   "0",
@@ -272,7 +275,7 @@
  ],
  "android.request.availableDynamicRangeProfilesMap": [
   "2",
-  "3",
+  "0",
   "0",
   "8192",
   "0",

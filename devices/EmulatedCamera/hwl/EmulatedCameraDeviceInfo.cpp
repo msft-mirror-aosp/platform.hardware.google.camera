@@ -1842,6 +1842,14 @@ status_t EmulatedCameraDeviceInfo::InitializeInfoDefaults() {
       (supported_hw_level_ == ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_FULL) ||
       (supported_hw_level_ == ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_3);
 
+  ret = static_metadata_->Get(ANDROID_INFO_DEVICE_TYPE, &entry);
+  if (!((ret == OK) && (entry.count == 1))) {
+    ALOGE("%s: No available device type!", __FUNCTION__);
+    return BAD_VALUE;
+  }
+
+  device_type_ = entry.data.u8[0];
+
   return InitializeReprocessDefaults();
 }
 

@@ -100,6 +100,7 @@ struct EmulatedCameraDeviceInfo {
   bool is_level_full_or_higher_ = false;
   // Set to true if the camera device has HW level FULL or LEVEL3
   uint8_t supported_hw_level_ = 0;
+  uint8_t device_type_ = ANDROID_INFO_DEVICE_TYPE_VIRTUAL;
 
   // android.lens.*
   float minimum_focus_distance_ = 0.f;

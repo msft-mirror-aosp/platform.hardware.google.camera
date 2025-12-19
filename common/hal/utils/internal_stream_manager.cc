@@ -136,7 +136,6 @@ status_t InternalStreamManager::GetBufferDescriptor(
   buffer_descriptor->immediate_num_buffers = hal_stream.max_buffers;
   buffer_descriptor->max_num_buffers =
       hal_stream.max_buffers + additional_num_buffers;
-  buffer_descriptor->additional_options = hal_stream.additional_options;
 
   return OK;
 }

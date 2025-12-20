@@ -441,6 +441,7 @@ struct HalBufferDescriptor {
   uint32_t immediate_num_buffers = 0;
   uint32_t max_num_buffers = 0;
   uint64_t allocator_id_ = 0;
+  std::vector<GrallocExtendableType> additional_options;
 };
 
 // Callback function invoked to request stream buffers.

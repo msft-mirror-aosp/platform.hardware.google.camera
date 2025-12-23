@@ -17,13 +17,11 @@
 #ifndef HARDWARE_GOOGLE_CAMERA_HAL_UTILS_GRALLOC_BUFFER_ALLOCATOR_H
 #define HARDWARE_GOOGLE_CAMERA_HAL_UTILS_GRALLOC_BUFFER_ALLOCATOR_H
 
-#include <hardware/gralloc1.h>
-#include <ui/GraphicBufferAllocator.h>
-#include <utils/Errors.h>
-
-#include <vector>
-
 #include "hal_buffer_allocator.h"
+
+#include <hardware/gralloc1.h>
+#include <utils/Errors.h>
+#include <vector>
 
 namespace android {
 namespace google_camera_hal {
@@ -36,7 +34,6 @@ struct BufferDescriptor {
   uint64_t producer_flags = 0;
   uint64_t consumer_flags = 0;
   uint32_t num_buffers = 0;
-  std::vector<android::GraphicBufferAllocator::AdditionalOptions> extras;
 };
 
 class GrallocBufferAllocator : IHalBufferAllocator {

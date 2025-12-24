@@ -63,6 +63,7 @@ class BasicCaptureSession : public CaptureSession {
       ProcessBatchCaptureResultFunc process_batch_capture_result,
       NotifyFunc notify, NotifyBatchFunc notify_batch,
       HwlSessionCallback session_callback,
+      NotifyOverridePendingBufferFunc notify_override_pending_buffer,
       std::vector<HalStream>* hal_configured_streams,
       CameraBufferAllocatorHwl* camera_allocator_hwl = nullptr);
 
@@ -81,12 +82,14 @@ class BasicCaptureSession : public CaptureSession {
   BasicCaptureSession() = default;
 
  private:
-  status_t Initialize(CameraDeviceSessionHwl* device_session_hwl,
-                      const StreamConfiguration& stream_config,
-                      ProcessCaptureResultFunc process_capture_result,
-                      ProcessBatchCaptureResultFunc process_batch_capture_result,
-                      NotifyFunc notify, NotifyBatchFunc notify_batch,
-                      std::vector<HalStream>* hal_configured_streams);
+  status_t Initialize(
+      CameraDeviceSessionHwl* device_session_hwl,
+      const StreamConfiguration& stream_config,
+      ProcessCaptureResultFunc process_capture_result,
+      ProcessBatchCaptureResultFunc process_batch_capture_result,
+      NotifyFunc notify, NotifyBatchFunc notify_batch,
+      NotifyOverridePendingBufferFunc notify_override_pending_buffer,
+      std::vector<HalStream>* hal_configured_streams);
 
   // Configure streams for request processor and process block.
   status_t ConfigureStreams(const StreamConfiguration& stream_config,

@@ -68,6 +68,10 @@ class PendingRequestsTracker {
   // Dump the buffer counting status
   void DumpStatus();
 
+  status_t OverridePendingRequestStream(
+      int32_t frame_number,
+      const std::vector<StreamGroupState>& stream_group_state);
+
   virtual ~PendingRequestsTracker() = default;
 
  protected:

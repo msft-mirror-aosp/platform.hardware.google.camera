@@ -430,6 +430,11 @@ using NotifyFunc = std::function<void(const NotifyMessage& /*message*/)>;
 using NotifyBatchFunc =
     std::function<void(const std::vector<NotifyMessage>& /*messages*/)>;
 
+// Callback to updatet pending buffer.
+using NotifyOverridePendingBufferFunc = std::function<void(
+    uint32_t /*frame_number*/,
+    const std::vector<StreamGroupState>& /*stream_group_state*/)>;
+
 // HAL buffer allocation descriptor
 struct HalBufferDescriptor {
   int32_t stream_id = -1;

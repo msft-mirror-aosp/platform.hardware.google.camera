@@ -84,6 +84,7 @@ class ExternalCaptureSessionFactory {
       const StreamConfiguration& stream_config,
       ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
       HwlSessionCallback session_callback,
+      NotifyOverridePendingBufferFunc notify_override_pending_buffer,
       std::vector<HalStream>* hal_configured_streams,
       CameraBufferAllocatorHwl* camera_allocator_hwl) = 0;
 };

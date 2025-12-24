@@ -44,6 +44,11 @@ class MockResultProcessor : public ResultProcessor {
 
   MOCK_METHOD1(Notify, void(const ProcessBlockNotifyMessage& message));
 
+  MOCK_METHOD(void, NotifyOverridePendingBuffer,
+              (uint32_t frame_number,
+               const std::vector<StreamGroupState>& stream_group_state),
+              (override));
+
   MOCK_METHOD0(FlushPendingRequests, status_t());
 };
 

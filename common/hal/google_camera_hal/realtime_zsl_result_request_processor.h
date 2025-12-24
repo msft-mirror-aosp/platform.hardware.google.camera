@@ -67,6 +67,10 @@ class RealtimeZslResultRequestProcessor : public RealtimeZslResultProcessor,
   void UpdateOutputBufferCount(int32_t frame_number, int output_buffer_count,
                                bool is_preview_intent);
 
+  void NotifyOverridePendingBuffer(
+      uint32_t /*frame_number*/,
+      const std::vector<StreamGroupState>& /*stream_group_state*/) override {};
+
  protected:
   RealtimeZslResultRequestProcessor(
       InternalStreamManager* internal_stream_manager, int32_t stream_id,

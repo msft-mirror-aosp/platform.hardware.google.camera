@@ -266,6 +266,37 @@ void CameraDeviceSession::NotifyBatch(const std::vector<NotifyMessage>& results)
   }
 }
 
+void CameraDeviceSession::OverridePendingRequest(
+    uint32_t frame_number,
+    const std::vector<StreamGroupState>& stream_group_state) {
+  std::shared_lock lock(session_callback_lock_);
+  std::vector<int32_t> stream_ids;
+  for (const StreamGroupState& stream_group_state : stream_group_state) {
+    for (auto& stream_id : stream_group_state.activeStreamIds) {
+      stream_ids.push_back(stream_id);
+    }
+  }
+
+  std::set<int32_t>& pending_streams = pending_request_streams_.at(frame_number);
+  for (const int32_t& stream_id : stream_ids) {
+    if (grouped_stream_id_map_.contains(stream_id)) {
+      pending_streams.erase(grouped_stream_id_map_.at(stream_id));
+    }
+    auto it = pending_streams.find(stream_id);
+    if (it != pending_streams.end()) {
+      pending_streams.insert(stream_id);
+      status_t res =
+          stream_buffer_cache_manager_->NotifyProviderReadiness(stream_id);
+      if (res != OK) {
+        ALOGE("%s NotifyProviderReadiness(%d) failed , res:%s", __FUNCTION__,
+              stream_id, strerror(-res));
+      }
+    }
+  }
+
+  pending_requests_tracker_->OverridePendingRequestStream(frame_number,
+                                                          stream_group_state);
+}
 void CameraDeviceSession::InitializeCallbacks() {
   std::lock_guard lock(session_callback_lock_);
 
@@ -311,6 +342,12 @@ void CameraDeviceSession::InitializeCallbacks() {
         NotifyBatch(messages);
       });
 
+  camera_device_session_callback_.notify_override_pending_buffer =
+      NotifyOverridePendingBufferFunc(
+          [this](uint32_t frame_number,
+                 const std::vector<StreamGroupState>& state) {
+            OverridePendingRequest(frame_number, state);
+          });
   hwl_session_callback_.request_stream_buffers = HwlRequestBuffersFunc(
       [this](int32_t stream_id, uint32_t num_buffers,
              std::vector<StreamBuffer>* buffers, uint32_t frame_number) {
@@ -516,7 +553,7 @@ void CameraDeviceSession::DeriveGroupedStreamIdMap() {
 
   // For each stream group, map all the streams' ids to one id
   for (const auto& [group_id, stream_ids] : group_to_streams_map) {
-    for (size_t i = 1; i < stream_ids.size(); i++) {
+    for (size_t i = 0; i < stream_ids.size(); i++) {
       grouped_stream_id_map_[stream_ids[i]] = stream_ids[0];
     }
   }
@@ -715,7 +752,8 @@ status_t CameraDeviceSession::ConfigureStreams(
       &hal_config, camera_device_session_callback_.process_capture_result,
       camera_device_session_callback_.notify,
       camera_device_session_callback_.process_batch_capture_result,
-      camera_device_session_callback_.notify_batch);
+      camera_device_session_callback_.notify_batch,
+      camera_device_session_callback_.notify_override_pending_buffer);
 
   if (capture_session_ == nullptr) {
     ALOGE("%s: Cannot find a capture session compatible with stream config",

@@ -39,12 +39,14 @@ std::unique_ptr<ResultDispatcher> ResultDispatcher::Create(
     ProcessCaptureResultFunc process_capture_result,
     ProcessBatchCaptureResultFunc process_batch_capture_result,
     NotifyFunc notify, NotifyBatchFunc notify_batch,
+    NotifyOverridePendingBufferFunc notify_override_pending_buffer,
     const StreamConfiguration& stream_config, std::string_view name) {
   ATRACE_CALL();
   auto dispatcher = std::make_unique<ResultDispatcher>(
       partial_result_count, std::move(process_capture_result),
       std::move(process_batch_capture_result), std::move(notify),
-      std::move(notify_batch), stream_config, name);
+      std::move(notify_batch), std::move(notify_override_pending_buffer),
+      stream_config, name);
   if (dispatcher == nullptr) {
     ALOGE("[%s] %s: Creating ResultDispatcher failed.",
           std::string(name).c_str(), __FUNCTION__);
@@ -59,13 +61,15 @@ ResultDispatcher::ResultDispatcher(
     ProcessCaptureResultFunc process_capture_result,
     ProcessBatchCaptureResultFunc process_batch_capture_result,
     NotifyFunc notify, NotifyBatchFunc notify_batch,
+    NotifyOverridePendingBufferFunc notify_override_pending_buffer,
     const StreamConfiguration& stream_config, std::string_view name)
     : kPartialResultCount(partial_result_count),
       name_(name),
       process_capture_result_(std::move(process_capture_result)),
       process_batch_capture_result_(std::move(process_batch_capture_result)),
       notify_(std::move(notify)),
-      notify_batch_(std::move(notify_batch)) {
+      notify_batch_(std::move(notify_batch)),
+      notify_override_pending_buffer_(std::move(notify_override_pending_buffer)) {
   ATRACE_CALL();
   pending_shutters_ = DispatchQueue<PendingShutter>(name_, "shutter");
   pending_early_metadata_ =
@@ -170,6 +174,27 @@ status_t ResultDispatcher::AddPendingRequestLocked(
     }
   }
 
+  return OK;
+}
+
+status_t ResultDispatcher::NotifyOverridePendingBuffer(
+    uint32_t frame_number,
+    const std::vector<StreamGroupState>& stream_group_state) {
+  status_t res = OverridePendingBufferLocked(frame_number, stream_group_state);
+  if (res != OK) {
+    ALOGE("[%s] %s: Overwriting a pending request failed: %s(%d).",
+          name_.c_str(), __FUNCTION__, strerror(-res), res);
+    return res;
+  }
+  return OK;
+}
+
+status_t ResultDispatcher::OverridePendingBufferLocked(
+    uint32_t frame_number,
+    const std::vector<StreamGroupState>& stream_group_state) {
+  if (notify_override_pending_buffer_ != nullptr) {
+    notify_override_pending_buffer_(frame_number, stream_group_state);
+  }
   return OK;
 }
 

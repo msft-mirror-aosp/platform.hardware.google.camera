@@ -57,6 +57,9 @@ struct CameraDeviceSessionCallback {
 
   // Callback to return stream buffers.
   ReturnStreamBuffersFunc return_stream_buffers;
+
+  // Callback to updatet pending buffer.
+  NotifyOverridePendingBufferFunc notify_override_pending_buffer;
 };
 
 // Defines callbacks to get thermal information.
@@ -241,6 +244,11 @@ class CameraDeviceSession {
 
   // Process the batched notification returned from the HWL
   void NotifyBatch(const std::vector<NotifyMessage>& results);
+
+  // Override the pending request for concurrent MRIR
+  void OverridePendingRequest(
+      uint32_t frame_number,
+      const std::vector<StreamGroupState>& stream_group_state);
 
   // Process the capture result returned from the HWL
   void ProcessCaptureResult(std::unique_ptr<CaptureResult> result);

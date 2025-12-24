@@ -70,7 +70,8 @@ status_t ZslResultDispatcher::Initialize(
       std::unique_ptr<ResultDispatcher>(new ResultDispatcher(
           partial_result_count, process_capture_result_,
           /*process_batch_capture_result=*/nullptr, notify_,
-          /*notify_batch=*/nullptr, stream_config, "ZslNormalDispatcher"));
+          /*notify_batch=*/nullptr, /*notify_override_pending_buffer*/ nullptr,
+          stream_config, "ZslNormalDispatcher"));
   if (normal_result_dispatcher_ == nullptr) {
     ALOGE("%s: Creating normal_result_dispatcher_ failed.", __FUNCTION__);
     return BAD_VALUE;
@@ -80,7 +81,8 @@ status_t ZslResultDispatcher::Initialize(
       std::unique_ptr<ResultDispatcher>(new ResultDispatcher(
           partial_result_count, process_capture_result_,
           /*process_batch_capture_result=*/nullptr, notify_,
-          /*notify_batch=*/nullptr, stream_config, "ZslZslDispatcher"));
+          /*notify_batch=*/nullptr, /*notify_override_pending_buffer*/ nullptr,
+          stream_config, "ZslZslDispatcher"));
   if (zsl_result_dispatcher_ == nullptr) {
     ALOGE("%s: Creating zsl_result_dispatcher_ failed.", __FUNCTION__);
     return BAD_VALUE;

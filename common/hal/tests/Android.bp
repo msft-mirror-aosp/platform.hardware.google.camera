@@ -63,6 +63,7 @@ cc_library {
         "libhardware",
         "libhidlbase",
         "liblog",
+        "libui",
         "libutils",
     ],
     static_libs: [

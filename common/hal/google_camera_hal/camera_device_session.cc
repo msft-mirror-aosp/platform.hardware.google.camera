@@ -283,14 +283,8 @@ void CameraDeviceSession::OverridePendingRequest(
       pending_streams.erase(grouped_stream_id_map_.at(stream_id));
     }
     auto it = pending_streams.find(stream_id);
-    if (it != pending_streams.end()) {
+    if (it == pending_streams.end()) {
       pending_streams.insert(stream_id);
-      status_t res =
-          stream_buffer_cache_manager_->NotifyProviderReadiness(stream_id);
-      if (res != OK) {
-        ALOGE("%s NotifyProviderReadiness(%d) failed , res:%s", __FUNCTION__,
-              stream_id, strerror(-res));
-      }
     }
   }
 
@@ -795,6 +789,9 @@ status_t CameraDeviceSession::ConfigureStreams(
       }
       hal_stream.is_hal_buffer_managed = true;
       hal_buffer_managed_stream_ids_.insert(hal_stream.id);
+      if (hal_stream.group_concurrency_enabled) {
+        group_concurrency_enabled_ = true;
+      }
     }
   }
 

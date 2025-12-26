@@ -204,7 +204,10 @@ status_t ResultDispatcher::NotifyOverridePendingBuffer(
 status_t ResultDispatcher::OverridePendingBufferLocked(
     uint32_t frame_number,
     const std::vector<StreamGroupState>& stream_group_state) {
-  if (notify_override_pending_buffer_ != nullptr) {
+  if (notify_override_pending_buffer_ == nullptr) {
+    ALOGE("%s: notify_overwrite_pending_buffer_ == nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  } else {
     notify_override_pending_buffer_(frame_number, stream_group_state);
   }
   {

@@ -186,6 +186,7 @@ struct HalStream {
   uint32_t physical_camera_id = 0;
   bool is_hal_buffer_managed = false;
   std::vector<GrallocExtendableType> additional_options;
+  bool group_concurrency_enabled = false;
 };
 
 // Corresponds to the definition of ConfigureStreamsRet

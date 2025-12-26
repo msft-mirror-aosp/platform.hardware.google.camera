@@ -465,6 +465,9 @@ class CameraDeviceSession {
 
   // Whether measure the time of buffer allocation
   bool measure_buffer_allocation_time_ = false;
+
+  // Whether group concurrency is enabled.
+  bool group_concurrency_enabled_ = false;
 };
 
 }  // namespace google_camera_hal

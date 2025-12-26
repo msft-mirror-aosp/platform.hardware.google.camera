@@ -302,7 +302,8 @@ class ResultDispatcher {
       GUARDED_BY(result_lock_);
 
   // Create a StreamKey for a stream
-  inline StreamKey CreateStreamKey(int32_t stream_id) const;
+  inline StreamKey CreateStreamKey(int32_t stream_id,
+                                   bool concurrent_group = false) const;
 
   // Dump a StreamKey to a debug string
   inline std::string DumpStreamKey(const StreamKey& stream_key) const;
@@ -330,6 +331,8 @@ class ResultDispatcher {
 
   // A map of group streams only, from stream ID to the group ID it belongs.
   std::map</*stream id=*/int32_t, /*group id=*/int32_t> group_stream_map_;
+
+  bool group_concurrency_enabled_ = false;
 };
 
 }  // namespace google_camera_hal

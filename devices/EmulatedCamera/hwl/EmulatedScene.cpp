@@ -17,12 +17,12 @@
 //#define LOG_NDEBUG 0
 #define LOG_TAG "EmulatedScene"
 #include "EmulatedScene.h"
-#include "EmulatedSensor.h"
 
 #include <stdlib.h>
 #include <utils/Log.h>
 
 #include <cmath>
+#include <cstring>
 
 // TODO: This should probably be done host-side in OpenGL for speed and better
 // quality

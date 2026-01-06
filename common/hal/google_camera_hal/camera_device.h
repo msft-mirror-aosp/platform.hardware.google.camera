@@ -106,17 +106,6 @@ class CameraDevice {
     return public_camera_id_;
   };
 
-  // Get the applied memory config for this camera device.
-  HwlMemoryConfig GetAppliedMemoryConfig() {
-    HwlMemoryConfig memory_config = applied_memory_config_;
-    return memory_config;
-  }
-
-  // Set the applied memory config for this camera device.
-  void SetAppliedMemoryConfig(HwlMemoryConfig memory_config) {
-    applied_memory_config_ = memory_config;
-  }
-
   // Query whether a particular streams configuration is supported.
   // stream_config: It contains the stream info and a set of features, which are
   // described in the form of session settings.

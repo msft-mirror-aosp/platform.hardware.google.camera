@@ -3,10 +3,28 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
+soong_config_module_type {
+    name: "emulated_camera_defaults",
+    module_type: "cc_defaults",
+    config_namespace: "emulated_camera",
+    bool_variables: ["use_emulated_camera2_hal_auto"],
+    properties: ["cflags"],
+}
+
+emulated_camera_defaults {
+    name: "emulated_camera_cflags_defaults",
+    soong_config_variables: {
+        use_emulated_camera2_hal_auto: {
+            cflags: ["-DUSE_EMULATED_CAMERA2_HAL_AUTO"],
+        },
+    },
+}
+
 cc_defaults {
     name: "libgooglecamerahwl_impl_defaults",
     owner: "google",
     proprietary: true,
+    defaults: ["emulated_camera_cflags_defaults"],
     srcs: [
         "ConfigUtils.cpp",
         "EmulatedCameraProviderHWLImpl.cpp",

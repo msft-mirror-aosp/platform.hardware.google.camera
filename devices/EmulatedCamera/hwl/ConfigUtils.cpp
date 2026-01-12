@@ -478,8 +478,11 @@ status_t GetCameraConfigurations(std::vector<CameraConfiguration>* configs) {
   }
 
   char prop[PROPERTY_VALUE_MAX];
-  property_get("ro.hardware.type", prop, "");
-  bool is_automotive = (strcmp(prop, "automotive") == 0);
+#ifdef USE_EMULATED_CAMERA2_HAL_AUTO
+  bool is_automotive = true;
+#else
+  bool is_automotive = false;
+#endif
 
   std::string main_config_path = config_dir;
   if (is_automotive) {

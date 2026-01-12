@@ -61,7 +61,7 @@ apex_defaults {
     prebuilts: [
         "com.google.emulated.camera.provider.hal.rc",
         "com.google.emulated.camera.provider.hal.xml", // vintf fragment
-    ] + select(soong_config_variable("ANDROID", "board_is_automotive"), {
+    ] + select(soong_config_variable("emulated_camera", "use_emulated_camera2_hal_auto"), {
         true: [
             "emu_camera_automotive_main.json",
             "emu_camera_automotive_front.json",

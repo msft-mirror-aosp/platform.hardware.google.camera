@@ -116,6 +116,12 @@ cc_defaults {
     ],
 }
 
+vintf_fragment {
+    name: "hardware_camera_vintf",
+    src: "android.hardware.camera.provider@2.7-service-google.xml",
+    soc_specific: true,
+}
+
 cc_defaults {
     name: "hardware_camera_service_defaults",
     defaults: [
@@ -124,7 +130,7 @@ cc_defaults {
     srcs: [
         "aidl_service.cc",
     ],
-    vintf_fragments: [":android.hardware.camera.provider@2.7-service-google.xml"],
+    vintf_fragment_modules: ["hardware_camera_vintf"],
 }
 
 cc_binary {
@@ -144,9 +150,4 @@ cc_binary {
     ],
     init_rc: ["android.hardware.camera.provider@2.7-service-google-lazy.rc"],
     cflags: ["-DLAZY_SERVICE"],
-}
-
-filegroup {
-    name: "android.hardware.camera.provider@2.7-service-google.xml",
-    srcs: ["android.hardware.camera.provider@2.7-service-google.xml"],
 }

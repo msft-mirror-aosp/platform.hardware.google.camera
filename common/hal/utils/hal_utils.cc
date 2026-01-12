@@ -666,10 +666,11 @@ void DumpStreamConfiguration(const StreamConfiguration& stream_configuration,
   for (uint32_t i = 0; i < stream_configuration.streams.size(); i++) {
     auto& stream = stream_configuration.streams[i];
     ALOGI("==== [%u]stream_id %d, type %d, format %d, res %ux%u, usage %" PRIu64
-          ", is_phy %d, phy_cam_id %u, group_id %d",
+          ", is_phy %d, phy_cam_id %u, group_id %d, concurrent_group %d",
           i, stream.id, stream.stream_type, stream.format, stream.width,
           stream.height, stream.usage, stream.is_physical_camera_stream,
-          stream.physical_camera_id, stream.group_id);
+          stream.physical_camera_id, stream.group_id,
+          stream.group_streams_concurrent);
   }
   ALOGI("%s", str.c_str());
 }

@@ -162,7 +162,7 @@ status_t CaptureSessionWrapperProcessBlock::GetConfiguredHalStreams(
 }
 
 status_t CaptureSessionWrapperProcessBlock::ProcessRequests(
-    const std::vector<ProcessBlockRequest>& process_block_requests,
+    std::vector<ProcessBlockRequest> process_block_requests,
     const CaptureRequest& remaining_session_request) {
   ATRACE_CALL();
   CaptureRequest request;

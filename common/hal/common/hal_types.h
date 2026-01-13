@@ -248,8 +248,31 @@ struct CaptureRequest {
   std::unordered_map<uint32_t, std::unique_ptr<HalCameraMetadata>>
       physical_camera_settings;
 
-  uint32_t input_width;
-  uint32_t input_height;
+  uint32_t input_width = 0;
+  uint32_t input_height = 0;
+
+  CaptureRequest Clone() const {
+    CaptureRequest request;
+    request.frame_number = frame_number;
+    if (settings != nullptr) {
+      request.settings = HalCameraMetadata::Clone(settings.get());
+    }
+    request.input_buffers = input_buffers;
+    request.input_buffer_metadata.reserve(input_buffer_metadata.size());
+    for (const auto& metadata : input_buffer_metadata) {
+      request.input_buffer_metadata.push_back(
+          HalCameraMetadata::Clone(metadata.get()));
+    }
+    request.output_buffers = output_buffers;
+    request.physical_camera_settings.reserve(physical_camera_settings.size());
+    for (const auto& [camera_id, metadata] : physical_camera_settings) {
+      request.physical_camera_settings[camera_id] =
+          HalCameraMetadata::Clone(metadata.get());
+    }
+    request.input_width = input_width;
+    request.input_height = input_height;
+    return request;
+  }
 };
 
 // See the definition of

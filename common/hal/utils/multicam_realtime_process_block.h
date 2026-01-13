@@ -54,7 +54,7 @@ class MultiCameraRtProcessBlock : public ProcessBlock {
       std::vector<HalStream>* hal_streams) const override;
 
   status_t ProcessRequests(
-      const std::vector<ProcessBlockRequest>& process_block_requests,
+      std::vector<ProcessBlockRequest> process_block_requests,
       const CaptureRequest& remaining_session_request) override;
 
   status_t Flush() override;
@@ -108,7 +108,8 @@ class MultiCameraRtProcessBlock : public ProcessBlock {
   status_t GetOutputBufferPipelineIdLocked(const StreamBuffer& buffer,
                                            uint32_t* pipeline_id) const;
 
-  // Return if requests are valid. Must be called with configure_shared_mutex_ locked.
+  // Return if requests are valid. Must be called with configure_shared_mutex_
+  // locked.
   bool AreRequestsValidLocked(
       const std::vector<ProcessBlockRequest>& requests) const;
 

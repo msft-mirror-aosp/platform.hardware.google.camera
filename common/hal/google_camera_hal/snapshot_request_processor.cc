@@ -184,7 +184,8 @@ status_t SnapshotRequestProcessor::ProcessRequest(const CaptureRequest& request)
   // Get multiple yuv buffer and metadata from internal stream as input
   status_t result = internal_stream_manager_->GetMostRecentStreamBuffer(
       yuv_stream_id_, &(block_request.input_buffers),
-      &(block_request.input_buffer_metadata), /*payload_frames=*/kZslBufferSize);
+      &(block_request.input_buffer_metadata),
+      /*payload_frames=*/kZslBufferSize);
   if (result != OK) {
     ALOGE("%s: frame:%d GetStreamBuffer failed.", __FUNCTION__,
           request.frame_number);
@@ -192,16 +193,18 @@ status_t SnapshotRequestProcessor::ProcessRequest(const CaptureRequest& request)
     return UNKNOWN_ERROR;
   }
 
-  // TODO(mhtan): may need to remove some metadata here.
-  std::vector<ProcessBlockRequest> block_requests(1);
-  block_requests[0].request = std::move(block_request);
+  std::vector<ProcessBlockRequest> block_requests;
+  block_requests.push_back(
+      ProcessBlockRequest{.request = std::move(block_request)});
   ALOGD("%s: frame number %u is a snapshot request.", __FUNCTION__,
         request.frame_number);
 
-  result = process_block_->ProcessRequests(block_requests, request);
+  // Obtain reference before moving the vector.
+  const CaptureRequest& first_block_request = block_requests[0].request;
+
+  result = process_block_->ProcessRequests(std::move(block_requests), request);
   if (result != OK) {
-    session_callback_.return_stream_buffers(
-        block_requests[0].request.output_buffers);
+    session_callback_.return_stream_buffers(first_block_request.output_buffers);
   }
 
   return result;

@@ -92,28 +92,10 @@ status_t BasicRequestProcessor::ProcessRequest(const CaptureRequest& request) {
     return NO_INIT;
   }
 
-  CaptureRequest block_request;
-  block_request.frame_number = request.frame_number;
-  block_request.settings = HalCameraMetadata::Clone(request.settings.get());
-  block_request.input_buffers = request.input_buffers;
-  block_request.input_width = request.input_width;
-  block_request.input_height = request.input_height;
+  std::vector<ProcessBlockRequest> block_requests;
+  block_requests.push_back(ProcessBlockRequest{.request = request.Clone()});
 
-  for (auto& metadata : request.input_buffer_metadata) {
-    block_request.input_buffer_metadata.push_back(
-        HalCameraMetadata::Clone(metadata.get()));
-  }
-
-  block_request.output_buffers = request.output_buffers;
-  for (auto& [camera_id, physical_metadata] : request.physical_camera_settings) {
-    block_request.physical_camera_settings[camera_id] =
-        HalCameraMetadata::Clone(physical_metadata.get());
-  }
-
-  std::vector<ProcessBlockRequest> block_requests(1);
-  block_requests[0].request = std::move(block_request);
-
-  return process_block_->ProcessRequests(block_requests, request);
+  return process_block_->ProcessRequests(std::move(block_requests), request);
 }
 
 status_t BasicRequestProcessor::Flush() {

@@ -77,6 +77,10 @@ class ResultProcessor {
     };
   }
 
+  virtual void NotifyOverridePendingBuffer(
+      uint32_t frame_number,
+      const std::vector<StreamGroupState>& stream_group_state) = 0;
+
   // Flush all pending workload.
   virtual status_t FlushPendingRequests() = 0;
 };

@@ -75,7 +75,8 @@ class ResultDispatcherTests : public ::testing::Test {
         },
         /*process_batch_capture_result=*/nullptr,
         [this](const NotifyMessage& message) { Notify(message); },
-        /*notify_batch=*/nullptr, stream_config, "TestResultDispatcher");
+        /*notify_batch=*/nullptr, /*notify_override_pending_buffer=*/nullptr,
+        stream_config, "TestResultDispatcher");
 
     ASSERT_NE(result_dispatcher_, nullptr)
         << "Creating ResultDispatcher failed";

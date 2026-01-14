@@ -15,6 +15,7 @@
  */
 
 // #define LOG_NDEBUG 0
+#include "utils/Errors.h"
 #define LOG_TAG "GCH_PendingRequestsTracker"
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 #include "pending_requests_tracker.h"
@@ -393,6 +394,28 @@ void PendingRequestsTracker::DumpStatus() {
       __FUNCTION__, pending_requests_string.c_str(),
       pending_acquisition_string.c_str());
 }
-
+status_t PendingRequestsTracker::OverridePendingRequestStream(
+    int32_t frame_number,
+    const std::vector<StreamGroupState>& stream_group_state) {
+  std::vector<int32_t> group_ids;
+  for (const StreamGroupState& group_state : stream_group_state) {
+    if (group_state.group_id != -1) {
+      group_ids.push_back(group_state.group_id);
+      // Stream buffer already added for one pending buffer while the request
+      // received. Only need to added additional n-1 pending buffers for each
+      // group in the callback function.
+      if (group_state.activeStreamIds.size() > 1) {
+        stream_pending_buffers_[OverrideStreamIdForGroup(
+            group_state.activeStreamIds[0])] +=
+            group_state.activeStreamIds.size() - 1;
+      }
+    }
+  }
+  if (group_ids.size() == 0) {
+    ALOGE("%s, No valid group in frame: %d", __FUNCTION__, frame_number);
+    return UNKNOWN_ERROR;
+  }
+  return OK;
+}
 }  // namespace google_camera_hal
 }  // namespace android

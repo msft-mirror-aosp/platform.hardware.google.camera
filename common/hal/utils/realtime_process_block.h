@@ -82,6 +82,10 @@ class RealtimeProcessBlock : public ProcessBlock {
 
   void NotifyHwlPipelineBatchMessage(const std::vector<NotifyMessage>& messages);
 
+  void NotifyHwlOverridePendingBuffer(
+      uint32_t frame_number,
+      const std::vector<StreamGroupState>& stream_group_states);
+
   HwlPipelineCallback hwl_pipeline_callback_;
   CameraDeviceSessionHwl* device_session_hwl_ = nullptr;
 

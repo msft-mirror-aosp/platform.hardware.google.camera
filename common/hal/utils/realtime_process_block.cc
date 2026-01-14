@@ -80,6 +80,12 @@ RealtimeProcessBlock::RealtimeProcessBlock(
       [this](const std::vector<NotifyMessage>& messages) {
         NotifyHwlPipelineBatchMessage(messages);
       });
+  hwl_pipeline_callback_.notify_override_pending_buffer =
+      NotifyHwlOverridePendingBufferFunc(
+          [this](uint32_t frame_number,
+                 const std::vector<StreamGroupState>& stream_group_state) {
+            NotifyHwlOverridePendingBuffer(frame_number, stream_group_state);
+          });
 }
 
 status_t RealtimeProcessBlock::SetResultProcessor(
@@ -277,6 +283,13 @@ void RealtimeProcessBlock::NotifyHwlPipelineBatchMessage(
 
   std::lock_guard<std::mutex> lock(result_processor_lock_);
   result_processor_->NotifyBatch(block_messages);
+}
+
+void RealtimeProcessBlock::NotifyHwlOverridePendingBuffer(
+    uint32_t frame_number,
+    const std::vector<StreamGroupState>& stream_group_state) {
+  result_processor_->NotifyOverridePendingBuffer(frame_number,
+                                                 stream_group_state);
 }
 
 }  // namespace google_camera_hal

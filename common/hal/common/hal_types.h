@@ -186,6 +186,7 @@ struct HalStream {
   uint32_t physical_camera_id = 0;
   bool is_hal_buffer_managed = false;
   std::vector<GrallocExtendableType> additional_options;
+  bool group_concurrency_enabled = false;
 };
 
 // Corresponds to the definition of ConfigureStreamsRet
@@ -429,6 +430,11 @@ using NotifyFunc = std::function<void(const NotifyMessage& /*message*/)>;
 // Callback function invoked to notify a batched message.
 using NotifyBatchFunc =
     std::function<void(const std::vector<NotifyMessage>& /*messages*/)>;
+
+// Callback to updatet pending buffer.
+using NotifyOverridePendingBufferFunc = std::function<void(
+    uint32_t /*frame_number*/,
+    const std::vector<StreamGroupState>& /*stream_group_state*/)>;
 
 // HAL buffer allocation descriptor
 struct HalBufferDescriptor {

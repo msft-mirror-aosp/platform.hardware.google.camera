@@ -39,12 +39,14 @@ std::unique_ptr<ResultDispatcher> ResultDispatcher::Create(
     ProcessCaptureResultFunc process_capture_result,
     ProcessBatchCaptureResultFunc process_batch_capture_result,
     NotifyFunc notify, NotifyBatchFunc notify_batch,
+    NotifyOverridePendingBufferFunc notify_override_pending_buffer,
     const StreamConfiguration& stream_config, std::string_view name) {
   ATRACE_CALL();
   auto dispatcher = std::make_unique<ResultDispatcher>(
       partial_result_count, std::move(process_capture_result),
       std::move(process_batch_capture_result), std::move(notify),
-      std::move(notify_batch), stream_config, name);
+      std::move(notify_batch), std::move(notify_override_pending_buffer),
+      stream_config, name);
   if (dispatcher == nullptr) {
     ALOGE("[%s] %s: Creating ResultDispatcher failed.",
           std::string(name).c_str(), __FUNCTION__);
@@ -59,13 +61,15 @@ ResultDispatcher::ResultDispatcher(
     ProcessCaptureResultFunc process_capture_result,
     ProcessBatchCaptureResultFunc process_batch_capture_result,
     NotifyFunc notify, NotifyBatchFunc notify_batch,
+    NotifyOverridePendingBufferFunc notify_override_pending_buffer,
     const StreamConfiguration& stream_config, std::string_view name)
     : kPartialResultCount(partial_result_count),
       name_(name),
       process_capture_result_(std::move(process_capture_result)),
       process_batch_capture_result_(std::move(process_batch_capture_result)),
       notify_(std::move(notify)),
-      notify_batch_(std::move(notify_batch)) {
+      notify_batch_(std::move(notify_batch)),
+      notify_override_pending_buffer_(std::move(notify_override_pending_buffer)) {
   ATRACE_CALL();
   pending_shutters_ = DispatchQueue<PendingShutter>(name_, "shutter");
   pending_early_metadata_ =
@@ -170,6 +174,60 @@ status_t ResultDispatcher::AddPendingRequestLocked(
     }
   }
 
+  return OK;
+}
+
+status_t ResultDispatcher::NotifyOverridePendingBuffer(
+    uint32_t frame_number,
+    const std::vector<StreamGroupState>& stream_group_state) {
+  status_t res = OverridePendingBufferLocked(frame_number, stream_group_state);
+  if (res != OK) {
+    ALOGE("[%s] %s: Overwriting a pending request failed: %s(%d).",
+          name_.c_str(), __FUNCTION__, strerror(-res), res);
+    return res;
+  }
+  return OK;
+}
+
+// Overrides the pending buffer tracking for a specific frame.
+// It performs the following actions:
+// 1.  Calls the `notify_override_pending_buffer_` callback to update the
+// pending requests in the camera_device_session.
+// 2.  Iterates through the provided `stream_group_state`:
+//     a.  Removes any existing pending buffers associated with the `group_id`
+//         from `stream_pending_buffers_map_` for the given `frame_number`.
+//     b.  For each `activeStreamIds` within the `group_id`, it adds a new
+//         pending buffer entry to `stream_pending_buffers_map_` using a
+//         `StreamKey` representing the individual stream ID, effectively
+//         replacing the group-based pending buffer with individual stream
+//         pending buffers.
+status_t ResultDispatcher::OverridePendingBufferLocked(
+    uint32_t frame_number,
+    const std::vector<StreamGroupState>& stream_group_state) {
+  if (notify_override_pending_buffer_ == nullptr) {
+    ALOGE("%s: notify_overwrite_pending_buffer_ == nullptr", __FUNCTION__);
+    return BAD_VALUE;
+  } else {
+    notify_override_pending_buffer_(frame_number, stream_group_state);
+  }
+  {
+    std::lock_guard<std::mutex> lock(result_lock_);
+    // Remove the current pending buffer added from the request with group ID.
+    for (const StreamGroupState& group_state : stream_group_state) {
+      for (const auto& [stream_key, pending_buffer_queue] :
+           stream_pending_buffers_map_) {
+        if (stream_key.first == group_state.group_id) {
+          stream_pending_buffers_map_[stream_key].RemoveRequest(frame_number);
+        }
+      }
+      for (const int32_t& stream_id : group_state.activeStreamIds) {
+        StreamKey stream_key =
+            CreateStreamKey(stream_id, /*concurrent_group=*/true);
+        stream_pending_buffers_map_[stream_key].AddRequest(
+            frame_number, RequestType::kNormal);
+      }
+    }
+  }
   return OK;
 }
 
@@ -397,7 +455,8 @@ status_t ResultDispatcher::AddBuffer(uint32_t frame_number, StreamBuffer buffer,
   ATRACE_CALL();
   std::lock_guard<std::mutex> lock(result_lock_);
 
-  StreamKey stream_key = CreateStreamKey(buffer.stream_id);
+  StreamKey stream_key =
+      CreateStreamKey(buffer.stream_id, group_concurrency_enabled_);
   auto pending_buffers_it = stream_pending_buffers_map_.find(stream_key);
   if (pending_buffers_it == stream_pending_buffers_map_.end()) {
     ALOGE("[%s] %s: Cannot find the pending buffer for stream %s",
@@ -461,15 +520,22 @@ void ResultDispatcher::InitializeGroupStreamIdsMap(
     const StreamConfiguration& stream_config) {
   std::lock_guard<std::mutex> lock(result_lock_);
   for (const auto& stream : stream_config.streams) {
+    if (!group_concurrency_enabled_) {
+      group_concurrency_enabled_ = stream.group_streams_concurrent;
+    }
     if (stream.group_id != -1) {
       group_stream_map_[stream.id] = stream.group_id;
     }
   }
+  ALOGI("%s , Group Stream enable: %d", __FUNCTION__,
+        group_concurrency_enabled_);
 }
 
 ResultDispatcher::StreamKey ResultDispatcher::CreateStreamKey(
-    int32_t stream_id) const {
-  if (group_stream_map_.count(stream_id) == 0) {
+    int32_t stream_id, bool concurrent_group) const {
+  // TODO: b/475728751 - Redesign the StreamKeyType to have an individual stream
+  // Key for the concurrent MRIR.
+  if (group_stream_map_.count(stream_id) == 0 || concurrent_group) {
     return StreamKey(stream_id, StreamKeyType::kSingleStream);
   } else {
     return StreamKey(group_stream_map_.at(stream_id),

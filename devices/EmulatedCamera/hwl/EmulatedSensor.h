@@ -82,7 +82,7 @@
 #include <functional>
 
 #include "Base.h"
-#include "EmulatedFrameSource.h"
+#include "IFrameSource.h"
 #include "JpegCompressor.h"
 #include "SensorCharacteristics.h"
 #include "utils/Mutex.h"
@@ -91,6 +91,8 @@
 #include "utils/Timers.h"
 
 namespace android {
+
+using framesource::IFrameSource;
 
 using google_camera_hal::ColorSpaceProfile;
 using google_camera_hal::DynamicRangeProfile;
@@ -252,7 +254,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   nsecs_t next_capture_time_;
   nsecs_t next_readout_time_;
 
-  std::unique_ptr<EmulatedFrameSource> frame_source_;
+  std::unique_ptr<IFrameSource> frame_source_;
 
   bool WaitForVSyncLocked(nsecs_t reltime);
 

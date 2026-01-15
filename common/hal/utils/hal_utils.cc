@@ -86,9 +86,9 @@ std::unique_ptr<CaptureResult> ConvertToCaptureResult(
 
   capture_result->physical_metadata.reserve(
       hwl_result->physical_camera_results.size());
-  for (const auto& [camera_id, metadata] : hwl_result->physical_camera_results) {
-    capture_result->physical_metadata.push_back(PhysicalCameraMetadata(
-        {camera_id, HalCameraMetadata::Clone(metadata.get())}));
+  for (auto& [camera_id, metadata] : hwl_result->physical_camera_results) {
+    capture_result->physical_metadata.push_back(PhysicalCameraMetadata{
+        .physical_camera_id = camera_id, .metadata = std::move(metadata)});
   }
 
   return capture_result;

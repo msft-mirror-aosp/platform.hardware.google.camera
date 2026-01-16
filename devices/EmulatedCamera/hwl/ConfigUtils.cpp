@@ -29,6 +29,7 @@
 #include <unordered_map>
 
 #include "EmulatedSensor.h"
+#include "SensorCharacteristics.h"
 #include "utils/HWLUtils.h"
 #include "vendor_tag_defs.h"
 

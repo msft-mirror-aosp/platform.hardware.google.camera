@@ -52,6 +52,10 @@ class RealtimeZslResultProcessor : public ResultProcessor {
 
   void Notify(const ProcessBlockNotifyMessage& block_message) override;
 
+  void NotifyOverridePendingBuffer(
+      uint32_t /*frame_number*/,
+      const std::vector<StreamGroupState>& /*stream_group_state*/) override {};
+
   status_t FlushPendingRequests() override;
   // Override functions of ResultProcessor end.
 

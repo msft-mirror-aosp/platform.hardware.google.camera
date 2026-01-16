@@ -55,6 +55,7 @@ class ResultDispatcher {
       ProcessCaptureResultFunc process_capture_result,
       ProcessBatchCaptureResultFunc process_batch_capture_result,
       NotifyFunc notify, NotifyBatchFunc notify_batch,
+      NotifyOverridePendingBufferFunc notify_override_pending_buffer,
       const StreamConfiguration& stream_config,
       std::string_view name = "ResultDispatcher");
 
@@ -72,6 +73,10 @@ class ResultDispatcher {
 
   // Add a batch of results which contains multiple ready results.
   status_t AddBatchResult(std::vector<std::unique_ptr<CaptureResult>> results);
+
+  status_t NotifyOverridePendingBuffer(
+      uint32_t frame_number,
+      const std::vector<StreamGroupState>& stream_group_state);
 
   // Add a shutter for a frame number. If the frame number doesn't belong to a
   // pending request that was previously added via AddPendingRequest(), an error
@@ -95,6 +100,7 @@ class ResultDispatcher {
                    ProcessCaptureResultFunc process_capture_result,
                    ProcessBatchCaptureResultFunc process_batch_capture_result,
                    NotifyFunc notify, NotifyBatchFunc notify_batch,
+                   NotifyOverridePendingBufferFunc notify_override_pending_buffer,
                    const StreamConfiguration& stream_config,
                    std::string_view name = "ResultDispatcher");
 
@@ -200,6 +206,12 @@ class ResultDispatcher {
                                   RequestType request_type)
       EXCLUSIVE_LOCKS_REQUIRED(result_lock_);
 
+  // Add a pending buffer for the associated stream
+  status_t OverridePendingBufferLocked(
+      uint32_t frame_number,
+      const std::vector<StreamGroupState>& stream_group_state)
+      EXCLUSIVE_LOCKS_REQUIRED(result_lock_);
+
   // Remove pending shutter, result metadata, and buffers for a frame number.
   void RemovePendingRequestLocked(uint32_t frame_number)
       EXCLUSIVE_LOCKS_REQUIRED(result_lock_);
@@ -290,7 +302,8 @@ class ResultDispatcher {
       GUARDED_BY(result_lock_);
 
   // Create a StreamKey for a stream
-  inline StreamKey CreateStreamKey(int32_t stream_id) const;
+  inline StreamKey CreateStreamKey(int32_t stream_id,
+                                   bool concurrent_group = false) const;
 
   // Dump a StreamKey to a debug string
   inline std::string DumpStreamKey(const StreamKey& stream_key) const;
@@ -299,6 +312,7 @@ class ResultDispatcher {
   ProcessBatchCaptureResultFunc process_batch_capture_result_;
   NotifyFunc notify_;
   NotifyBatchFunc notify_batch_;
+  NotifyOverridePendingBufferFunc notify_override_pending_buffer_;
 
   // A thread to run NotifyCallbackThreadLoop().
   std::thread notify_callback_thread_;
@@ -317,6 +331,8 @@ class ResultDispatcher {
 
   // A map of group streams only, from stream ID to the group ID it belongs.
   std::map</*stream id=*/int32_t, /*group id=*/int32_t> group_stream_map_;
+
+  bool group_concurrency_enabled_ = false;
 };
 
 }  // namespace google_camera_hal

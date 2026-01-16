@@ -52,6 +52,10 @@ class BasicResultProcessor : public ResultProcessor {
   void NotifyBatch(
       const std::vector<ProcessBlockNotifyMessage>& block_messages) override;
 
+  void NotifyOverridePendingBuffer(
+      uint32_t /*frame_number*/,
+      const std::vector<StreamGroupState>& /*stream_group_state*/) override {};
+
   status_t FlushPendingRequests() override;
   // Override functions of ResultProcessor end.
 

@@ -109,6 +109,11 @@ using NotifyHwlPipelineMessageFunc = std::function<void(
 using NotifyHwlPipelineBatchMessageFunc =
     std::function<void(const std::vector<NotifyMessage>& /*messages*/)>;
 
+// Callback to update StreamGroupState from HWL
+using NotifyHwlOverridePendingBufferFunc = std::function<void(
+    uint32_t /*frame_number*/,
+    const std::vector<StreamGroupState>& /*stream_group_state*/)>;
+
 // Defines callbacks to notify from a HWL pipeline.
 struct HwlPipelineCallback {
   // Callback to notify when a HWL pipeline produces a capture result.
@@ -122,6 +127,10 @@ struct HwlPipelineCallback {
 
   // Callback to notify batched shutters or errors.
   NotifyHwlPipelineBatchMessageFunc notify_batch;
+
+  // Callback function to update active group and stream IDs
+  // for the concurrent MRIR
+  NotifyHwlOverridePendingBufferFunc notify_override_pending_buffer;
 };
 
 // Callback to invoke to request buffers from HAL. Only in case of HFR, there

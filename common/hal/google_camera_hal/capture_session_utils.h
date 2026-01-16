@@ -40,6 +40,7 @@ using CaptureSessionCreateFunc = std::function<std::unique_ptr<CaptureSession>(
     ProcessCaptureResultFunc process_capture_result,
     ProcessBatchCaptureResultFunc process_capture_batch_result, NotifyFunc notify,
     NotifyBatchFunc notify_batch, HwlSessionCallback session_callback,
+    NotifyOverridePendingBufferFunc notify_override_pending_buffer,
     std::vector<HalStream>* hal_configured_streams,
     CameraBufferAllocatorHwl* camera_allocator_hwl)>;
 
@@ -85,7 +86,8 @@ std::unique_ptr<CaptureSession> CreateCaptureSession(
     std::vector<HalStream>* hal_config,
     ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
     ProcessBatchCaptureResultFunc process_batch_capture_result = nullptr,
-    NotifyBatchFunc notify_batch = nullptr);
+    NotifyBatchFunc notify_batch = nullptr,
+    NotifyOverridePendingBufferFunc notify_override_pending_buffer = nullptr);
 
 }  // namespace google_camera_hal
 }  // namespace android

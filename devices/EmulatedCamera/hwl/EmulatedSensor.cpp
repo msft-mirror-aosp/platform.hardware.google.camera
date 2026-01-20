@@ -228,11 +228,11 @@ bool EmulatedSensor::AreCharacteristicsSupported(
       switch (profile.first) {
         case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD:
         case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_HLG10:
-        case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD_AGTM:
-        case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_HLG10_AGTM:
+        case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD_SMPTE_2094_50:
+        case ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_HLG10_SMPTE_2094_50:
           break;
         default:
-          ALOGE("%s: Only support for HLG10 and AGTM is available!",
+          ALOGE("%s: Only support for HLG10 and SMPTE_2094_50 is available!",
                 __FUNCTION__);
           return false;
       }
@@ -442,7 +442,7 @@ bool EmulatedSensor::IsStreamCombinationSupported(
       if ((stream.dynamic_profile !=
            ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD) &&
           (stream.dynamic_profile !=
-           ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD_AGTM)) {
+           ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD_SMPTE_2094_50)) {
         const SensorCharacteristics& sensor_char =
             stream.is_physical_camera_stream
                 ? sensor_chars.at(stream.physical_camera_id)

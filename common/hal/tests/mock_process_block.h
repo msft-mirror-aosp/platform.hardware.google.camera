@@ -37,10 +37,9 @@ class MockProcessBlock : public ProcessBlock {
   MOCK_CONST_METHOD1(GetConfiguredHalStreams,
                      status_t(std::vector<HalStream>* hal_streams));
 
-  MOCK_METHOD2(
-      ProcessRequests,
-      status_t(const std::vector<ProcessBlockRequest>& process_block_requests,
-               const CaptureRequest& remaining_session_request));
+  MOCK_METHOD2(ProcessRequests,
+               status_t(std::vector<ProcessBlockRequest> process_block_requests,
+                        const CaptureRequest& remaining_session_request));
 
   MOCK_METHOD0(Flush, status_t());
 

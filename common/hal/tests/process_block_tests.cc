@@ -15,9 +15,9 @@
  */
 
 #define LOG_TAG "ProcessBlockTest"
+#include <gtest/gtest.h>
 #include <log/log.h>
 
-#include <gtest/gtest.h>
 #include <memory>
 
 #include "mock_device_session_hwl.h"
@@ -200,7 +200,8 @@ TEST_F(ProcessBlockTest, RealtimeProcessBlockRequest) {
 
   // Testing RealtimeProcessBlock with an empty request.
   std::vector<ProcessBlockRequest> block_requests(1);
-  ASSERT_EQ(block->ProcessRequests(block_requests, block_requests[0].request),
+  ASSERT_EQ(block->ProcessRequests(std::move(block_requests),
+                                   block_requests[0].request),
             OK);
 }
 
@@ -253,7 +254,8 @@ TEST_F(ProcessBlockTest, MultiCameraRtProcessBlockRequest) {
     remaining_session_requests.output_buffers.push_back(buffer);
   }
 
-  ASSERT_EQ(block->ProcessRequests(block_requests, remaining_session_requests),
+  ASSERT_EQ(block->ProcessRequests(std::move(block_requests),
+                                   remaining_session_requests),
             OK);
 }
 

@@ -290,7 +290,7 @@ status_t RealtimeZslResultRequestProcessor::ProcessRequest(
   std::vector<ProcessBlockRequest> block_requests(1);
   block_requests[0].request = std::move(block_request);
 
-  return process_block_->ProcessRequests(block_requests, request);
+  return process_block_->ProcessRequests(std::move(block_requests), request);
 }
 
 status_t RealtimeZslResultRequestProcessor::Flush() {

@@ -336,7 +336,7 @@ status_t MultiCameraRtProcessBlock::PrepareBlockByCameraId(
 }
 
 status_t MultiCameraRtProcessBlock::ProcessRequests(
-    const std::vector<ProcessBlockRequest>& process_block_requests,
+    std::vector<ProcessBlockRequest> process_block_requests,
     const CaptureRequest& remaining_session_request) {
   ATRACE_CALL();
   std::shared_lock lock(configure_shared_mutex_);
@@ -389,17 +389,17 @@ status_t MultiCameraRtProcessBlock::ProcessRequests(
           block_request.request_id);
   }
 
+  uint32_t frame_number = process_block_requests[0].request.frame_number;
   std::vector<HwlPipelineRequest> hwl_requests;
-  res = hal_utils::CreateHwlPipelineRequests(&hwl_requests, pipeline_ids,
-                                             process_block_requests);
+  res = hal_utils::CreateHwlPipelineRequests(
+      pipeline_ids, std::move(process_block_requests), hwl_requests);
   if (res != OK) {
     ALOGE("%s: Creating HWL pipeline requests failed: %s(%d)", __FUNCTION__,
           strerror(-res), res);
     return res;
   }
 
-  return device_session_hwl_->SubmitRequests(
-      process_block_requests[0].request.frame_number, hwl_requests);
+  return device_session_hwl_->SubmitRequests(frame_number, hwl_requests);
 }
 
 status_t MultiCameraRtProcessBlock::Flush() {

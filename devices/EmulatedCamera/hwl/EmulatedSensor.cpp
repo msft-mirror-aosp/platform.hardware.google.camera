@@ -36,6 +36,7 @@
 
 #include <cmath>
 
+#include "ColorBarFrameSource.h"
 #include "EmulatedFrameSource.h"
 #include "EmulatedSensor.h"
 #include "utils/ExifUtils.h"
@@ -45,6 +46,7 @@ namespace android {
 
 using android::google_camera_hal::ErrorCode;
 using framesource::BinningState;
+using framesource::ColorBarFrameSource;
 using framesource::EmulatedFrameSource;
 using framesource::YUV420Frame;
 using google_camera_hal::ErrorMessage;
@@ -542,7 +544,8 @@ bool EmulatedSensor::IsStreamCombinationSupported(
 
 status_t EmulatedSensor::StartUp(
     uint32_t logical_camera_id,
-    std::unique_ptr<LogicalCharacteristics> logical_chars) {
+    std::unique_ptr<LogicalCharacteristics> logical_chars,
+    const FrameSourceConfig& source_config) {
   if (isRunning()) {
     return OK;
   }
@@ -569,8 +572,13 @@ status_t EmulatedSensor::StartUp(
   }
 
   logical_camera_id_ = logical_camera_id;
-  frame_source_ =
-      std::make_unique<EmulatedFrameSource>(*chars_, logical_camera_id);
+  if (source_config.type == "color_bar") {
+    frame_source_ = std::make_unique<ColorBarFrameSource>();
+  } else {
+    frame_source_ =
+        std::make_unique<EmulatedFrameSource>(*chars_, logical_camera_id);
+  }
+
   jpeg_compressor_ = std::make_unique<JpegCompressor>();
 
   auto res = run(LOG_TAG, ANDROID_PRIORITY_URGENT_DISPLAY);

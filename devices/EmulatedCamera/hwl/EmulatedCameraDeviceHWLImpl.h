@@ -46,7 +46,8 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
   static std::unique_ptr<CameraDeviceHwl> Create(
       uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta,
       PhysicalDeviceMapPtr physical_devices,
-      std::shared_ptr<EmulatedTorchState> torch_state);
+      std::shared_ptr<EmulatedTorchState> torch_state,
+      const FrameSourceConfig& source_config);
 
   virtual ~EmulatedCameraDeviceHwlImpl() = default;
 
@@ -98,7 +99,8 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
   EmulatedCameraDeviceHwlImpl(uint32_t camera_id,
                               std::unique_ptr<HalCameraMetadata> static_meta,
                               PhysicalDeviceMapPtr physical_devices,
-                              std::shared_ptr<EmulatedTorchState> torch_state);
+                              std::shared_ptr<EmulatedTorchState> torch_state,
+                              const FrameSourceConfig& source_config);
 
   status_t Initialize();
 
@@ -118,7 +120,7 @@ class EmulatedCameraDeviceHwlImpl : public CameraDeviceHwl {
   LogicalCharacteristics sensor_chars_;
   int32_t default_torch_strength_level_ = 0;
   int32_t maximum_torch_strength_level_ = 0;
-
+  const FrameSourceConfig source_config_;
 };
 
 }  // namespace android

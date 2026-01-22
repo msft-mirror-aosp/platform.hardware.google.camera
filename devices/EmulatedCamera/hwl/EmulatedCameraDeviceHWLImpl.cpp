@@ -29,11 +29,12 @@ namespace android {
 std::unique_ptr<CameraDeviceHwl> EmulatedCameraDeviceHwlImpl::Create(
     uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta,
     PhysicalDeviceMapPtr physical_devices,
-    std::shared_ptr<EmulatedTorchState> torch_state) {
+    std::shared_ptr<EmulatedTorchState> torch_state,
+    const FrameSourceConfig& source_config) {
   auto device = std::unique_ptr<EmulatedCameraDeviceHwlImpl>(
       new EmulatedCameraDeviceHwlImpl(camera_id, std::move(static_meta),
-                                      std::move(physical_devices),
-                                      torch_state));
+                                      std::move(physical_devices), torch_state,
+                                      source_config));
 
   if (device == nullptr) {
     ALOGE("%s: Creating EmulatedCameraDeviceHwlImpl failed.", __FUNCTION__);
@@ -56,11 +57,14 @@ std::unique_ptr<CameraDeviceHwl> EmulatedCameraDeviceHwlImpl::Create(
 EmulatedCameraDeviceHwlImpl::EmulatedCameraDeviceHwlImpl(
     uint32_t camera_id, std::unique_ptr<HalCameraMetadata> static_meta,
     PhysicalDeviceMapPtr physical_devices,
-    std::shared_ptr<EmulatedTorchState> torch_state)
+    std::shared_ptr<EmulatedTorchState> torch_state,
+    const FrameSourceConfig& source_config)
     : camera_id_(camera_id),
       static_metadata_(std::move(static_meta)),
       physical_device_map_(std::move(physical_devices)),
-      torch_state_(torch_state) {}
+      torch_state_(torch_state),
+      source_config_(source_config) {
+}
 
 uint32_t EmulatedCameraDeviceHwlImpl::GetCameraId() const {
   return camera_id_;
@@ -270,7 +274,8 @@ status_t EmulatedCameraDeviceHwlImpl::CreateCameraDeviceSessionHwl(
       EmulatedCameraDeviceInfo::Clone(*device_info_);
   *session = EmulatedCameraDeviceSessionHwlImpl::Create(
       camera_id_, std::move(deviceInfo),
-      ClonePhysicalDeviceMap(physical_device_map_), torch_state_);
+      ClonePhysicalDeviceMap(physical_device_map_), torch_state_,
+      source_config_);
   if (*session == nullptr) {
     ALOGE("%s: Cannot create EmulatedCameraDeviceSessionHWlImpl.", __FUNCTION__);
     return BAD_VALUE;

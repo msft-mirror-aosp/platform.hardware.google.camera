@@ -169,7 +169,8 @@ class EmulatedSensor : private Thread, public virtual RefBase {
    */
 
   status_t StartUp(uint32_t logical_camera_id,
-                   std::unique_ptr<LogicalCharacteristics> logical_chars);
+                   std::unique_ptr<LogicalCharacteristics> logical_chars,
+                   const FrameSourceConfig& source_config);
   status_t ShutDown();
 
   /*

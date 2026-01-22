@@ -276,6 +276,7 @@ status_t EmulatedCameraProviderHwlImpl::Initialize() {
 
   for (auto& config : camera_configs) {
     static_metadata_[config.id] = std::move(config.characteristics);
+    camera_id_to_source_config_[config.id] = config.source_config;
     if (!config.physical_camera_characteristics.empty()) {
       // This is a logical camera
       std::vector<std::pair<CameraDeviceStatus, uint32_t>> physical_ids;
@@ -430,8 +431,10 @@ status_t EmulatedCameraProviderHwlImpl::CreateCameraDeviceHwl(
                        HalCameraMetadata::Clone(
                            static_metadata_.at(physical_device.second).get())));
   }
+  const auto& source_config = camera_id_to_source_config_.at(camera_id);
   *camera_device_hwl = EmulatedCameraDeviceHwlImpl::Create(
-      camera_id, std::move(meta), std::move(physical_devices), torch_state);
+      camera_id, std::move(meta), std::move(physical_devices), torch_state,
+      source_config);
   if (*camera_device_hwl == nullptr) {
     ALOGE("%s: Cannot create EmulatedCameraDeviceHWlImpl.", __FUNCTION__);
     return BAD_VALUE;

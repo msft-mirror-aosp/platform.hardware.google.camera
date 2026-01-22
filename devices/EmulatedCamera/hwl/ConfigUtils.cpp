@@ -627,6 +627,17 @@ status_t GetCameraConfigurations(std::vector<CameraConfiguration>* configs) {
         return BAD_VALUE;
       }
     }
+
+    if (camera.isMember("source")) {
+      cam_config.source_config.type = camera["source"].asString();
+    } else {
+      cam_config.source_config.type = "emulated_scene";
+    }
+
+    if (camera.isMember("file_path")) {
+      cam_config.source_config.file_path = camera["file_path"].asString();
+    }
+
     configs->push_back(std::move(cam_config));
   }
 

@@ -64,7 +64,8 @@ TEST(ResultProcessorTest, SetResultCallback) {
 
     result_processor->SetResultCallback(
         process_capture_result, notify,
-        /*process_batch_capture_result=*/nullptr, /*notify_batch=*/nullptr);
+        /*process_batch_capture_result=*/nullptr, /*notify_batch=*/nullptr,
+        /*notify_override_pending_buffer*/ nullptr);
   }
 }
 
@@ -121,7 +122,8 @@ TEST(ResultProcessorTest, ProcessResultAndNotify) {
     // Test again after setting result callback.
     result_processor->SetResultCallback(
         process_capture_result, notify,
-        /*process_batch_capture_result=*/nullptr, /*notify_batch=*/nullptr);
+        /*process_batch_capture_result=*/nullptr, /*notify_batch=*/nullptr,
+        /*notify_override_pending_buffer*/ nullptr);
     SendResultsAndMessages(result_processor.get());
   }
 }
@@ -140,9 +142,11 @@ TEST(ResultProcessorTest, BasicResultProcessorResultAndNotify) {
   NotifyFunc notify = NotifyFunc(
       [&](const NotifyMessage& /*message*/) { message_received = true; });
 
-  result_processor->SetResultCallback(process_capture_result, notify,
-                                      /*process_batch_capture_result=*/nullptr,
-                                      /*notify_batch=*/nullptr);
+  result_processor->SetResultCallback(
+      process_capture_result, notify,
+      /*process_batch_capture_result=*/nullptr,
+      /*notify_batch=*/nullptr,
+      /*notify_override_pending_buffer*/ nullptr);
 
   ProcessBlockResult null_result;
   result_processor->ProcessResult(std::move(null_result));
@@ -172,9 +176,11 @@ TEST(ResultProcessorTest, BasicResultProcessorAddPendingRequest) {
 
   NotifyFunc notify = NotifyFunc([&](const NotifyMessage& /*message*/) {});
 
-  result_processor->SetResultCallback(process_capture_result, notify,
-                                      /*process_batch_capture_result=*/nullptr,
-                                      /*notify_batch=*/nullptr);
+  result_processor->SetResultCallback(
+      process_capture_result, notify,
+      /*process_batch_capture_result=*/nullptr,
+      /*notify_batch=*/nullptr,
+      /*notify_override_pending_buffer*/ nullptr);
 
   std::vector<ProcessBlockRequest> requests(1);
   requests[0].request.output_buffers = {StreamBuffer{}};

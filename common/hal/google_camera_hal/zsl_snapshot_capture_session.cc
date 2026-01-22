@@ -444,7 +444,7 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
   }
   realtime_result_processor->SetResultCallback(
       process_capture_result, notify, /*process_batch_capture_result=*/nullptr,
-      /*notify_batch=*/nullptr);
+      /*notify_batch=*/nullptr, /*notify_override_pending_buffer*/ nullptr);
 
   res = process_block->SetResultProcessor(std::move(realtime_result_processor));
   if (res != OK) {
@@ -494,7 +494,8 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
     basic_result_processor_ = basic_result_processor.get();
     basic_result_processor->SetResultCallback(
         process_capture_result, notify,
-        /*process_batch_capture_result=*/nullptr, /*notify_batch=*/nullptr);
+        /*process_batch_capture_result=*/nullptr, /*notify_batch=*/nullptr,
+        /*notify_override_pending_buffer*/ nullptr);
 
     res =
         denoise_processor->SetResultProcessor(std::move(basic_result_processor));
@@ -609,7 +610,7 @@ status_t ZslSnapshotCaptureSession::SetupSnapshotProcessChain(
 
   snapshot_result_processor_->SetResultCallback(
       process_capture_result, notify, /*process_batch_capture_result=*/nullptr,
-      /*notify_batch=*/nullptr);
+      /*notify_batch=*/nullptr, /*notify_override_pending_buffer*/ nullptr);
   res = ConfigureSnapshotStreams(stream_config);
   if (res != OK) {
     ALOGE("%s: Configuring snapshot stream failed: %s(%d)", __FUNCTION__,

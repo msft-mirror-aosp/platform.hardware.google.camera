@@ -90,8 +90,10 @@ class ProcessBlock {
   // process chain, remaining_session_request should contain only the output
   // buffers that are present in process_block_requests.
   // remaining_session_request doesn't contain any internal buffers.
+  //
+  // Assumes ownership of the metadata buffers inside the passed ProcessBlockRequests.
   virtual status_t ProcessRequests(
-      const std::vector<ProcessBlockRequest>& process_block_requests,
+      std::vector<ProcessBlockRequest> process_block_requests,
       const CaptureRequest& remaining_session_request) = 0;
 
   // Flush pending requests.
@@ -116,8 +118,8 @@ class ExternalProcessBlockFactory {
 };
 
 #if !GCH_HWL_USE_DLOPEN
-extern "C" __attribute__((weak)) ExternalProcessBlockFactory*
-GetSnapshotProcessBlockFactory();
+extern "C" __attribute__((weak))
+ExternalProcessBlockFactory* GetSnapshotProcessBlockFactory();
 
 extern "C" __attribute__((weak)) ExternalProcessBlockFactory*
 GetDenoiseProcessBlockFactory();

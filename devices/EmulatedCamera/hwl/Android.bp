@@ -26,6 +26,7 @@ cc_defaults {
     proprietary: true,
     defaults: ["emulated_camera_cflags_defaults"],
     srcs: [
+        "ColorBarFrameSource.cpp",
         "ConfigUtils.cpp",
         "EmulatedCameraProviderHWLImpl.cpp",
         "EmulatedCameraDeviceInfo.cpp",

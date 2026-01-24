@@ -256,9 +256,14 @@ status_t BasicCaptureSession::Initialize(
   auto notify_batch_cb = [this](const std::vector<NotifyMessage>& messages) {
     NotifyBatch(messages);
   };
-  result_processor->SetResultCallback(process_capture_result_cb, notify_cb,
-                                      process_batch_capture_result_cb,
-                                      notify_batch_cb);
+  auto notify_override_pending_buffer_cb =
+      [this](uint32_t frame_number,
+             const std::vector<StreamGroupState>& stream_group_state) {
+        NotifyOverridePendingBuffer(frame_number, stream_group_state);
+      };
+  result_processor->SetResultCallback(
+      process_capture_result_cb, notify_cb, process_batch_capture_result_cb,
+      notify_batch_cb, notify_override_pending_buffer_cb);
 
   // Create process block.
   auto process_block = RealtimeProcessBlock::Create(device_session_hwl_);
@@ -348,6 +353,13 @@ void BasicCaptureSession::NotifyBatch(const std::vector<NotifyMessage>& messages
     }
   }
   result_dispatcher_->AddBatchShutter(shutter_messages);
+}
+
+void BasicCaptureSession::NotifyOverridePendingBuffer(
+    uint32_t frame_number,
+    const std::vector<StreamGroupState>& stream_group_state) {
+  result_dispatcher_->NotifyOverridePendingBuffer(frame_number,
+                                                  stream_group_state);
 }
 
 }  // namespace google_camera_hal

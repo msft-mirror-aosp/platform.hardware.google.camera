@@ -103,11 +103,20 @@ class EmulatedLogicalRequestState {
   std::vector<ZoomRatioPhysicalCameraInfo> zoom_ratio_physical_camera_info_;
   uint32_t current_physical_camera_ = 0;
 
+  // Variables for leader/follower physical cameras during lens switch
+  int32_t follower_physical_camera_ = -1;
+  static constexpr size_t CAMERA_SWITCH_FRAME_COUNT = 3;
+  size_t physical_camera_transition_counter_ = 0;
+
   static std::vector<ZoomRatioPhysicalCameraInfo> GetZoomRatioPhysicalCameraInfo(
       const HalCameraMetadata* logical_chars,
       const PhysicalDeviceMap* physical_devices);
   static void UpdateActivePhysicalId(HalCameraMetadata* result_metadata,
                                      uint32_t device_id);
+  status_t createFollowerOutputBuffer(
+      StreamBuffer* follower_buffer,
+      const DynamicStreamIdMapType& dynamic_stream_id_map,
+      int32_t physical_camera_id, int32_t group_id);
 
   EmulatedLogicalRequestState(const EmulatedLogicalRequestState&) = delete;
   EmulatedLogicalRequestState& operator=(const EmulatedLogicalRequestState&) =

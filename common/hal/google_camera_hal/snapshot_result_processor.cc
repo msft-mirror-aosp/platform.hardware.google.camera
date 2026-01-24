@@ -55,7 +55,8 @@ SnapshotResultProcessor::SnapshotResultProcessor(
 void SnapshotResultProcessor::SetResultCallback(
     ProcessCaptureResultFunc process_capture_result, NotifyFunc notify,
     ProcessBatchCaptureResultFunc /*process_batch_capture_result*/,
-    NotifyBatchFunc /*notify_batch*/) {
+    NotifyBatchFunc /*notify_batch*/,
+    NotifyOverridePendingBufferFunc /*override_pending_buffer*/) {
   ATRACE_CALL();
   std::lock_guard<std::mutex> lock(callback_lock_);
   process_capture_result_ = process_capture_result;

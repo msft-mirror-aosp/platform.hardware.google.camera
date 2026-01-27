@@ -60,6 +60,7 @@ apex_defaults {
             "emu_camera_automotive_rear.json",
             "emu_camera_automotive_left.json",
             "emu_camera_automotive_right.json",
+            "com.google.emulated.camera.provider.hal.video.mp4",
         ],
         default: [
             "emu_camera_main.json",

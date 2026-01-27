@@ -1,0 +1,12 @@
+package {
+    // See: http://go/android-license-faq
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+prebuilt_etc {
+    name: "com.google.emulated.camera.provider.hal.video.mp4",
+    src: "video.mp4",
+    filename: "video.mp4",
+    installable: false,
+    soc_specific: true,
+}

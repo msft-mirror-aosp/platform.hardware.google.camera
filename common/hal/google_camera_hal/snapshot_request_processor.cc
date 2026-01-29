@@ -199,12 +199,13 @@ status_t SnapshotRequestProcessor::ProcessRequest(const CaptureRequest& request)
   ALOGD("%s: frame number %u is a snapshot request.", __FUNCTION__,
         request.frame_number);
 
-  // Obtain reference before moving the vector.
-  const CaptureRequest& first_block_request = block_requests[0].request;
+  // Copies the output buffers from the first block request before moving it.
+  std::vector<StreamBuffer> first_output_buffers =
+      block_requests[0].request.output_buffers;
 
   result = process_block_->ProcessRequests(std::move(block_requests), request);
   if (result != OK) {
-    session_callback_.return_stream_buffers(first_block_request.output_buffers);
+    session_callback_.return_stream_buffers(first_output_buffers);
   }
 
   return result;

@@ -216,7 +216,8 @@ status_t ResultDispatcher::OverridePendingBufferLocked(
     for (const StreamGroupState& group_state : stream_group_state) {
       for (const auto& [stream_key, pending_buffer_queue] :
            stream_pending_buffers_map_) {
-        if (stream_key.first == group_state.group_id) {
+        if (group_stream_map_.contains(stream_key.first) &&
+            stream_pending_buffers_map_.contains(stream_key)) {
           stream_pending_buffers_map_[stream_key].RemoveRequest(frame_number);
         }
       }

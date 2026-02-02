@@ -397,6 +397,7 @@ void PendingRequestsTracker::DumpStatus() {
 status_t PendingRequestsTracker::OverridePendingRequestStream(
     int32_t frame_number,
     const std::vector<StreamGroupState>& stream_group_state) {
+  std::lock_guard<std::mutex> lock(pending_requests_mutex_);
   std::vector<int32_t> group_ids;
   for (const StreamGroupState& group_state : stream_group_state) {
     if (group_state.group_id != -1) {

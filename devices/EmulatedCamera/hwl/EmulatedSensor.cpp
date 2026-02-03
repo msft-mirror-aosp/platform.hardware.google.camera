@@ -46,11 +46,9 @@
 namespace android {
 
 using android::google_camera_hal::ErrorCode;
-using framesource::BinningState;
 using framesource::ColorBarFrameSource;
 using framesource::EmulatedFrameSource;
 using framesource::VideoFrameSource;
-using framesource::YUV420Frame;
 using google_camera_hal::ErrorMessage;
 using google_camera_hal::HalCameraMetadata;
 using google_camera_hal::NotifyMessage;
@@ -743,10 +741,6 @@ bool EmulatedSensor::threadLoop() {
   next_capture_time_ = frame_end_real_time;
   next_readout_time_ = frame_end_real_time + exposure_time;
 
-  if (frame_source_) {
-    frame_source_->ResetSensorBinningInfo();
-  }
-
   bool reprocess_request = false;
   if ((next_input_buffer.get() != nullptr) && (!next_input_buffer->empty())) {
     if (next_input_buffer->size() > 1) {
@@ -774,6 +768,12 @@ bool EmulatedSensor::threadLoop() {
   }
 
   if ((next_buffers != nullptr) && (settings != nullptr)) {
+    // Calculate binning info for all involved cameras
+    for (const auto& it : *settings) {
+      CalculateBinningInfo(it.first, it.second, *next_buffers,
+                           reprocess_request);
+    }
+
     callback = next_buffers->at(0)->callback;
     std::vector<StreamGroupState> stream_group_state =
         GetStreamGroupState(*next_buffers);
@@ -848,13 +848,6 @@ bool EmulatedSensor::threadLoop() {
               treat_as_reprocess = false;
             }
 
-            YUV420Frame yuv_input{};
-            if (treat_as_reprocess && input_buffer != nullptr) {
-              yuv_input.width = input_buffer->width;
-              yuv_input.height = input_buffer->height;
-              yuv_input.planes = input_buffer->plane.img_y_crcb;
-            }
-
             auto jpeg_input = std::make_unique<JpegYUV420Input>();
             jpeg_input->width = (*b)->width;
             jpeg_input->height = (*b)->height;
@@ -887,16 +880,18 @@ bool EmulatedSensor::threadLoop() {
             }
             jpeg_input->buffer_owner = true;
 
-            YUV420Frame yuv_output{.width = jpeg_input->width,
-                                   .height = jpeg_input->height,
-                                   .planes = jpeg_input->yuv_planes};
-            // Pass color space for conversion if needed
-            yuv_output.color_space = (*b)->color_space;
+            SensorBuffer yuv_buffer;
+            yuv_buffer.width = jpeg_input->width;
+            yuv_buffer.height = jpeg_input->height;
+            yuv_buffer.format = PixelFormat::YCBCR_420_888;
+            yuv_buffer.plane.img_y_crcb = jpeg_input->yuv_planes;
+            yuv_buffer.color_space = (*b)->color_space;
+            yuv_buffer.camera_id = (*b)->camera_id;
 
-            status_t ret = frame_source_->RenderYUV420(
+            status_t ret = frame_source_->ProduceFrame(
                 (*b)->camera_id, next_capture_time_, device_settings->second,
-                yuv_output,
-                (treat_as_reprocess && input_buffer) ? &yuv_input : nullptr);
+                &yuv_buffer,
+                (treat_as_reprocess && input_buffer) ? input_buffer : nullptr);
 
             if (ret != OK) {
               (*b)->stream_buffer.status = BufferStatus::kError;
@@ -980,6 +975,78 @@ bool EmulatedSensor::threadLoop() {
   return true;
 }
 
+void EmulatedSensor::CalculateBinningInfo(uint32_t camera_id,
+                                          const SensorSettings& settings,
+                                          const Buffers& buffers,
+                                          bool is_reprocess) {
+  auto& binning_info = sensor_binning_factor_info_[camera_id];
+  // Reset for new calculation
+  binning_info = SensorBinningFactorInfo();
+
+  const auto& chars = chars_->at(camera_id);
+  binning_info.quad_bayer_sensor = chars.quad_bayer_sensor;
+  binning_info.max_res_request = (settings.sensor_pixel_mode ==
+                                  ANDROID_SENSOR_PIXEL_MODE_MAXIMUM_RESOLUTION);
+
+  const bool zoom_condition_met = settings.zoom_ratio > 2.0f &&
+                                  chars.quad_bayer_sensor &&
+                                  !binning_info.max_res_request;
+
+  for (const auto& buffer : buffers) {
+    if (buffer->camera_id != camera_id) continue;
+
+    if (buffer->format != PixelFormat::RAW16) {
+      binning_info.has_non_raw_stream = true;
+      continue;
+    }
+
+    if (is_reprocess) continue;
+
+    binning_info.has_raw_stream = true;
+    if (buffer->use_case ==
+        ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_CROPPED_RAW) {
+      binning_info.has_cropped_raw_stream = true;
+      if (zoom_condition_met) {
+        binning_info.raw_in_sensor_zoom_applied = true;
+      }
+    }
+  }
+}
+
+void EmulatedSensor::UpdateBinningMetadata(uint32_t camera_id,
+                                           bool reprocess_request,
+                                           HalCameraMetadata* metadata) {
+  if (sensor_binning_factor_info_.count(camera_id) == 0) {
+    return;
+  }
+
+  const auto& info = sensor_binning_factor_info_.at(camera_id);
+  uint8_t raw_binned_factor_used = 0;
+  if (!reprocess_request && info.quad_bayer_sensor && info.max_res_request &&
+      info.has_raw_stream && !info.has_non_raw_stream) {
+    raw_binned_factor_used = 1;
+  }
+  metadata->Set(ANDROID_SENSOR_RAW_BINNING_FACTOR_USED, &raw_binned_factor_used,
+                1);
+
+  if (info.has_cropped_raw_stream) {
+    auto device_chars = chars_->find(camera_id);
+    if (device_chars == chars_->end()) {
+      ALOGE("%s: Characteristics missing for camera %d", __FUNCTION__,
+            camera_id);
+      return;
+    }
+
+    if (info.raw_in_sensor_zoom_applied) {
+      metadata->Set(ANDROID_SCALER_RAW_CROP_REGION,
+                    device_chars->second.raw_crop_region_zoomed, 4);
+    } else {
+      metadata->Set(ANDROID_SCALER_RAW_CROP_REGION,
+                    device_chars->second.raw_crop_region_unzoomed, 4);
+    }
+  }
+}
+
 void EmulatedSensor::ReturnResults(
     HwlPipelineCallback callback,
     std::unique_ptr<LogicalCameraSettings> settings,
@@ -1010,28 +1077,8 @@ void EmulatedSensor::ReturnResults(
                                    &next_capture_time_, 1);
     }
 
-    if (frame_source_->HasBinningInfo(logical_camera_id_)) {
-      BinningState state = frame_source_->GetBinningState(logical_camera_id_);
-      uint8_t raw_binned_factor_used = 0;
-      if (!reprocess_request && state.raw_binning_factor_used) {
-        raw_binned_factor_used = 1;
-      }
-      result->result_metadata->Set(ANDROID_SENSOR_RAW_BINNING_FACTOR_USED,
-                                   &raw_binned_factor_used, 1);
-
-      if (state.has_cropped_raw_stream) {
-        if (state.raw_in_sensor_zoom_applied) {
-          result->result_metadata->Set(
-              ANDROID_SCALER_RAW_CROP_REGION,
-              device_chars->second.raw_crop_region_zoomed, 4);
-
-        } else {
-          result->result_metadata->Set(
-              ANDROID_SCALER_RAW_CROP_REGION,
-              device_chars->second.raw_crop_region_unzoomed, 4);
-        }
-      }
-    }
+    UpdateBinningMetadata(logical_camera_id_, reprocess_request,
+                          result->result_metadata.get());
 
     if (logical_settings->second.lens_shading_map_mode ==
         ANDROID_STATISTICS_LENS_SHADING_MAP_MODE_ON) {
@@ -1065,10 +1112,8 @@ void EmulatedSensor::ReturnResults(
       result->result_metadata->Set(ANDROID_SENSOR_GREEN_SPLIT, &kGreenSplit, 1);
     }
     if (logical_settings->second.report_noise_profile) {
-      float base_gain_factor =
-          frame_source_->GetBaseGainFactor(device_chars->second.max_raw_value);
       frame_source_->CalculateAndAppendNoiseProfile(
-          logical_settings->second.gain, base_gain_factor,
+          logical_settings->second.gain, device_chars->second.max_raw_value,
           result->result_metadata.get());
     }
     if (logical_settings->second.report_rotate_and_crop) {
@@ -1085,15 +1130,7 @@ void EmulatedSensor::ReturnResults(
           continue;
         }
 
-        if (frame_source_->HasBinningInfo(it.first)) {
-          BinningState physical_state = frame_source_->GetBinningState(it.first);
-          uint8_t raw_binned_factor_used = 0;
-          if (!reprocess_request && physical_state.raw_binning_factor_used) {
-            raw_binned_factor_used = 1;
-          }
-          it.second->Set(ANDROID_SENSOR_RAW_BINNING_FACTOR_USED,
-                         &raw_binned_factor_used, 1);
-        }
+        UpdateBinningMetadata(it.first, reprocess_request, it.second.get());
 
         // Sensor timestamp for all physical devices must be the same.
         it.second->Set(ANDROID_SENSOR_TIMESTAMP, &next_capture_time_, 1);
@@ -1110,11 +1147,9 @@ void EmulatedSensor::ReturnResults(
             ALOGE("%s: Sensor characteristics absent for device: %d", __func__,
                   it.first);
           } else {
-            float base_gain_factor = frame_source_->GetBaseGainFactor(
-                physical_chars->second.max_raw_value);
             frame_source_->CalculateAndAppendNoiseProfile(
-                physical_settings->second.gain, base_gain_factor,
-                it.second.get());
+                physical_settings->second.gain,
+                physical_chars->second.max_raw_value, it.second.get());
           }
         }
       }

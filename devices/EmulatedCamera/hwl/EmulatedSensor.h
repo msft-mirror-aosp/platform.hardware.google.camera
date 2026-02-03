@@ -108,6 +108,15 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   EmulatedSensor();
   ~EmulatedSensor();
 
+  struct SensorBinningFactorInfo {
+    bool has_raw_stream = false;
+    bool has_non_raw_stream = false;
+    bool quad_bayer_sensor = false;
+    bool max_res_request = false;
+    bool has_cropped_raw_stream = false;
+    bool raw_in_sensor_zoom_applied = false;
+  };
+
   static android_pixel_format_t OverrideFormat(
       android_pixel_format_t format, DynamicRangeProfile dynamic_range_profile) {
     switch (dynamic_range_profile) {
@@ -256,8 +265,12 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   nsecs_t next_readout_time_;
 
   std::unique_ptr<IFrameSource> frame_source_;
+  std::map<uint32_t, SensorBinningFactorInfo> sensor_binning_factor_info_;
 
   bool WaitForVSyncLocked(nsecs_t reltime);
+
+  void CalculateBinningInfo(uint32_t camera_id, const SensorSettings& settings,
+                            const Buffers& buffers, bool is_reprocess);
 
   void ReturnResults(HwlPipelineCallback callback,
                      std::unique_ptr<LogicalCameraSettings> settings,
@@ -267,6 +280,9 @@ class EmulatedSensor : private Thread, public virtual RefBase {
 
   static std::vector<StreamGroupState> GetStreamGroupState(
       const Buffers& output_buffers);
+
+  void UpdateBinningMetadata(uint32_t camera_id, bool reprocess_request,
+                             HalCameraMetadata* metadata);
 
   nsecs_t getSystemTimeWithSource(uint32_t timestamp_source);
 };

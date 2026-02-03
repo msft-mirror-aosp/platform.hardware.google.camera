@@ -91,19 +91,10 @@ bool ContainsOutputBuffer(const CaptureRequest& request,
 }
 
 bool AreAllRemainingBuffersRequested(
-    const std::vector<ProcessBlockRequest>& process_block_requests,
+    const ProcessBlockRequest& process_block_request,
     const CaptureRequest& remaining_session_request) {
   for (auto& buffer : remaining_session_request.output_buffers) {
-    bool found = false;
-
-    for (auto& block_request : process_block_requests) {
-      if (ContainsOutputBuffer(block_request.request, buffer)) {
-        found = true;
-        break;
-      }
-    }
-
-    if (!found) {
+    if (!ContainsOutputBuffer(process_block_request.request, buffer)) {
       ALOGE("%s: A buffer %" PRIu64 " of stream %d is not requested.",
             __FUNCTION__, buffer.buffer_id, buffer.stream_id);
       return false;

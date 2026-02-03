@@ -146,15 +146,10 @@ status_t RealtimeProcessBlock::GetConfiguredHalStreams(
   return device_session_hwl_->GetConfiguredHalStream(pipeline_id_, hal_streams);
 }
 
-status_t RealtimeProcessBlock::ProcessRequests(
-    std::vector<ProcessBlockRequest> process_block_requests,
+status_t RealtimeProcessBlock::ProcessRequest(
+    ProcessBlockRequest process_block_request,
     const CaptureRequest& remaining_session_request) {
   ATRACE_CALL();
-  if (process_block_requests.size() != 1) {
-    ALOGE("%s: Only a single request is supported but there are %zu",
-          __FUNCTION__, process_block_requests.size());
-    return BAD_VALUE;
-  }
 
   {
     std::lock_guard<std::mutex> lock(result_processor_lock_);
@@ -163,8 +158,8 @@ status_t RealtimeProcessBlock::ProcessRequests(
       return NO_INIT;
     }
 
-    status_t res = result_processor_->AddPendingRequests(
-        process_block_requests, remaining_session_request);
+    status_t res = result_processor_->AddPendingRequest(
+        process_block_request, remaining_session_request);
     if (res != OK) {
       ALOGE("%s: Adding a pending request to result processor failed: %s(%d)",
             __FUNCTION__, strerror(-res), res);
@@ -178,10 +173,10 @@ status_t RealtimeProcessBlock::ProcessRequests(
     return NO_INIT;
   }
 
-  uint32_t frame_number = process_block_requests[0].request.frame_number;
+  uint32_t frame_number = process_block_request.request.frame_number;
   std::vector<HwlPipelineRequest> hwl_requests;
   hwl_requests.push_back(hal_utils::CreateHwlPipelineRequest(
-      pipeline_id_, std::move(process_block_requests[0].request)));
+      pipeline_id_, std::move(process_block_request.request)));
 
   return device_session_hwl_->SubmitRequests(frame_number, hwl_requests);
 }

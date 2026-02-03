@@ -169,7 +169,7 @@ TEST_F(ProcessBlockTest, RealtimeProcessBlockRequest) {
   ASSERT_NE(result_processor, nullptr) << "Cannot create a MockResultProcessor";
 
   // Verify process block calls result processor
-  EXPECT_CALL(*result_processor, AddPendingRequests(_, _)).Times(1);
+  EXPECT_CALL(*result_processor, AddPendingRequest(_, _)).Times(1);
   EXPECT_CALL(*result_processor, ProcessResult(_)).Times(1);
   EXPECT_CALL(*result_processor, Notify(_)).Times(1);
 
@@ -187,9 +187,9 @@ TEST_F(ProcessBlockTest, RealtimeProcessBlockRequest) {
   ASSERT_EQ(block->SetResultProcessor(std::move(result_processor)), OK);
 
   // Testing RealtimeProcessBlock with an empty request.
-  std::vector<ProcessBlockRequest> block_requests(1);
-  ASSERT_EQ(block->ProcessRequests(std::move(block_requests),
-                                   block_requests[0].request),
+  ProcessBlockRequest block_request;
+  CaptureRequest remaining_request;
+  ASSERT_EQ(block->ProcessRequest(std::move(block_request), remaining_request),
             OK);
 }
 

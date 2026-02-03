@@ -39,9 +39,9 @@ bool ContainsOutputBuffer(const CaptureRequest& request,
                           const buffer_handle_t& buffer);
 
 // Return if all output buffers in remaining_session_request are included in
-// process_block_requests.
+// process_block_request.
 bool AreAllRemainingBuffersRequested(
-    const std::vector<ProcessBlockRequest>& process_block_requests,
+    const ProcessBlockRequest& process_block_request,
     const CaptureRequest& remaining_session_request);
 
 // Return if this is an IR camera.

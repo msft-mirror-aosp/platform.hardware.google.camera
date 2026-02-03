@@ -27,21 +27,23 @@ namespace google_camera_hal {
 // Defines a ProcessBlock mock using gmock.
 class MockProcessBlock : public ProcessBlock {
  public:
-  MOCK_METHOD2(ConfigureStreams,
-               status_t(const StreamConfiguration& stream_config,
-                        const StreamConfiguration& overall_config));
+  MOCK_METHOD(status_t, ConfigureStreams,
+              (const StreamConfiguration& stream_config,
+               const StreamConfiguration& overall_config),
+              (override));
 
-  MOCK_METHOD1(SetResultProcessor,
-               status_t(std::unique_ptr<ResultProcessor> result_processor));
+  MOCK_METHOD(status_t, SetResultProcessor,
+              (std::unique_ptr<ResultProcessor> result_processor), (override));
 
-  MOCK_CONST_METHOD1(GetConfiguredHalStreams,
-                     status_t(std::vector<HalStream>* hal_streams));
+  MOCK_METHOD(status_t, GetConfiguredHalStreams,
+              (std::vector<HalStream> * hal_streams), (const, override));
 
-  MOCK_METHOD2(ProcessRequests,
-               status_t(std::vector<ProcessBlockRequest> process_block_requests,
-                        const CaptureRequest& remaining_session_request));
+  MOCK_METHOD(status_t, ProcessRequest,
+              (ProcessBlockRequest process_block_request,
+               const CaptureRequest& remaining_session_request),
+              (override));
 
-  MOCK_METHOD0(Flush, status_t());
+  MOCK_METHOD(status_t, Flush, (), (override));
 
   MOCK_METHOD(void, RepeatingRequestEnd,
               (int32_t frame_number, const std::vector<int32_t>& stream_ids),

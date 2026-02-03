@@ -98,11 +98,12 @@ TEST(ResultProcessorTest, AddPendingRequests) {
     ASSERT_NE(result_processor, nullptr)
         << "Creating a result processor failed";
 
-    std::vector<ProcessBlockRequest> requests(1);
-    requests[0].request.output_buffers = {StreamBuffer{}};
+    ProcessBlockRequest block_request;
+    block_request.request.output_buffers = {StreamBuffer{}};
 
-    EXPECT_EQ(
-        result_processor->AddPendingRequests(requests, requests[0].request), OK);
+    EXPECT_EQ(result_processor->AddPendingRequest(block_request,
+                                                  block_request.request),
+              OK);
   }
 }
 
@@ -182,12 +183,13 @@ TEST(ResultProcessorTest, BasicResultProcessorAddPendingRequest) {
       /*notify_batch=*/nullptr,
       /*notify_override_pending_buffer*/ nullptr);
 
-  std::vector<ProcessBlockRequest> requests(1);
-  requests[0].request.output_buffers = {StreamBuffer{}};
+  ProcessBlockRequest block_request;
+  block_request.request.output_buffers = {StreamBuffer{}};
 
   CaptureRequest remaining_request;
   remaining_request.output_buffers.push_back({.buffer = kTestBufferHandle});
-  EXPECT_NE(result_processor->AddPendingRequests(requests, remaining_request), OK)
+  EXPECT_NE(
+      result_processor->AddPendingRequest(block_request, remaining_request), OK)
       << "Adding a pending request with a remaining output buffer that's not"
       << "included in the request should fail.";
 }

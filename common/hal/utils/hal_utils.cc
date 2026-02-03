@@ -46,25 +46,6 @@ HwlPipelineRequest CreateHwlPipelineRequest(uint32_t pipeline_id,
   return hwl_request;
 }
 
-status_t CreateHwlPipelineRequests(const std::vector<uint32_t>& pipeline_ids,
-                                   std::vector<ProcessBlockRequest> requests,
-                                   std::vector<HwlPipelineRequest>& hwl_requests) {
-  if (pipeline_ids.size() != requests.size()) {
-    ALOGE("%s: There are %zu pipeline IDs but %zu requests", __FUNCTION__,
-          pipeline_ids.size(), requests.size());
-    return BAD_VALUE;
-  }
-
-  for (size_t i = 0; i < pipeline_ids.size(); i++) {
-    HwlPipelineRequest hwl_request = CreateHwlPipelineRequest(
-        pipeline_ids[i], std::move(requests[i].request));
-
-    hwl_requests.push_back(std::move(hwl_request));
-  }
-
-  return OK;
-}
-
 std::unique_ptr<CaptureResult> ConvertToCaptureResult(
     std::unique_ptr<HwlPipelineResult> hwl_result) {
   if (hwl_result == nullptr) {

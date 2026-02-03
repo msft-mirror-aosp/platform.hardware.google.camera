@@ -31,7 +31,6 @@ cc_library_shared {
         "hal_utils.cc",
         "hwl_buffer_allocator.cc",
         "internal_stream_manager.cc",
-        "multicam_realtime_process_block.cc",
         "pipeline_request_id_manager.cc",
         "realtime_process_block.cc",
         "result_dispatcher.cc",

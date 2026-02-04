@@ -72,9 +72,8 @@ EmulatedRequestProcessor::~EmulatedRequestProcessor() {
   }
 }
 
-status_t EmulatedRequestProcessor::ProcessPipelineRequests(
-    uint32_t frame_number, std::vector<HwlPipelineRequest>& requests,
-    const std::vector<EmulatedPipeline>& pipelines,
+status_t EmulatedRequestProcessor::ProcessPipelineRequest(
+    HwlPipelineRequest& request, const std::vector<EmulatedPipeline>& pipelines,
     const DynamicStreamIdMapType& dynamic_stream_id_map,
     bool use_default_physical_camera) {
   ATRACE_CALL();
@@ -82,69 +81,67 @@ status_t EmulatedRequestProcessor::ProcessPipelineRequests(
 
   std::unique_lock<std::mutex> lock(process_mutex_);
 
-  for (auto& request : requests) {
-    if (request.pipeline_id >= pipelines.size()) {
-      ALOGE("%s: Pipeline request with invalid pipeline id: %u", __FUNCTION__,
-            request.pipeline_id);
-      return BAD_VALUE;
-    }
-
-    while (pending_requests_.size() > EmulatedSensor::kPipelineDepth) {
-      auto result = request_condition_.wait_for(
-          lock, std::chrono::nanoseconds(
-                    EmulatedSensor::kSupportedFrameDurationRange[1]));
-      if (result == std::cv_status::timeout) {
-        ALOGE("%s: Timed out waiting for a pending request slot", __FUNCTION__);
-        return TIMED_OUT;
-      }
-    }
-
-    res = request_state_->UpdateRequestForDynamicStreams(
-        &request, pipelines, dynamic_stream_id_map, use_default_physical_camera);
-    if (res != OK) {
-      ALOGE("%s: Failed to update request for dynamic streams: %s(%d)",
-            __FUNCTION__, strerror(-res), res);
-      return res;
-    }
-
-    auto output_buffers = CreateSensorBuffers(
-        frame_number, request.output_buffers,
-        pipelines[request.pipeline_id].streams, request.pipeline_id,
-        pipelines[request.pipeline_id].cb, /*override_width*/ 0,
-        /*override_height*/ 0);
-    if (output_buffers == nullptr) {
-      return NO_MEMORY;
-    }
-
-    auto input_buffers = CreateSensorBuffers(
-        frame_number, request.input_buffers,
-        pipelines[request.pipeline_id].streams, request.pipeline_id,
-        pipelines[request.pipeline_id].cb, request.input_width,
-        request.input_height);
-
-    // Check if there are any settings that need to be overridden.
-    camera_metadata_ro_entry_t entry;
-    if (request.settings.get() != nullptr) {
-      auto ret = request.settings.get()->Get(ANDROID_CONTROL_SETTINGS_OVERRIDE,
-                                             &entry);
-      if ((ret == OK) && (entry.count == 1)) {
-        std::unique_ptr<HalCameraMetadata> override_setting =
-            HalCameraMetadata::Clone(request.settings.get());
-        override_settings_.push({.settings = std::move(override_setting),
-                                 .frame_number = frame_number});
-      }
-    } else {
-      override_settings_.push(
-          {.settings = nullptr, .frame_number = frame_number});
-    }
-    pending_requests_.push(
-        {.frame_number = frame_number,
-         .pipeline_id = request.pipeline_id,
-         .callback = pipelines[request.pipeline_id].cb,
-         .settings = HalCameraMetadata::Clone(request.settings.get()),
-         .input_buffers = std::move(input_buffers),
-         .output_buffers = std::move(output_buffers)});
+  if (request.pipeline_id >= pipelines.size()) {
+    ALOGE("%s: Pipeline request with invalid pipeline id: %u", __FUNCTION__,
+          request.pipeline_id);
+    return BAD_VALUE;
   }
+
+  while (pending_requests_.size() > EmulatedSensor::kPipelineDepth) {
+    auto result = request_condition_.wait_for(
+        lock, std::chrono::nanoseconds(
+                  EmulatedSensor::kSupportedFrameDurationRange[1]));
+    if (result == std::cv_status::timeout) {
+      ALOGE("%s: Timed out waiting for a pending request slot", __FUNCTION__);
+      return TIMED_OUT;
+    }
+  }
+
+  res = request_state_->UpdateRequestForDynamicStreams(
+      &request, pipelines, dynamic_stream_id_map, use_default_physical_camera);
+  if (res != OK) {
+    ALOGE("%s: Failed to update request for dynamic streams: %s(%d)",
+          __FUNCTION__, strerror(-res), res);
+    return res;
+  }
+
+  auto output_buffers = CreateSensorBuffers(
+      request.frame_number, request.output_buffers,
+      pipelines[request.pipeline_id].streams, request.pipeline_id,
+      pipelines[request.pipeline_id].cb, /*override_width*/ 0,
+      /*override_height*/ 0);
+  if (output_buffers == nullptr) {
+    return NO_MEMORY;
+  }
+
+  auto input_buffers = CreateSensorBuffers(
+      request.frame_number, request.input_buffers,
+      pipelines[request.pipeline_id].streams, request.pipeline_id,
+      pipelines[request.pipeline_id].cb, request.input_width,
+      request.input_height);
+
+  // Check if there are any settings that need to be overridden.
+  camera_metadata_ro_entry_t entry;
+  if (request.settings.get() != nullptr) {
+    auto ret =
+        request.settings.get()->Get(ANDROID_CONTROL_SETTINGS_OVERRIDE, &entry);
+    if ((ret == OK) && (entry.count == 1)) {
+      std::unique_ptr<HalCameraMetadata> override_setting =
+          HalCameraMetadata::Clone(request.settings.get());
+      override_settings_.push({.settings = std::move(override_setting),
+                               .frame_number = request.frame_number});
+    }
+  } else {
+    override_settings_.push(
+        {.settings = nullptr, .frame_number = request.frame_number});
+  }
+  pending_requests_.push(
+      {.frame_number = request.frame_number,
+       .pipeline_id = request.pipeline_id,
+       .callback = pipelines[request.pipeline_id].cb,
+       .settings = HalCameraMetadata::Clone(request.settings.get()),
+       .input_buffers = std::move(input_buffers),
+       .output_buffers = std::move(output_buffers)});
 
   return OK;
 }
@@ -514,7 +511,8 @@ void EmulatedRequestProcessor::RequestProcessorLoop() {
             auto result = request_state_->InitializeLogicalResult(
                 pipeline_id, frame_number,
                 /*partial result*/ false);
-            // The screen rotation will be the same for all logical and physical devices
+            // The screen rotation will be the same for all logical and physical
+            // devices
             uint32_t screen_rotation = screen_rotation_;
             for (auto it = logical_settings->begin();
                  it != logical_settings->end(); it++) {

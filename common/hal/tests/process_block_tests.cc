@@ -163,7 +163,7 @@ TEST_F(ProcessBlockTest, RealtimeProcessBlockRequest) {
   EXPECT_CALL(*session_hwl_, ConfigurePipeline(_, _, _, _, _)).Times(1);
   EXPECT_CALL(*session_hwl_, GetConfiguredHalStream(_, _))
       .Times(test_config_.streams.size());
-  EXPECT_CALL(*session_hwl_, SubmitRequests(_, _)).Times(1);
+  EXPECT_CALL(*session_hwl_, SubmitRequest(_)).Times(1);
 
   auto result_processor = std::make_unique<MockResultProcessor>();
   ASSERT_NE(result_processor, nullptr) << "Cannot create a MockResultProcessor";

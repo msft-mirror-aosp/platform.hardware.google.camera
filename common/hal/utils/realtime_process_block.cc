@@ -173,12 +173,8 @@ status_t RealtimeProcessBlock::ProcessRequest(
     return NO_INIT;
   }
 
-  uint32_t frame_number = process_block_request.request.frame_number;
-  std::vector<HwlPipelineRequest> hwl_requests;
-  hwl_requests.push_back(hal_utils::CreateHwlPipelineRequest(
+  return device_session_hwl_->SubmitRequest(hal_utils::CreateHwlPipelineRequest(
       pipeline_id_, std::move(process_block_request.request)));
-
-  return device_session_hwl_->SubmitRequests(frame_number, hwl_requests);
 }
 
 status_t RealtimeProcessBlock::Flush() {

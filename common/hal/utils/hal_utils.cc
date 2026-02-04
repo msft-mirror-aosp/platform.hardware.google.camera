@@ -34,6 +34,7 @@ HwlPipelineRequest CreateHwlPipelineRequest(uint32_t pipeline_id,
                                             CaptureRequest request) {
   HwlPipelineRequest hwl_request;
   hwl_request.pipeline_id = pipeline_id;
+  hwl_request.frame_number = request.frame_number;
   hwl_request.settings = std::move(request.settings);
   hwl_request.input_buffers = std::move(request.input_buffers);
   hwl_request.output_buffers = std::move(request.output_buffers);

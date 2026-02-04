@@ -387,7 +387,7 @@ TEST_F(CameraDeviceSessionTests, PreviewRequests) {
   // Set up mocking expections.
   static constexpr uint32_t kNumPreviewRequests = 5;
   EXPECT_CALL(*session_hwl, ConfigurePipeline(_, _, _, _, _)).Times(1);
-  EXPECT_CALL(*session_hwl, SubmitRequests(_, _)).Times(kNumPreviewRequests);
+  EXPECT_CALL(*session_hwl, SubmitRequest(_)).Times(kNumPreviewRequests);
 
   std::unique_ptr<CameraDeviceSession> session;
   CreateSessionAndCheck(std::move(session_hwl), &session);

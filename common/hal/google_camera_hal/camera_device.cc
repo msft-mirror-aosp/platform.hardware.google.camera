@@ -117,29 +117,10 @@ static void ReadAheadVma(const Vma& vma, const size_t madvise_size_limit_bytes,
                       map_end, vma.name, preload_mode);
 }
 
-static void UnpinVma(const Vma& vma) {
-  std::string trace_tag =
-      "munlocking " + vma.name + " size=" + std::to_string(vma.end - vma.start);
-  ATRACE_NAME(trace_tag.c_str());
-  int status_munlock =
-      munlock(reinterpret_cast<uint8_t*>(vma.start), vma.end - vma.start);
-  if (status_munlock < 0) {
-    ALOGW(
-        "%s: Unlocking memory failed! status=%i, errno=%i, "
-        "trace_tag=%s",
-        __FUNCTION__, status_munlock, errno, trace_tag.c_str());
-  }
-}
-
-// Update memory configuration to match the new configuration. This includes
-// pinning new libraries, unpinning libraries that were pinned in the old
-// config but aren't any longer, and madvising anonymous VMAs.
-static void MadviseOnAnonAndPinnedLibraries(
-    google_camera_hal::HwlMemoryConfig memory_config,
-    google_camera_hal::HwlMemoryConfig old_memory_config) {
-  ALOGI("Pinning memory config is set to %zu shared libraries.",
-        memory_config.pinned_libraries.size());
-  auto vmaCollectorCb = [&memory_config, &old_memory_config](const Vma& vma) {
+// Update memory configuration to match the new configuration, including
+// madvising anonymous VMAs.
+static void MadviseAnonVma(google_camera_hal::HwlMemoryConfig memory_config) {
+  auto vmaCollectorCb = [&memory_config](const Vma& vma) {
     // Read ahead for anonymous VMAs and for specific files.
     // vma.flags represents a VMAs rwx bits.
     if (vma.inode == 0 && !vma.is_shared && vma.flags) {
@@ -150,17 +131,6 @@ static void MadviseOnAnonAndPinnedLibraries(
       ReadAheadVma(vma, memory_config.madvise_map_size_limit_bytes,
                    PreloadMode::kMadvise);
       return true;
-    }
-    if (memory_config.pinned_libraries.contains(vma.name) &&
-        !old_memory_config.pinned_libraries.contains(vma.name)) {
-      // File-backed VMAs do not have a madvise limit
-      ReadAheadVma(vma, std::numeric_limits<size_t>::max(),
-                   PreloadMode::kMlockMadvise);
-    } else if (!memory_config.pinned_libraries.contains(vma.name) &&
-               old_memory_config.pinned_libraries.contains(vma.name)) {
-      // Unpin libraries that were previously pinned but are no longer needed.
-      ALOGI("%s: Unpinning %s", __FUNCTION__, vma.name.c_str());
-      UnpinVma(vma);
     }
     return true;
   };
@@ -212,10 +182,8 @@ std::unique_ptr<CameraDevice> CameraDevice::Create(
   memory_config.madvise_map_size_limit_bytes = 0;
 
   std::lock_guard<std::mutex> lock(applied_memory_config_mutex_);
-  std::thread t(MadviseOnAnonAndPinnedLibraries, memory_config,
-                device->GetAppliedMemoryConfig());
+  std::thread t(MadviseAnonVma, memory_config);
   t.detach();
-  device->SetAppliedMemoryConfig(memory_config);
 
   return device;
 }
@@ -433,9 +401,7 @@ status_t CameraDevice::CreateCameraDeviceSession(
 
   std::lock_guard<std::mutex> lock(applied_memory_config_mutex_);
   HwlMemoryConfig memory_config = camera_device_hwl_->GetMemoryConfig();
-  std::thread t(MadviseOnAnonAndPinnedLibraries, memory_config,
-                GetAppliedMemoryConfig());
-  SetAppliedMemoryConfig(memory_config);
+  std::thread t(MadviseAnonVma, memory_config);
   t.detach();
 
   return OK;

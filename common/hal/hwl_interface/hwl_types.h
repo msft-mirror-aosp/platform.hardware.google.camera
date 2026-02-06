@@ -31,9 +31,6 @@ namespace google_camera_hal {
 
 // Controls what memory is pinned and madvised
 struct HwlMemoryConfig {
-  // Defines which libraries to pin in memory.
-  std::unordered_set<std::string> pinned_libraries;
-
   // Sets the maximum size of a map to be madvised.
   size_t madvise_map_size_limit_bytes = std::numeric_limits<size_t>::max();
 };

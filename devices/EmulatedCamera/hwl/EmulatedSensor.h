@@ -82,7 +82,7 @@
 #include <functional>
 
 #include "Base.h"
-#include "EmulatedScene.h"
+#include "EmulatedFrameSource.h"
 #include "JpegCompressor.h"
 #include "SensorCharacteristics.h"
 #include "utils/Mutex.h"
@@ -213,10 +213,6 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   static const uint8_t kPipelineDepth;
 
  private:
-  // Scene stabilization
-  static const uint32_t kRegularSceneHandshake;
-  static const uint32_t kReducedSceneHandshake;
-
   /**
    * Logical characteristics
    */
@@ -224,19 +220,7 @@ class EmulatedSensor : private Thread, public virtual RefBase {
 
   uint32_t logical_camera_id_ = 0;
 
-  static const nsecs_t kMinVerticalBlank;
-
   // Sensor sensitivity, approximate
-
-  static const float kSaturationVoltage;
-  static const uint32_t kSaturationElectrons;
-  static const float kVoltsPerLuxSecond;
-  static const float kElectronsPerLuxSecond;
-
-  static const float kReadNoiseStddevBeforeGain;  // In electrons
-  static const float kReadNoiseStddevAfterGain;   // In raw digital units
-  static const float kReadNoiseVarBeforeGain;
-  static const float kReadNoiseVarAfterGain;
   static const camera_metadata_rational kNeutralColorPoint[3];
   static const float kGreenSplit;
 
@@ -245,12 +229,6 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   static const uint32_t kMaxStallingStreams;
   static const uint32_t kMaxInputStreams;
   static const uint32_t kMaxLensShadingMapSize[2];
-  static const int32_t kFixedBitPrecision;
-  static const int32_t kSaturationPoint;
-
-  std::vector<int32_t> gamma_table_sRGB_;
-  std::vector<int32_t> gamma_table_smpte170m_;
-  std::vector<int32_t> gamma_table_hlg_;
 
   Mutex control_mutex_;  // Lock before accessing control parameters
   // Start of control parameters
@@ -265,8 +243,6 @@ class EmulatedSensor : private Thread, public virtual RefBase {
 
   // End of control parameters
 
-  unsigned int rand_seed_ = 1;
-
   /**
    * Inherited Thread virtual overrides, and members only used by the
    * processing thread
@@ -276,88 +252,15 @@ class EmulatedSensor : private Thread, public virtual RefBase {
   nsecs_t next_capture_time_;
   nsecs_t next_readout_time_;
 
-  struct SensorBinningFactorInfo {
-    bool has_raw_stream = false;
-    bool has_non_raw_stream = false;
-    bool quad_bayer_sensor = false;
-    bool max_res_request = false;
-    bool has_cropped_raw_stream = false;
-    bool raw_in_sensor_zoom_applied = false;
-  };
-
-  std::map<uint32_t, SensorBinningFactorInfo> sensor_binning_factor_info_;
-
-  std::unique_ptr<EmulatedScene> scene_;
-
-  RgbRgbMatrix rgb_rgb_matrix_;
-
-  static EmulatedScene::ColorChannels GetQuadBayerColor(uint32_t x, uint32_t y);
-
-  static void RemosaicQuadBayerBlock(uint16_t* img_in, uint16_t* img_out,
-                                     int xstart, int ystart,
-                                     int row_stride_in_bytes);
-
-  static status_t RemosaicRAW16Image(uint16_t* img_in, uint16_t* img_out,
-                                     size_t row_stride_in_bytes,
-                                     const SensorCharacteristics& chars);
-
-  void CaptureRawBinned(uint8_t* img, size_t row_stride_in_bytes, uint32_t gain,
-                        const SensorCharacteristics& chars);
-
-  void CaptureRawFullRes(uint8_t* img, size_t row_stride_in_bytes,
-                         uint32_t gain, const SensorCharacteristics& chars);
-  void CaptureRawInSensorZoom(uint8_t* img, size_t row_stride_in_bytes,
-                              uint32_t gain, const SensorCharacteristics& chars);
-  void CaptureRaw(uint8_t* img, size_t row_stride_in_bytes, uint32_t gain,
-                  const SensorCharacteristics& chars, bool in_sensor_zoom,
-                  bool binned);
-
-  enum RGBLayout { RGB, RGBA, ARGB };
-  void CaptureRGB(uint8_t* img, uint32_t width, uint32_t height,
-                  uint32_t stride, RGBLayout layout, uint32_t gain,
-                  int32_t color_space, const SensorCharacteristics& chars);
-  void CaptureYUV420(YCbCrPlanes yuv_layout, uint32_t width, uint32_t height,
-                     uint32_t gain, float zoom_ratio, bool rotate,
-                     int32_t color_space, const SensorCharacteristics& chars);
-  void CaptureDepth(uint8_t* img, uint32_t gain, uint32_t width, uint32_t height,
-                    uint32_t stride, const SensorCharacteristics& chars);
-  void RgbToRgb(uint32_t* r_count, uint32_t* g_count, uint32_t* b_count);
-  void CalculateRgbRgbMatrix(int32_t color_space,
-                             const SensorCharacteristics& chars);
-
-  struct YUV420Frame {
-    uint32_t width = 0;
-    uint32_t height = 0;
-    YCbCrPlanes planes;
-  };
-
-  enum ProcessType { REPROCESS, HIGH_QUALITY, REGULAR };
-  status_t ProcessYUV420(const YUV420Frame& input, const YUV420Frame& output,
-                         uint32_t gain, ProcessType process_type,
-                         float zoom_ratio, bool rotate_and_crop,
-                         int32_t color_space,
-                         const SensorCharacteristics& chars);
-
-  inline int32_t ApplysRGBGamma(int32_t value, int32_t saturation);
-  inline int32_t ApplySMPTE170MGamma(int32_t value, int32_t saturation);
-  inline int32_t ApplyST2084Gamma(int32_t value, int32_t saturation);
-  inline int32_t ApplyHLGGamma(int32_t value, int32_t saturation);
-  inline int32_t GammaTable(int32_t value, int32_t color_space);
+  std::unique_ptr<EmulatedFrameSource> frame_source_;
 
   bool WaitForVSyncLocked(nsecs_t reltime);
-  void CalculateAndAppendNoiseProfile(float gain /*in ISO*/,
-                                      float base_gain_factor,
-                                      HalCameraMetadata* result /*out*/);
 
   void ReturnResults(HwlPipelineCallback callback,
                      std::unique_ptr<LogicalCameraSettings> settings,
                      std::unique_ptr<HwlPipelineResult> result,
                      bool reprocess_request,
                      std::unique_ptr<HwlPipelineResult> partial_result);
-
-  static float GetBaseGainFactor(float max_raw_value) {
-    return max_raw_value / EmulatedSensor::kSaturationElectrons;
-  }
 
   static std::vector<StreamGroupState> GetStreamGroupState(
       const Buffers& output_buffers);

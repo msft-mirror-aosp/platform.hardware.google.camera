@@ -27,58 +27,42 @@
 
 #include "Base.h"
 #include "EmulatedScene.h"
+#include "IFrameSource.h"
 #include "SensorCharacteristics.h"
 
 namespace android {
+namespace framesource {
 
 using google_camera_hal::HalCameraMetadata;
 
-struct BinningState {
-  bool raw_binning_factor_used = false;
-  bool raw_in_sensor_zoom_applied = false;
-  bool has_cropped_raw_stream = false;
-};
-
-class EmulatedFrameSource {
+class EmulatedFrameSource : public IFrameSource {
  public:
-  // Struct used for YUV processing (shared with JpegCompressor usage)
-  struct YUV420Frame {
-    uint32_t width = 0;
-    uint32_t height = 0;
-    YCbCrPlanes planes;
-    const uint8_t* output_buffer = nullptr;
-    size_t output_buffer_size = 0;
-    const uint8_t* app1_buffer = nullptr;
-    size_t app1_buffer_size = 0;
-    int32_t color_space = 0;
-  };
-
   EmulatedFrameSource(const LogicalCharacteristics& chars, uint32_t camera_id);
   virtual ~EmulatedFrameSource();
 
   // Main entry point for producing a frame into a sensor buffer
   status_t ProduceFrame(uint32_t camera_id, nsecs_t timestamp,
                         const SensorSettings& settings, SensorBuffer* buffer,
-                        const SensorBuffer* input_buffer);
+                        const SensorBuffer* input_buffer) override;
 
   // Helper for JPEG compression (renders directly to memory)
   status_t RenderYUV420(uint32_t camera_id, nsecs_t timestamp,
                         const SensorSettings& settings,
                         const YUV420Frame& output_frame,
-                        const YUV420Frame* input_frame);
+                        const YUV420Frame* input_frame) override;
 
   void CalculateAndAppendNoiseProfile(float gain /*in ISO*/,
                                       float base_gain_factor,
-                                      HalCameraMetadata* result /*out*/);
+                                      HalCameraMetadata* result /*out*/) override;
 
-  static float GetBaseGainFactor(float max_raw_value) {
+  float GetBaseGainFactor(float max_raw_value) const override {
     return max_raw_value / EmulatedFrameSource::kSaturationElectrons;
   }
 
-  bool HasBinningInfo(uint32_t camera_id) const;
-  BinningState GetBinningState(uint32_t camera_id) const;
+  bool HasBinningInfo(uint32_t camera_id) const override;
+  BinningState GetBinningState(uint32_t camera_id) const override;
 
-  void ResetSensorBinningInfo() {
+  void ResetSensorBinningInfo() override {
     sensor_binning_factor_info_.clear();
   }
 
@@ -175,6 +159,7 @@ class EmulatedFrameSource {
   inline int32_t GammaTable(int32_t value, int32_t color_space);
 };
 
+}  // namespace framesource
 }  // namespace android
 
 #endif  // HW_EMULATOR_CAMERA2_EMULATED_FRAME_SOURCE_H

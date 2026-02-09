@@ -36,6 +36,7 @@
 
 #include <cmath>
 
+#include "EmulatedFrameSource.h"
 #include "EmulatedSensor.h"
 #include "utils/ExifUtils.h"
 #include "utils/HWLUtils.h"
@@ -43,6 +44,9 @@
 namespace android {
 
 using android::google_camera_hal::ErrorCode;
+using framesource::BinningState;
+using framesource::EmulatedFrameSource;
+using framesource::YUV420Frame;
 using google_camera_hal::ErrorMessage;
 using google_camera_hal::HalCameraMetadata;
 using google_camera_hal::NotifyMessage;
@@ -825,7 +829,7 @@ bool EmulatedSensor::threadLoop() {
               treat_as_reprocess = false;
             }
 
-            EmulatedFrameSource::YUV420Frame yuv_input{};
+            YUV420Frame yuv_input{};
             if (treat_as_reprocess && input_buffer != nullptr) {
               yuv_input.width = input_buffer->width;
               yuv_input.height = input_buffer->height;
@@ -864,10 +868,9 @@ bool EmulatedSensor::threadLoop() {
             }
             jpeg_input->buffer_owner = true;
 
-            EmulatedFrameSource::YUV420Frame yuv_output{
-                .width = jpeg_input->width,
-                .height = jpeg_input->height,
-                .planes = jpeg_input->yuv_planes};
+            YUV420Frame yuv_output{.width = jpeg_input->width,
+                                   .height = jpeg_input->height,
+                                   .planes = jpeg_input->yuv_planes};
             // Pass color space for conversion if needed
             yuv_output.color_space = (*b)->color_space;
 
@@ -1043,8 +1046,8 @@ void EmulatedSensor::ReturnResults(
       result->result_metadata->Set(ANDROID_SENSOR_GREEN_SPLIT, &kGreenSplit, 1);
     }
     if (logical_settings->second.report_noise_profile) {
-      float base_gain_factor = EmulatedFrameSource::GetBaseGainFactor(
-          device_chars->second.max_raw_value);
+      float base_gain_factor =
+          frame_source_->GetBaseGainFactor(device_chars->second.max_raw_value);
       frame_source_->CalculateAndAppendNoiseProfile(
           logical_settings->second.gain, base_gain_factor,
           result->result_metadata.get());
@@ -1088,7 +1091,7 @@ void EmulatedSensor::ReturnResults(
             ALOGE("%s: Sensor characteristics absent for device: %d", __func__,
                   it.first);
           } else {
-            float base_gain_factor = EmulatedFrameSource::GetBaseGainFactor(
+            float base_gain_factor = frame_source_->GetBaseGainFactor(
                 physical_chars->second.max_raw_value);
             frame_source_->CalculateAndAppendNoiseProfile(
                 physical_settings->second.gain, base_gain_factor,

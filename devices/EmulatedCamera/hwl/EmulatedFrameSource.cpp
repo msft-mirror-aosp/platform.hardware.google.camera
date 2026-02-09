@@ -37,6 +37,7 @@
 #endif
 
 namespace android {
+namespace framesource {
 
 using android::hardware::graphics::common::V1_2::Dataspace;
 
@@ -1140,4 +1141,5 @@ void EmulatedFrameSource::RgbToRgb(uint32_t* r_count, uint32_t* g_count,
       0.0f);
 }
 
+}  // namespace framesource
 }  // namespace android

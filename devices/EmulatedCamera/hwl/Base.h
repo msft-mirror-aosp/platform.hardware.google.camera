@@ -97,6 +97,11 @@ struct SensorBuffer {
 
 typedef std::vector<std::unique_ptr<SensorBuffer>> Buffers;
 
+struct FrameSourceConfig {
+  std::string type;
+  std::string file_path;
+};
+
 }  // namespace android
 
 #endif

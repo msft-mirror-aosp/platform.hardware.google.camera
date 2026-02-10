@@ -3,22 +3,26 @@
     {
       "id": "0",
       "type": "front",
-      "filename": "emu_camera_automotive_front.json"
+      "filename": "emu_camera_automotive_front.json",
+      "source": "color_bar"
     },
     {
       "id": "1",
       "type": "right",
-      "filename": "emu_camera_automotive_right.json"
+      "filename": "emu_camera_automotive_right.json",
+      "source": "color_bar"
     },
     {
       "id": "2",
       "type": "rear",
-      "filename": "emu_camera_automotive_rear.json"
+      "filename": "emu_camera_automotive_rear.json",
+      "source": "color_bar"
     },
     {
       "id": "3",
       "type": "left",
-      "filename": "emu_camera_automotive_left.json"
+      "filename": "emu_camera_automotive_left.json",
+      "source": "color_bar"
     }
   ]
 }

@@ -191,20 +191,38 @@ status_t RealtimeZslRequestProcessor::ConfigureStreams(
 
   // For YUV ZSL, we will use the JPEG size for ZSL buffer size. We already
   // checked the size is supported in capture session.
+  const Stream* snapshot_stream = nullptr;
+  const Stream* fallback_stream = nullptr;
   for (const auto& stream : stream_config.streams) {
     if (utils::IsSoftwareDenoiseEligibleSnapshotStream(stream)) {
-      if (SelectWidthAndHeight(stream.width, stream.height,
-                               *device_session_hwl_, active_array_width_,
-                               active_array_height_) != OK) {
-        ALOGE("%s: failed to select ZSL YUV buffer width and height",
-              __FUNCTION__);
-        return BAD_VALUE;
+      if (stream.format == HAL_PIXEL_FORMAT_BLOB) {
+        snapshot_stream = &stream;
+        break;  // JPEG has the highest priority.
       }
-      ALOGI("%s, Snapshot size is (%d x %d), selected size is (%d x %d)",
-            __FUNCTION__, stream.width, stream.height, active_array_width_,
-            active_array_height_);
-      break;
+      // Find the first YUV stream that is eligible for software denoise.
+      // This will be used as the fallback stream if JPEG stream is not
+      // available.
+      if (fallback_stream == nullptr) {
+        fallback_stream = &stream;
+      }
     }
+  }
+
+  if (snapshot_stream == nullptr) {
+    snapshot_stream = fallback_stream;
+  }
+  // TODO: b/483227308 if snapshot_stream is nullptr, we should return BAD_VALUE
+  // instead of proceeding with the default size.
+  if (snapshot_stream != nullptr) {
+    if (SelectWidthAndHeight(snapshot_stream->width, snapshot_stream->height,
+                             *device_session_hwl_, active_array_width_,
+                             active_array_height_) != OK) {
+      ALOGE("%s: failed to select ZSL buffer width and height", __FUNCTION__);
+      return BAD_VALUE;
+    }
+    ALOGI("%s, Snapshot size is (%d x %d), selected size is (%d x %d)",
+          __FUNCTION__, snapshot_stream->width, snapshot_stream->height,
+          active_array_width_, active_array_height_);
   }
 
   // Register internal stream

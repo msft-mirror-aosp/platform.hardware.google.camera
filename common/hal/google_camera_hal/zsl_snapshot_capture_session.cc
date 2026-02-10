@@ -21,6 +21,7 @@
 
 #include "zsl_snapshot_capture_session.h"
 
+#include <android-base/properties.h>
 #include <dlfcn.h>
 #include <log/log.h>
 #include <sys/stat.h>
@@ -49,6 +50,9 @@ constexpr char kExternalProcessBlockDir[] =
     "/vendor/lib/camera/google_proprietary/";
 #endif
 #endif  // GCH_HWL_USE_DLOPEN
+
+constexpr char k3PZslEverywhereEnabled[] =
+    "vendor.camera.debug.3p_zsl_everywhere_enabled";
 
 bool IsSwDenoiseSnapshotCompatible(const CaptureRequest& request) {
   if (request.settings == nullptr) {
@@ -196,6 +200,11 @@ bool ZslSnapshotCaptureSession::IsStreamConfigurationSupported(
     CameraDeviceSessionHwl* device_session_hwl,
     const StreamConfiguration& stream_config) {
   ATRACE_CALL();
+#if GCH_HWL_USE_DLOPEN
+  ALOGE("%s: GCH_HWL_USE_DLOPEN is not supported", __FUNCTION__);
+  return false;
+#endif
+
   if (device_session_hwl == nullptr) {
     ALOGE("%s: device_session_hwl is nullptr", __FUNCTION__);
     return false;
@@ -208,11 +217,16 @@ bool ZslSnapshotCaptureSession::IsStreamConfigurationSupported(
     return false;
   }
 
-  camera_metadata_ro_entry entry;
-  res = characteristics->Get(VendorTagIds::kSwDenoiseEnabled, &entry);
-  if (res != OK || entry.data.u8[0] != 1) {
-    ALOGI("%s: Software denoised not enabled", __FUNCTION__);
-    return false;
+  // k3PZslEverywhereEnabled is set as a safeguard.
+  // If true, we can bypass the software denoise check to run ZSL snapshot.
+  if (!android::base::GetBoolProperty(k3PZslEverywhereEnabled, true)) {
+    camera_metadata_ro_entry entry;
+    res = characteristics->Get(VendorTagIds::kSwDenoiseEnabled, &entry);
+
+    if (res != OK || entry.data.u8[0] != 1) {
+      ALOGI("%s: Software denoised not enabled", __FUNCTION__);
+      return false;
+    }
   }
 
   bool has_eligible_snapshot_stream = false;

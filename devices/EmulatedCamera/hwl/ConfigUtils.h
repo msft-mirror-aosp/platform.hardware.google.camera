@@ -25,6 +25,8 @@
 #include <string>
 #include <vector>
 
+#include "Base.h"
+
 namespace android {
 
 using google_camera_hal::HalCameraMetadata;
@@ -37,6 +39,7 @@ struct CameraConfiguration {
   // underlying physical cameras.
   std::map<uint32_t, std::unique_ptr<HalCameraMetadata>>
       physical_camera_characteristics;
+  FrameSourceConfig source_config;
 };
 
 status_t GetCameraConfigurations(std::vector<CameraConfiguration>* configs);

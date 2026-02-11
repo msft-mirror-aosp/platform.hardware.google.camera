@@ -22,6 +22,8 @@
 
 #include <future>
 
+#include "Base.h"
+
 namespace android {
 
 using google_camera_hal::CameraBufferAllocatorHwl;
@@ -88,6 +90,7 @@ class EmulatedCameraProviderHwlImpl : public CameraProviderHwl {
   std::unordered_map<uint32_t,
                      std::vector<std::pair<CameraDeviceStatus, uint32_t>>>
       camera_id_map_;
+  std::unordered_map<uint32_t, FrameSourceConfig> camera_id_to_source_config_;
   HwlTorchModeStatusChangeFunc torch_cb_;
   HwlPhysicalCameraDeviceStatusChangeFunc physical_camera_status_cb_;
 

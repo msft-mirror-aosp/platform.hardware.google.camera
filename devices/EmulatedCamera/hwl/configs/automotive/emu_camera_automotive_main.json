@@ -16,13 +16,13 @@
       "id": "2",
       "type": "rear",
       "filename": "emu_camera_automotive_rear.json",
-      "source": "color_bar"
+      "source": "video",
+      "file_path": "/apex/com.google.emulated.camera.provider.hal/etc/video.mp4"
     },
     {
       "id": "3",
       "type": "left",
       "filename": "emu_camera_automotive_left.json",
-      "source": "color_bar"
     }
   ]
 }

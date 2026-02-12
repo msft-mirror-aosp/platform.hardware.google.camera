@@ -39,6 +39,7 @@
 #include "ColorBarFrameSource.h"
 #include "EmulatedFrameSource.h"
 #include "EmulatedSensor.h"
+#include "VideoFrameSource.h"
 #include "utils/ExifUtils.h"
 #include "utils/HWLUtils.h"
 
@@ -48,6 +49,7 @@ using android::google_camera_hal::ErrorCode;
 using framesource::BinningState;
 using framesource::ColorBarFrameSource;
 using framesource::EmulatedFrameSource;
+using framesource::VideoFrameSource;
 using framesource::YUV420Frame;
 using google_camera_hal::ErrorMessage;
 using google_camera_hal::HalCameraMetadata;
@@ -574,6 +576,15 @@ status_t EmulatedSensor::StartUp(
   logical_camera_id_ = logical_camera_id;
   if (source_config.type == "color_bar") {
     frame_source_ = std::make_unique<ColorBarFrameSource>();
+  } else if (source_config.type == "video") {
+    auto source = std::make_unique<VideoFrameSource>(*chars_, logical_camera_id,
+                                                     source_config.file_path);
+    auto res = source->Initialize();
+    if (res != OK) {
+      ALOGE("%s: Failed to initialize VideoFrameSource: %d", __FUNCTION__, res);
+      return res;
+    }
+    frame_source_ = std::move(source);
   } else {
     frame_source_ =
         std::make_unique<EmulatedFrameSource>(*chars_, logical_camera_id);

@@ -49,7 +49,8 @@ struct MediaFormatDeleter {
 using MediaFormatPtr = std::unique_ptr<AMediaFormat, MediaFormatDeleter>;
 
 VideoFrameSource::VideoFrameSource(const LogicalCharacteristics& chars,
-                                   uint32_t /*camera_id*/, std::string file_path)
+                                   uint32_t /*camera_id*/,
+                                   const std::string& file_path)
     : chars_(std::make_unique<LogicalCharacteristics>(chars)),
       file_path_(file_path) {
 }
@@ -180,7 +181,6 @@ int VideoFrameSource::GetNextDecodedFrame(AMediaCodecBufferInfo* out_info) {
   const int kTimeoutUs = 1000;  // 1ms
 
   while (retries < kMaxRetries) {
-    // Feed input until full (match EVS behavior)
     while (true) {
       ssize_t bufIdx = AMediaCodec_dequeueInputBuffer(codec_, 0);
       if (bufIdx < 0) {
@@ -215,6 +215,7 @@ int VideoFrameSource::GetNextDecodedFrame(AMediaCodecBufferInfo* out_info) {
     if (outBufIdx >= 0) {
       return outBufIdx;
     } else if (outBufIdx == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
+      // On format change, we just loop and retry.
       MediaFormatPtr newFormat(AMediaCodec_getOutputFormat(codec_));
       AMediaFormat_getInt32(newFormat.get(), AMEDIAFORMAT_KEY_WIDTH,
                             &video_width_);
@@ -229,7 +230,6 @@ int VideoFrameSource::GetNextDecodedFrame(AMediaCodecBufferInfo* out_info) {
       ALOGI("%s: Format changed: %dx%d, stride %d, slice %d, color %d",
             __FUNCTION__, video_width_, video_height_, video_stride_,
             video_slice_height_, video_color_format_);
-      // EVS logs/returns on format change, effectively retrying. We retry loop.
     } else if (outBufIdx == AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
       retries++;
     } else {
@@ -353,7 +353,6 @@ uint8_t* VideoFrameSource::GetBufferFromFrame(uint8_t* src, int src_width,
   int src_stride_u = 0;
   int src_stride_v = 0;
 
-  // Identify format (approximate parity with EVS which uses ConfigManager)
   switch (video_color_format_) {
     case COLOR_FormatYUV420SemiPlanar:  // NV12
       src_u = src + y_size;
@@ -361,8 +360,6 @@ uint8_t* VideoFrameSource::GetBufferFromFrame(uint8_t* src, int src_width,
       src_stride_u = stride;
       src_stride_v = stride;
       break;
-    // Note: EVS doesn't strictly check COLOR_Format values in the loop,
-    // it relies on ConfigManager. We assume standard mappings here.
     case COLOR_FormatYUV420Planar:  // I420 or YV12
     default:
       // Assume I420/YV12 as default for software decoders
@@ -508,8 +505,9 @@ void VideoFrameSource::CopyFrame(uint8_t* src, size_t /*src_size*/,
     }
   }
 
-  // NOTE: EVS does NOT scale. We assume buffer dimensions match video.
-  // If they don't, libyuv will handle the region of interest defined by width/height.
+  // NOTE: We assume buffer dimensions match video dimensions. If they don't,
+  // libyuv will handle the region of interest defined by the buffer's
+  // width/height.
 
   if (buffer->format == PixelFormat::RGBA_8888) {
     if (video_color_format_ == COLOR_FormatYUV420SemiPlanar) {
@@ -591,124 +589,11 @@ void VideoFrameSource::CopyFrame(uint8_t* src, size_t /*src_size*/,
   }
 }
 
-status_t VideoFrameSource::RenderYUV420(uint32_t /*camera_id*/,
-                                        nsecs_t timestamp,
-                                        const SensorSettings& /*settings*/,
-                                        const YUV420Frame& output_frame,
-                                        const YUV420Frame* /*input_frame*/) {
-  ATRACE_CALL();
-
-  uint8_t* src_ptr = nullptr;
-  size_t src_size = 0;
-  AMediaCodecBufferInfo info = {};
-
-  status_t res = GetFrameForTimestamp(timestamp, &src_ptr, &src_size, &info);
-  if (res != OK) {
-    return res;
-  }
-
-  if (src_ptr != nullptr && info.size > 0) {
-    int src_stride_y, src_stride_u, src_stride_v;
-    uint8_t* src_buffer = GetBufferFromFrame(
-        src_ptr, video_width_, video_height_, output_frame.width,
-        output_frame.height, &src_stride_y, &src_stride_u, &src_stride_v);
-
-    // Set up plane pointers for the (possibly scaled) source buffer
-    uint8_t* src_y = src_buffer;
-    uint8_t* src_u = nullptr;
-    uint8_t* src_v = nullptr;
-
-    if (src_buffer == src_ptr) {
-      int stride = (video_stride_ > 0) ? video_stride_ : video_width_;
-      int slice_height =
-          (video_slice_height_ > 0) ? video_slice_height_ : video_height_;
-      size_t y_size = stride * slice_height;
-
-      src_u = src_y + y_size;
-      if (video_color_format_ == COLOR_FormatYUV420Planar) {
-        src_v = src_y + y_size + (stride / 2 * slice_height / 2);
-      }
-    } else {
-      size_t y_size = output_frame.width * output_frame.height;
-      src_u = src_y + y_size;
-      if (video_color_format_ == COLOR_FormatYUV420Planar) {
-        src_v = src_u + (output_frame.width / 2) * (output_frame.height / 2);
-      }
-    }
-
-    YCbCrPlanes dst_planes = output_frame.planes;
-    bool dst_is_nv21 =
-        (dst_planes.cbcr_step == 2 && dst_planes.img_cr < dst_planes.img_cb);
-    bool dst_is_nv12 =
-        (dst_planes.cbcr_step == 2 && dst_planes.img_cb < dst_planes.img_cr);
-
-    // Direct copy/convert (no scaling)
-    if (video_color_format_ == COLOR_FormatYUV420SemiPlanar) {
-      if (dst_is_nv12) {
-        libyuv::CopyPlane(src_y, src_stride_y, dst_planes.img_y,
-                          dst_planes.y_stride, output_frame.width,
-                          output_frame.height);
-        libyuv::CopyPlane(src_u, src_stride_u, dst_planes.img_cb,
-                          dst_planes.cbcr_stride, output_frame.width,
-                          output_frame.height / 2);
-      } else if (dst_is_nv21) {
-        libyuv::CopyPlane(src_y, src_stride_y, dst_planes.img_y,
-                          dst_planes.y_stride, output_frame.width,
-                          output_frame.height);
-        libyuv::SwapUVPlane(src_u, src_stride_u, dst_planes.img_cr,
-                            dst_planes.cbcr_stride, output_frame.width,
-                            output_frame.height / 2);
-      } else {
-        libyuv::NV12ToI420(src_y, src_stride_y, src_u, src_stride_u,
-                           dst_planes.img_y, dst_planes.y_stride,
-                           dst_planes.img_cb, dst_planes.cbcr_stride,
-                           dst_planes.img_cr, dst_planes.cbcr_stride,
-                           output_frame.width, output_frame.height);
-      }
-    } else {
-      if (dst_is_nv12) {
-        libyuv::I420ToNV12(src_y, src_stride_y, src_u, src_stride_u, src_v,
-                           src_stride_v, dst_planes.img_y, dst_planes.y_stride,
-                           dst_planes.img_cb, dst_planes.cbcr_stride,
-                           output_frame.width, output_frame.height);
-      } else if (dst_is_nv21) {
-        libyuv::I420ToNV21(src_y, src_stride_y, src_u, src_stride_u, src_v,
-                           src_stride_v, dst_planes.img_y, dst_planes.y_stride,
-                           dst_planes.img_cr, dst_planes.cbcr_stride,
-                           output_frame.width, output_frame.height);
-      } else {
-        libyuv::I420Copy(src_y, src_stride_y, src_u, src_stride_u, src_v,
-                         src_stride_v, dst_planes.img_y, dst_planes.y_stride,
-                         dst_planes.img_cb, dst_planes.cbcr_stride,
-                         dst_planes.img_cr, dst_planes.cbcr_stride,
-                         output_frame.width, output_frame.height);
-      }
-    }
-  }
-
-  return OK;
-}
-
 void VideoFrameSource::CalculateAndAppendNoiseProfile(
-    float /*gain*/, float /*base_gain_factor*/, HalCameraMetadata* result) {
+    float /*gain*/, float /*max_raw_value*/, HalCameraMetadata* result) {
   // Zero noise for video
   double noise_profile[8] = {0.0};
   result->Set(ANDROID_SENSOR_NOISE_PROFILE, noise_profile, 8);
-}
-
-float VideoFrameSource::GetBaseGainFactor(float /*max_raw_value*/) const {
-  return 1.0f;
-}
-
-bool VideoFrameSource::HasBinningInfo(uint32_t /*camera_id*/) const {
-  return false;
-}
-
-BinningState VideoFrameSource::GetBinningState(uint32_t /*camera_id*/) const {
-  return BinningState();
-}
-
-void VideoFrameSource::ResetSensorBinningInfo() {
 }
 
 }  // namespace framesource

@@ -41,19 +41,8 @@ class ColorBarFrameSource : public IFrameSource {
                         const SensorSettings& settings, SensorBuffer* buffer,
                         const SensorBuffer* input_buffer) override;
 
-  status_t RenderYUV420(uint32_t camera_id, nsecs_t timestamp,
-                        const SensorSettings& settings,
-                        const YUV420Frame& output_frame,
-                        const YUV420Frame* input_frame) override;
-
-  void CalculateAndAppendNoiseProfile(float gain, float base_gain_factor,
+  void CalculateAndAppendNoiseProfile(float gain, float max_raw_value,
                                       HalCameraMetadata* result) override;
-
-  float GetBaseGainFactor(float max_raw_value) const override;
-
-  bool HasBinningInfo(uint32_t camera_id) const override;
-  BinningState GetBinningState(uint32_t camera_id) const override;
-  void ResetSensorBinningInfo() override;
 
  private:
   struct BarColor {

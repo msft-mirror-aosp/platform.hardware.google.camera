@@ -203,10 +203,6 @@ status_t EmulatedFrameSource::ProduceFrame(uint32_t camera_id, nsecs_t timestamp
   ConfigureScene(camera_id, timestamp, settings);
 
   const auto& chars = chars_->at(camera_id);
-  auto& binning_info = sensor_binning_factor_info_[camera_id];
-  binning_info.quad_bayer_sensor = chars.quad_bayer_sensor;
-  binning_info.max_res_request = (settings.sensor_pixel_mode ==
-                                  ANDROID_SENSOR_PIXEL_MODE_MAXIMUM_RESOLUTION);
 
   bool treat_as_reprocess = (input_buffer != nullptr);
   if (chars.quad_bayer_sensor && treat_as_reprocess &&
@@ -243,19 +239,12 @@ status_t EmulatedFrameSource::ProduceFrame(uint32_t camera_id, nsecs_t timestamp
                                   buffer->plane.img.stride_in_bytes, chars);
       }
 
-      binning_info.has_raw_stream = true;
-      if (buffer->use_case ==
-          ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_CROPPED_RAW) {
-        if (!binning_info.has_cropped_raw_stream) {
-          binning_info.has_cropped_raw_stream = true;
-        }
-      }
-
       uint64_t min_full_res_raw_size =
           2 * chars.full_res_width * chars.full_res_height;
       uint64_t min_default_raw_size = 2 * chars.width * chars.height;
-      bool default_mode_for_qb =
-          chars.quad_bayer_sensor && !binning_info.max_res_request;
+      bool max_res_request = (settings.sensor_pixel_mode ==
+                              ANDROID_SENSOR_PIXEL_MODE_MAXIMUM_RESOLUTION);
+      bool default_mode_for_qb = chars.quad_bayer_sensor && !max_res_request;
       size_t buffer_size = buffer->plane.img.buffer_size;
 
       if (default_mode_for_qb) {
@@ -269,7 +258,6 @@ status_t EmulatedFrameSource::ProduceFrame(uint32_t camera_id, nsecs_t timestamp
         if (settings.zoom_ratio > 2.0f &&
             (buffer->use_case ==
              ANDROID_SCALER_AVAILABLE_STREAM_USE_CASES_CROPPED_RAW)) {
-          binning_info.raw_in_sensor_zoom_applied = true;
           CaptureRawInSensorZoom(buffer->plane.img.img,
                                  buffer->plane.img.stride_in_bytes,
                                  settings.gain, chars);
@@ -298,7 +286,6 @@ status_t EmulatedFrameSource::ProduceFrame(uint32_t camera_id, nsecs_t timestamp
               __FUNCTION__, buffer->format);
         return BAD_VALUE;
       }
-      binning_info.has_non_raw_stream = true;
       if (buffer->color_space !=
           ANDROID_REQUEST_AVAILABLE_COLOR_SPACE_PROFILES_MAP_UNSPECIFIED) {
         CalculateRgbRgbMatrix(buffer->color_space, chars);
@@ -313,7 +300,6 @@ status_t EmulatedFrameSource::ProduceFrame(uint32_t camera_id, nsecs_t timestamp
               __FUNCTION__, buffer->format);
         return BAD_VALUE;
       }
-      binning_info.has_non_raw_stream = true;
       if (buffer->color_space !=
           ANDROID_REQUEST_AVAILABLE_COLOR_SPACE_PROFILES_MAP_UNSPECIFIED) {
         CalculateRgbRgbMatrix(buffer->color_space, chars);
@@ -325,7 +311,6 @@ status_t EmulatedFrameSource::ProduceFrame(uint32_t camera_id, nsecs_t timestamp
     case PixelFormat::YCRCB_420_SP:
     case PixelFormat::YCBCR_420_888:
     case PixelFormat::YCBCR_P010: {
-      binning_info.has_non_raw_stream = true;
       if (buffer->color_space !=
           ANDROID_REQUEST_AVAILABLE_COLOR_SPACE_PROFILES_MAP_UNSPECIFIED) {
         CalculateRgbRgbMatrix(buffer->color_space, chars);
@@ -368,7 +353,6 @@ status_t EmulatedFrameSource::ProduceFrame(uint32_t camera_id, nsecs_t timestamp
               __FUNCTION__, buffer->format);
         return BAD_VALUE;
       }
-      binning_info.has_non_raw_stream = true;
       if (buffer->dataSpace == HAL_DATASPACE_DEPTH) {
         CaptureDepth(buffer->plane.img.img, settings.gain, buffer->width,
                      buffer->height, buffer->plane.img.stride_in_bytes, chars);
@@ -378,10 +362,6 @@ status_t EmulatedFrameSource::ProduceFrame(uint32_t camera_id, nsecs_t timestamp
         return BAD_VALUE;
       }
       break;
-    case PixelFormat::BLOB:
-      // BLOB (JPEG) generation is handled via RenderYUV420 and JpegCompressor
-      // by the caller.
-      return INVALID_OPERATION;
     default:
       ALOGE("%s: Unknown format %x", __FUNCTION__, buffer->format);
       return BAD_VALUE;
@@ -390,72 +370,11 @@ status_t EmulatedFrameSource::ProduceFrame(uint32_t camera_id, nsecs_t timestamp
   return OK;
 }
 
-status_t EmulatedFrameSource::RenderYUV420(uint32_t camera_id, nsecs_t timestamp,
-                                           const SensorSettings& settings,
-                                           const YUV420Frame& output_frame,
-                                           const YUV420Frame* input_frame) {
-  ATRACE_CALL();
-
-  ConfigureScene(camera_id, timestamp, settings);
-
-  const auto& chars = chars_->at(camera_id);
-  auto& binning_info = sensor_binning_factor_info_[camera_id];
-  binning_info.quad_bayer_sensor = chars.quad_bayer_sensor;
-  binning_info.max_res_request = (settings.sensor_pixel_mode ==
-                                  ANDROID_SENSOR_PIXEL_MODE_MAXIMUM_RESOLUTION);
-  binning_info.has_non_raw_stream = true;
-
-  bool rotate = settings.rotate_and_crop == ANDROID_SCALER_ROTATE_AND_CROP_90;
-
-  if (output_frame.color_space !=
-      ANDROID_REQUEST_AVAILABLE_COLOR_SPACE_PROFILES_MAP_UNSPECIFIED) {
-    CalculateRgbRgbMatrix(output_frame.color_space, chars);
-  }
-
-  // Determine process type based on edge mode
-  ProcessType process_type;
-  if (input_frame != nullptr) {
-    process_type = REPROCESS;
-  } else {
-    process_type = (settings.edge_mode == ANDROID_EDGE_MODE_HIGH_QUALITY)
-                       ? HIGH_QUALITY
-                       : REGULAR;
-  }
-
-  // Use the provided input frame if valid, otherwise use an empty one (for
-  // generation)
-  const YUV420Frame& effective_input =
-      (input_frame != nullptr) ? *input_frame : YUV420Frame();
-
-  return ProcessYUV420(effective_input, output_frame, settings.gain,
-                       process_type, settings.zoom_ratio, rotate,
-                       output_frame.color_space, chars);
-}
-
-BinningState EmulatedFrameSource::GetBinningState(uint32_t camera_id) const {
-  BinningState state;
-  if (sensor_binning_factor_info_.count(camera_id) > 0) {
-    const auto& info = sensor_binning_factor_info_.at(camera_id);
-
-    if (info.quad_bayer_sensor && info.max_res_request && info.has_raw_stream &&
-        !info.has_non_raw_stream) {
-      state.raw_binning_factor_used = true;
-    }
-
-    state.raw_in_sensor_zoom_applied = info.raw_in_sensor_zoom_applied;
-    state.has_cropped_raw_stream = info.has_cropped_raw_stream;
-  }
-  return state;
-}
-
-bool EmulatedFrameSource::HasBinningInfo(uint32_t camera_id) const {
-  return sensor_binning_factor_info_.count(camera_id) > 0;
-}
-
 void EmulatedFrameSource::CalculateAndAppendNoiseProfile(
-    float gain /*in ISO*/, float base_gain_factor,
+    float gain /*in ISO*/, float max_raw_value,
     HalCameraMetadata* result /*out*/) {
   if (result != nullptr) {
+    float base_gain_factor = GetBaseGainFactor(max_raw_value);
     float total_gain = gain / 100.0 * base_gain_factor;
     float noise_var_gain = total_gain * total_gain;
     float read_noise_var =
@@ -1068,34 +987,11 @@ void EmulatedFrameSource::CalculateRgbRgbMatrix(
       break;
   }
 
-  // Calculate the RGB->RGB matrix using the sensor color filter and the
-  // destination XY matricies.
-  //
-  // M = ( (W_d * H_d) * (H_s)^-1 )^-1 * ( (W_s * H_s) * (H_d)^-1 )
-  //
-  // Where:
-  // H_s = Hamming matrix of the sensor (H from XYZ->RGB transform)
-  // W_s = White point diagonal matrix of the sensor
-  // H_d = Hamming matrix of the destination
-  // W_d = White point diagonal matrix of the destination
-  //
-  // For the sensor, we have the Forward Matrix (XYZ->RGB) which is
-  // (W_s * H_s)^-1.
-  // For the destination, we have the RGB->XYZ matrix which is
-  // (W_d * H_d).
-  //
-  // So M = ( (W_d * H_d) * (H_s)^-1 )^-1 * (W_s * H_s) * (H_d)^-1
-  //      = H_s * (W_d * H_d)^-1 * (W_s * H_s) * (H_d)^-1
-  //
-  // This seems overly complicated? Let's just use the XYZ->RGB and RGB->XYZ
-  // matrices directly.
-  //
-  // M = RGB_d->XYZ * XYZ->RGB_s
-  //   = Destination_Matrix * Sensor_Forward_Matrix
-  //
-  // This maps a sensor RGB value to a destination RGB value via XYZ space.
+  // Calculate the RGB->RGB matrix to convert from the sensor's color space to
+  // the destination color space. This is done by converting from sensor RGB to
+  // XYZ and then from XYZ to the destination RGB.
 
-  // M = D * S
+  // M = Destination_RGB->XYZ * Sensor_XYZ->RGB
   rgb_rgb_matrix_.rR = xyzMatrix->xR * chars.forward_matrix.rX +
                        xyzMatrix->yR * chars.forward_matrix.rY +
                        xyzMatrix->zR * chars.forward_matrix.rZ;

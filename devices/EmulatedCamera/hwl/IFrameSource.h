@@ -29,12 +29,6 @@ namespace framesource {
 
 using google_camera_hal::HalCameraMetadata;
 
-struct BinningState {
-  bool raw_binning_factor_used = false;
-  bool raw_in_sensor_zoom_applied = false;
-  bool has_cropped_raw_stream = false;
-};
-
 // Struct used for YUV processing (shared with JpegCompressor usage)
 struct YUV420Frame {
   uint32_t width = 0;
@@ -57,21 +51,9 @@ class IFrameSource {
                                 SensorBuffer* buffer,
                                 const SensorBuffer* input_buffer) = 0;
 
-  // Helper for JPEG compression (renders directly to memory)
-  virtual status_t RenderYUV420(uint32_t camera_id, nsecs_t timestamp,
-                                const SensorSettings& settings,
-                                const YUV420Frame& output_frame,
-                                const YUV420Frame* input_frame) = 0;
-
   virtual void CalculateAndAppendNoiseProfile(
-      float gain /*in ISO*/, float base_gain_factor,
+      float gain /*in ISO*/, float max_raw_value,
       HalCameraMetadata* result /*out*/) = 0;
-
-  virtual float GetBaseGainFactor(float max_raw_value) const = 0;
-
-  virtual bool HasBinningInfo(uint32_t camera_id) const = 0;
-  virtual BinningState GetBinningState(uint32_t camera_id) const = 0;
-  virtual void ResetSensorBinningInfo() = 0;
 };
 
 }  // namespace framesource

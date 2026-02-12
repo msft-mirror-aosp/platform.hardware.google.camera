@@ -45,42 +45,18 @@ class EmulatedFrameSource : public IFrameSource {
                         const SensorSettings& settings, SensorBuffer* buffer,
                         const SensorBuffer* input_buffer) override;
 
-  // Helper for JPEG compression (renders directly to memory)
-  status_t RenderYUV420(uint32_t camera_id, nsecs_t timestamp,
-                        const SensorSettings& settings,
-                        const YUV420Frame& output_frame,
-                        const YUV420Frame* input_frame) override;
-
-  void CalculateAndAppendNoiseProfile(float gain /*in ISO*/,
-                                      float base_gain_factor,
+  void CalculateAndAppendNoiseProfile(float gain /*in ISO*/, float max_raw_value,
                                       HalCameraMetadata* result /*out*/) override;
 
-  float GetBaseGainFactor(float max_raw_value) const override {
+ private:
+  float GetBaseGainFactor(float max_raw_value) const {
     return max_raw_value / EmulatedFrameSource::kSaturationElectrons;
   }
-
-  bool HasBinningInfo(uint32_t camera_id) const override;
-  BinningState GetBinningState(uint32_t camera_id) const override;
-
-  void ResetSensorBinningInfo() override {
-    sensor_binning_factor_info_.clear();
-  }
-
- private:
-  struct SensorBinningFactorInfo {
-    bool has_raw_stream = false;
-    bool has_non_raw_stream = false;
-    bool quad_bayer_sensor = false;
-    bool max_res_request = false;
-    bool has_cropped_raw_stream = false;
-    bool raw_in_sensor_zoom_applied = false;
-  };
 
   // Internal state
   std::unique_ptr<LogicalCharacteristics> chars_;
 
   std::unique_ptr<EmulatedScene> scene_;
-  std::map<uint32_t, SensorBinningFactorInfo> sensor_binning_factor_info_;
 
   // Lookup tables
   std::vector<int32_t> gamma_table_sRGB_;

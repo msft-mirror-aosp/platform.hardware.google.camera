@@ -51,7 +51,8 @@ struct ProcessBlockNotifyMessage {
 
 // ProcessBlock defines the interface of a process block. A process block can
 // process capture requests and sends results to a result processor. A process
-// block can process capture requests using SW, ISP, GPU, or other HW components.
+// block can process capture requests using SW, ISP, GPU, or other HW
+// components.
 class ProcessBlock {
  public:
   virtual ~ProcessBlock() = default;
@@ -75,25 +76,25 @@ class ProcessBlock {
 
   // Process a capture request.
   // When this method is called, process block should forward
-  // process_block_requests and remaining_session_request to the result
+  // process_block_request and remaining_session_request to the result
   // processor using ResultProcessor::AddPendingRequests() so the result process
   // knows what results to expect.
   //
-  // process_block_requests are the requests for this process block. This method
-  // is asynchronous so returning from this call doesn't mean the requests are
-  // completed. If the process block captures from camera sensors, capturing
-  // from camera sensors must be synchronized for all requests in this call.
+  // process_block_request is the request for this process block. This method
+  // is asynchronous so returning from this call doesn't mean the request is
+  // completed.
   //
   // remaining_session_request is the remaining request that was sent to the
   // capture session. It contains all remaining output buffers that have not
   // been completed by the process chain yet. For the last result process in a
   // process chain, remaining_session_request should contain only the output
-  // buffers that are present in process_block_requests.
+  // buffers that are present in process_block_request.
   // remaining_session_request doesn't contain any internal buffers.
   //
-  // Assumes ownership of the metadata buffers inside the passed ProcessBlockRequests.
-  virtual status_t ProcessRequests(
-      std::vector<ProcessBlockRequest> process_block_requests,
+  // Assumes ownership of the metadata buffers inside the passed
+  // ProcessBlockRequests.
+  virtual status_t ProcessRequest(
+      ProcessBlockRequest process_block_request,
       const CaptureRequest& remaining_session_request) = 0;
 
   // Flush pending requests.

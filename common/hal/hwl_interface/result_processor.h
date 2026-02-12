@@ -44,17 +44,17 @@ class ResultProcessor {
 
   // Add pending requests to the result processor.
   //
-  // process_block_requests are the requests that will be completed by the
+  // process_block_request is the request that will be completed by the
   // preceding process block.
   //
   // remaining_session_request is the remaining request that was sent to the
   // capture session. It contains all remaining output buffers that have not
   // been completed by the process chain yet. For the last result process in a
   // process chain, remaining_session_request should contain only the output
-  // buffers that are present in process_block_requests.
+  // buffers that are present in process_block_request.
   // remaining_session_request doesn't contain any internal buffers.
-  virtual status_t AddPendingRequests(
-      const std::vector<ProcessBlockRequest>& process_block_requests,
+  virtual status_t AddPendingRequest(
+      const ProcessBlockRequest& process_block_request,
       const CaptureRequest& remaining_session_request) = 0;
 
   // Called by a ProcessBlock to send the capture results.

@@ -46,6 +46,7 @@ enum class HwlOfflinePipelineRole {
 struct HwlPipelineRequest {
   // ID of the pipeline that this request should be submitted to.
   uint32_t pipeline_id = 0;
+  uint32_t frame_number = 0;
 
   std::unique_ptr<HalCameraMetadata> settings;
 

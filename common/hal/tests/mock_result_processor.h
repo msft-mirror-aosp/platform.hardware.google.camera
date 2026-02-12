@@ -36,21 +36,22 @@ class MockResultProcessor : public ResultProcessor {
                NotifyOverridePendingBufferFunc notify_override_pending_buffer),
               (override));
 
-  MOCK_METHOD2(
-      AddPendingRequests,
-      status_t(const std::vector<ProcessBlockRequest>& process_block_requests,
-               const CaptureRequest& remaining_session_request));
+  MOCK_METHOD(status_t, AddPendingRequest,
+              (const ProcessBlockRequest& process_block_request,
+               const CaptureRequest& remaining_session_request),
+              (override));
 
-  MOCK_METHOD1(ProcessResult, void(ProcessBlockResult result));
+  MOCK_METHOD(void, ProcessResult, (ProcessBlockResult result), (override));
 
-  MOCK_METHOD1(Notify, void(const ProcessBlockNotifyMessage& message));
+  MOCK_METHOD(void, Notify, (const ProcessBlockNotifyMessage& message),
+              (override));
 
   MOCK_METHOD(void, NotifyOverridePendingBuffer,
               (uint32_t frame_number,
                const std::vector<StreamGroupState>& stream_group_state),
               (override));
 
-  MOCK_METHOD0(FlushPendingRequests, status_t());
+  MOCK_METHOD(status_t, FlushPendingRequests, (), (override));
 };
 
 }  // namespace google_camera_hal

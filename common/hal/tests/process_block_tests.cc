@@ -22,7 +22,6 @@
 
 #include "mock_device_session_hwl.h"
 #include "mock_result_processor.h"
-#include "multicam_realtime_process_block.h"
 #include "realtime_process_block.h"
 #include "test_utils.h"
 
@@ -49,18 +48,8 @@ class ProcessBlockTest : public ::testing::Test {
         .camera_id = 3,
     };
 
-    multi_camera_process_block_setup_ = {
-        .process_block_create_func =
-            [&]() {
-              return MultiCameraRtProcessBlock::Create(session_hwl_.get());
-            },
-        .camera_id = 3,
-        .physical_camera_ids = {1, 5},
-    };
-
     process_block_test_setups_ = {
         realtime_process_block_setup_,
-        multi_camera_process_block_setup_,
     };
   }
 
@@ -86,7 +75,6 @@ class ProcessBlockTest : public ::testing::Test {
   std::unique_ptr<MockDeviceSessionHwl> session_hwl_;
   std::vector<ProcessBlockTestSetup> process_block_test_setups_;
   ProcessBlockTestSetup realtime_process_block_setup_;
-  ProcessBlockTestSetup multi_camera_process_block_setup_;
   StreamConfiguration test_config_;  // Configuration used in tests.
 };
 
@@ -175,13 +163,13 @@ TEST_F(ProcessBlockTest, RealtimeProcessBlockRequest) {
   EXPECT_CALL(*session_hwl_, ConfigurePipeline(_, _, _, _, _)).Times(1);
   EXPECT_CALL(*session_hwl_, GetConfiguredHalStream(_, _))
       .Times(test_config_.streams.size());
-  EXPECT_CALL(*session_hwl_, SubmitRequests(_, _)).Times(1);
+  EXPECT_CALL(*session_hwl_, SubmitRequest(_)).Times(1);
 
   auto result_processor = std::make_unique<MockResultProcessor>();
   ASSERT_NE(result_processor, nullptr) << "Cannot create a MockResultProcessor";
 
   // Verify process block calls result processor
-  EXPECT_CALL(*result_processor, AddPendingRequests(_, _)).Times(1);
+  EXPECT_CALL(*result_processor, AddPendingRequest(_, _)).Times(1);
   EXPECT_CALL(*result_processor, ProcessResult(_)).Times(1);
   EXPECT_CALL(*result_processor, Notify(_)).Times(1);
 
@@ -199,63 +187,9 @@ TEST_F(ProcessBlockTest, RealtimeProcessBlockRequest) {
   ASSERT_EQ(block->SetResultProcessor(std::move(result_processor)), OK);
 
   // Testing RealtimeProcessBlock with an empty request.
-  std::vector<ProcessBlockRequest> block_requests(1);
-  ASSERT_EQ(block->ProcessRequests(std::move(block_requests),
-                                   block_requests[0].request),
-            OK);
-}
-
-TEST_F(ProcessBlockTest, MultiCameraRtProcessBlockRequest) {
-  ProcessBlockTestSetup& setup = multi_camera_process_block_setup_;
-  InitializeProcessBlockTest(setup);
-
-  size_t num_pipelines = setup.physical_camera_ids.size();
-  size_t num_streams = test_config_.streams.size();
-
-  // Verify process block calls HWL session.
-  EXPECT_CALL(*session_hwl_, ConfigurePipeline(_, _, _, _, _))
-      .Times(num_pipelines);
-  EXPECT_CALL(*session_hwl_, GetConfiguredHalStream(_, _)).Times(num_streams);
-  EXPECT_CALL(*session_hwl_, SubmitRequests(_, _)).Times(1);
-
-  auto result_processor = std::make_unique<MockResultProcessor>();
-  ASSERT_NE(result_processor, nullptr) << "Cannot create a MockResultProcessor";
-
-  // Verify process block calls result processor
-  EXPECT_CALL(*result_processor, AddPendingRequests(_, _)).Times(1);
-  EXPECT_CALL(*result_processor, ProcessResult(_)).Times(num_pipelines);
-  EXPECT_CALL(*result_processor, Notify(_)).Times(num_pipelines);
-
-  auto block = setup.process_block_create_func();
-  ASSERT_NE(block, nullptr) << "Creating MultiCameraRtProcessBlock failed";
-
-  ASSERT_EQ(block->ConfigureStreams(test_config_, test_config_), OK);
-
-  ASSERT_EQ(session_hwl_->BuildPipelines(), OK);
-
-  std::vector<HalStream> hal_streams;
-  ASSERT_EQ(block->GetConfiguredHalStreams(&hal_streams), OK);
-  EXPECT_EQ(hal_streams.size(), test_config_.streams.size());
-
-  ASSERT_EQ(block->SetResultProcessor(std::move(result_processor)), OK);
-
-  // Testing RealtimeProcessBlock with some requests.
-  std::vector<ProcessBlockRequest> block_requests;
-  CaptureRequest remaining_session_requests;
-
-  for (auto& stream : test_config_.streams) {
-    StreamBuffer buffer;
-    buffer.stream_id = stream.id;
-
-    ProcessBlockRequest block_request;
-    block_request.request.output_buffers.push_back(buffer);
-
-    block_requests.push_back(std::move(block_request));
-    remaining_session_requests.output_buffers.push_back(buffer);
-  }
-
-  ASSERT_EQ(block->ProcessRequests(std::move(block_requests),
-                                   remaining_session_requests),
+  ProcessBlockRequest block_request;
+  CaptureRequest remaining_request;
+  ASSERT_EQ(block->ProcessRequest(std::move(block_request), remaining_request),
             OK);
 }
 

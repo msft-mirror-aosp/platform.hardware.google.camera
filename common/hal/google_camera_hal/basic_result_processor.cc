@@ -70,13 +70,13 @@ void BasicResultProcessor::SetResultCallback(
   notify_override_pending_buffer_ = notify_override_pending_buffer;
 }
 
-status_t BasicResultProcessor::AddPendingRequests(
-    const std::vector<ProcessBlockRequest>& process_block_requests,
+status_t BasicResultProcessor::AddPendingRequest(
+    const ProcessBlockRequest& process_block_request,
     const CaptureRequest& remaining_session_request) {
   ATRACE_CALL();
   // This is the last result processor. Sanity check if requests contains
   // all remaining output buffers.
-  if (!hal_utils::AreAllRemainingBuffersRequested(process_block_requests,
+  if (!hal_utils::AreAllRemainingBuffersRequested(process_block_request,
                                                   remaining_session_request)) {
     ALOGE("%s: Some output buffers will not be completed.", __FUNCTION__);
     return BAD_VALUE;

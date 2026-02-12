@@ -55,17 +55,20 @@ class EmulatedCameraZoomRatioMapperHwlImpl : public ZoomRatioMapperHwl {
   virtual ~EmulatedCameraZoomRatioMapperHwlImpl() = default;
 
   // Limit zoom ratio if concurrent mode is on
-  virtual void LimitZoomRatioIfConcurrent(float*) const override{};
+  virtual void LimitZoomRatioIfConcurrent(float*) const override {
+  }
 
   // Get the array dimensions to be used for this capture request / result
   virtual bool GetActiveArrayDimensionToBeUsed(
       uint32_t camera_id, const HalCameraMetadata* settings,
       Dimension* active_array_dimension) const override;
   // Apply zoom ratio to capture request
-  virtual void UpdateCaptureRequest(CaptureRequest*) override{};
+  virtual void UpdateCaptureRequest(CaptureRequest*) override {
+  }
 
   // Apply zoom ratio to capture result
-  virtual void UpdateCaptureResult(CaptureResult*) override{};
+  virtual void UpdateCaptureResult(CaptureResult*) override {
+  }
 
   static std::unique_ptr<EmulatedCameraZoomRatioMapperHwlImpl> Create(
       const std::unordered_map<uint32_t, std::pair<Dimension, Dimension>>& dims);
@@ -125,8 +128,7 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
 
   void DestroyPipelines() override;
 
-  status_t SubmitRequests(uint32_t frame_number,
-                          std::vector<HwlPipelineRequest>& requests) override;
+  status_t SubmitRequest(HwlPipelineRequest request) override;
 
   status_t Flush() override;
 

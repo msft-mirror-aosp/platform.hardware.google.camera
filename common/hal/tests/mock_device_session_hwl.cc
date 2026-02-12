@@ -166,37 +166,34 @@ void FakeCameraDeviceSessionHwl::DestroyPipelines() {
   pipeline_hal_streams_map_.clear();
 }
 
-status_t FakeCameraDeviceSessionHwl::SubmitRequests(
-    uint32_t frame_number, std::vector<HwlPipelineRequest>& requests) {
+status_t FakeCameraDeviceSessionHwl::SubmitRequest(HwlPipelineRequest request) {
   std::lock_guard<std::mutex> lock(hwl_pipeline_lock_);
 
-  for (auto& request : requests) {
-    auto callback = hwl_pipeline_callbacks_.find(request.pipeline_id);
-    if (callback == hwl_pipeline_callbacks_.end()) {
-      ALOGE("%s: Could not find callback for pipeline %u", __FUNCTION__,
-            request.pipeline_id);
-      return BAD_VALUE;
-    }
-
-    // Notify shutter.
-    NotifyMessage shutter_message = ShutterMessage{
-        .frame_number = frame_number,
-        .timestamp_ns = 0,
-        .readout_timestamp_ns = 0,
-    };
-    callback->second.notify(request.pipeline_id, shutter_message);
-
-    // Send out result.
-    auto result = std::make_unique<HwlPipelineResult>();
-    result->camera_id = kCameraId;
-    result->pipeline_id = request.pipeline_id;
-    result->frame_number = frame_number;
-    result->result_metadata = HalCameraMetadata::Clone(request.settings.get());
-    result->input_buffers = request.input_buffers;
-    result->output_buffers = request.output_buffers;
-    result->partial_result = 1;
-    callback->second.process_pipeline_result(std::move(result));
+  auto callback = hwl_pipeline_callbacks_.find(request.pipeline_id);
+  if (callback == hwl_pipeline_callbacks_.end()) {
+    ALOGE("%s: Could not find callback for pipeline %u", __FUNCTION__,
+          request.pipeline_id);
+    return BAD_VALUE;
   }
+
+  // Notify shutter.
+  NotifyMessage shutter_message = ShutterMessage{
+      .frame_number = request.frame_number,
+      .timestamp_ns = 0,
+      .readout_timestamp_ns = 0,
+  };
+  callback->second.notify(request.pipeline_id, shutter_message);
+
+  // Send out result.
+  auto result = std::make_unique<HwlPipelineResult>();
+  result->camera_id = kCameraId;
+  result->pipeline_id = request.pipeline_id;
+  result->frame_number = request.frame_number;
+  result->result_metadata = HalCameraMetadata::Clone(request.settings.get());
+  result->input_buffers = request.input_buffers;
+  result->output_buffers = request.output_buffers;
+  result->partial_result = 1;
+  callback->second.process_pipeline_result(std::move(result));
 
   return OK;
 }
@@ -335,9 +332,9 @@ void MockDeviceSessionHwl::DelegateCallsToFakeSession() {
       .WillByDefault(Invoke(&fake_session_hwl_,
                             &FakeCameraDeviceSessionHwl::DestroyPipelines));
 
-  ON_CALL(*this, SubmitRequests(_, _))
+  ON_CALL(*this, SubmitRequest(_))
       .WillByDefault(Invoke(&fake_session_hwl_,
-                            &FakeCameraDeviceSessionHwl::SubmitRequests));
+                            &FakeCameraDeviceSessionHwl::SubmitRequest));
 
   ON_CALL(*this, Flush())
       .WillByDefault(

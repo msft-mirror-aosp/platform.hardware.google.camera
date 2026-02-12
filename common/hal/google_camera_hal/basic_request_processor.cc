@@ -92,10 +92,8 @@ status_t BasicRequestProcessor::ProcessRequest(const CaptureRequest& request) {
     return NO_INIT;
   }
 
-  std::vector<ProcessBlockRequest> block_requests;
-  block_requests.push_back(ProcessBlockRequest{.request = request.Clone()});
-
-  return process_block_->ProcessRequests(std::move(block_requests), request);
+  return process_block_->ProcessRequest(
+      ProcessBlockRequest{.request = request.Clone()}, request);
 }
 
 status_t BasicRequestProcessor::Flush() {

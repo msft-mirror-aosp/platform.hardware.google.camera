@@ -15,9 +15,9 @@
  */
 
 #define LOG_TAG "RequestProcessorTest"
+#include <gtest/gtest.h>
 #include <log/log.h>
 
-#include <gtest/gtest.h>
 #include <memory>
 
 #include "basic_request_processor.h"
@@ -143,7 +143,7 @@ TEST_F(RequestProcessorTest, BasicRequestProcessorRequest) {
   ASSERT_NE(process_block, nullptr);
 
   // Expect request process to send a request to the process block.
-  EXPECT_CALL(*process_block, ProcessRequests(_, _)).Times(1);
+  EXPECT_CALL(*process_block, ProcessRequest(_, _)).Times(1);
 
   EXPECT_EQ(request_processor->SetProcessBlock(std::move(process_block)), OK);
 

@@ -208,7 +208,8 @@ void RealtimeZslResultRequestProcessor::ProcessResult(
                          result->input_buffers.end());
   }
 
-  // Submit the request and remove the request from the cache when all data is collected.
+  // Submit the request and remove the request from the cache when all data is
+  // collected.
   if (AllDataCollected(pending_request)) {
     res = ProcessRequest(*pending_request.capture_request);
     pending_frame_number_to_requests_.erase(result->frame_number);
@@ -287,10 +288,8 @@ status_t RealtimeZslResultRequestProcessor::ProcessRequest(
         HalCameraMetadata::Clone(physical_metadata.get());
   }
 
-  std::vector<ProcessBlockRequest> block_requests(1);
-  block_requests[0].request = std::move(block_request);
-
-  return process_block_->ProcessRequests(std::move(block_requests), request);
+  return process_block_->ProcessRequest(
+      ProcessBlockRequest{.request = std::move(block_request)}, request);
 }
 
 status_t RealtimeZslResultRequestProcessor::Flush() {

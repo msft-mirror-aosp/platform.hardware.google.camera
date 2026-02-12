@@ -34,6 +34,7 @@ HwlPipelineRequest CreateHwlPipelineRequest(uint32_t pipeline_id,
                                             CaptureRequest request) {
   HwlPipelineRequest hwl_request;
   hwl_request.pipeline_id = pipeline_id;
+  hwl_request.frame_number = request.frame_number;
   hwl_request.settings = std::move(request.settings);
   hwl_request.input_buffers = std::move(request.input_buffers);
   hwl_request.output_buffers = std::move(request.output_buffers);
@@ -44,25 +45,6 @@ HwlPipelineRequest CreateHwlPipelineRequest(uint32_t pipeline_id,
       std::move(request.physical_camera_settings);
 
   return hwl_request;
-}
-
-status_t CreateHwlPipelineRequests(const std::vector<uint32_t>& pipeline_ids,
-                                   std::vector<ProcessBlockRequest> requests,
-                                   std::vector<HwlPipelineRequest>& hwl_requests) {
-  if (pipeline_ids.size() != requests.size()) {
-    ALOGE("%s: There are %zu pipeline IDs but %zu requests", __FUNCTION__,
-          pipeline_ids.size(), requests.size());
-    return BAD_VALUE;
-  }
-
-  for (size_t i = 0; i < pipeline_ids.size(); i++) {
-    HwlPipelineRequest hwl_request = CreateHwlPipelineRequest(
-        pipeline_ids[i], std::move(requests[i].request));
-
-    hwl_requests.push_back(std::move(hwl_request));
-  }
-
-  return OK;
 }
 
 std::unique_ptr<CaptureResult> ConvertToCaptureResult(
@@ -110,19 +92,10 @@ bool ContainsOutputBuffer(const CaptureRequest& request,
 }
 
 bool AreAllRemainingBuffersRequested(
-    const std::vector<ProcessBlockRequest>& process_block_requests,
+    const ProcessBlockRequest& process_block_request,
     const CaptureRequest& remaining_session_request) {
   for (auto& buffer : remaining_session_request.output_buffers) {
-    bool found = false;
-
-    for (auto& block_request : process_block_requests) {
-      if (ContainsOutputBuffer(block_request.request, buffer)) {
-        found = true;
-        break;
-      }
-    }
-
-    if (!found) {
+    if (!ContainsOutputBuffer(process_block_request.request, buffer)) {
       ALOGE("%s: A buffer %" PRIu64 " of stream %d is not requested.",
             __FUNCTION__, buffer.buffer_id, buffer.stream_id);
       return false;

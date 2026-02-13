@@ -64,10 +64,10 @@ class EmulatedRequestProcessor {
                            const HwlSessionCallback& session_callback);
   virtual ~EmulatedRequestProcessor();
 
-  // Process given pipeline requests and invoke the respective callback in a
+  // Process a given pipeline request and invoke the respective callback in a
   // separate thread
-  status_t ProcessPipelineRequests(
-      uint32_t frame_number, std::vector<HwlPipelineRequest>& requests,
+  status_t ProcessPipelineRequest(
+      HwlPipelineRequest& request,
       const std::vector<EmulatedPipeline>& pipelines,
       const DynamicStreamIdMapType& dynamic_stream_id_map,
       bool use_default_physical_camera);

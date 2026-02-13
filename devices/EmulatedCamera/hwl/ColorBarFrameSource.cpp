@@ -77,10 +77,6 @@ status_t ColorBarFrameSource::ProduceFrame(uint32_t /*camera_id*/,
     return BAD_VALUE;
   }
 
-  // NOTE: We ignore input_buffer here. The test pattern source does not support
-  // reprocessing or overlaying on top of an input. It always generates fresh
-  // bars.
-
   switch (buffer->format) {
     case PixelFormat::RGB_888:
       DrawRGB(buffer->plane.img.img, buffer->width, buffer->height,
@@ -99,26 +95,11 @@ status_t ColorBarFrameSource::ProduceFrame(uint32_t /*camera_id*/,
       DrawYUV420(output_frame);
       break;
     }
-    case PixelFormat::BLOB:
-      // BLOB is typically handled by RenderYUV420 + JpegCompressor in the
-      // caller, just like EmulatedFrameSource.
-      return INVALID_OPERATION;
     default:
       ALOGE("%s: Unknown format %x", __FUNCTION__, buffer->format);
       return BAD_VALUE;
   }
 
-  return OK;
-}
-
-status_t ColorBarFrameSource::RenderYUV420(uint32_t /*camera_id*/,
-                                           nsecs_t /*timestamp*/,
-                                           const SensorSettings& /*settings*/,
-                                           const YUV420Frame& output_frame,
-                                           const YUV420Frame* /*input_frame*/) {
-  ATRACE_CALL();
-  // Always draw fresh color bars, ignore input frame (reprocessing)
-  DrawYUV420(output_frame);
   return OK;
 }
 
@@ -196,26 +177,11 @@ void ColorBarFrameSource::DrawRGB(uint8_t* img, uint32_t width, uint32_t height,
 }
 
 void ColorBarFrameSource::CalculateAndAppendNoiseProfile(
-    float /*gain*/, float /*base_gain_factor*/, HalCameraMetadata* result) {
+    float /*gain*/, float /*max_raw_value*/, HalCameraMetadata* result) {
   // Use small epsilon to avoid divide-by-zero in downstream calculations
   double noise_profile[8];
   std::fill(std::begin(noise_profile), std::end(noise_profile), 1e-9);
   result->Set(ANDROID_SENSOR_NOISE_PROFILE, noise_profile, 8);
-}
-
-float ColorBarFrameSource::GetBaseGainFactor(float /*max_raw_value*/) const {
-  return 1.0f;
-}
-
-bool ColorBarFrameSource::HasBinningInfo(uint32_t /*camera_id*/) const {
-  return false;
-}
-
-BinningState ColorBarFrameSource::GetBinningState(uint32_t /*camera_id*/) const {
-  return BinningState();
-}
-
-void ColorBarFrameSource::ResetSensorBinningInfo() {
 }
 
 }  // namespace framesource

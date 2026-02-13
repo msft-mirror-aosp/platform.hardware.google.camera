@@ -65,7 +65,7 @@ class CameraDeviceSessionHwl : public PhysicalCameraInfoHwl {
   // overall_config is the complete requested stream configuration from
   // frameworks.
   // pipeline_id is an unique pipeline ID filled by this method. It can be used
-  // to submit requests to a specific pipeline in SubmitRequests().
+  // to submit a request to a specific pipeline in SubmitRequest().
   virtual status_t ConfigurePipeline(uint32_t camera_id,
                                      HwlPipelineCallback hwl_pipeline_callback,
                                      const StreamConfiguration& request_config,
@@ -120,13 +120,9 @@ class CameraDeviceSessionHwl : public PhysicalCameraInfoHwl {
   // Destroy built pipelines or discard configured pipelines.
   virtual void DestroyPipelines() = 0;
 
-  // frame_number is the frame number of the requests.
-  // requests contain requests from all different pipelines. If requests contain
-  // more than one request from a certain pipeline, this method will return an
-  // error. All requests captured from camera sensors must be captured
-  // synchronously.
-  virtual status_t SubmitRequests(uint32_t frame_number,
-                                  std::vector<HwlPipelineRequest>& requests) = 0;
+  // Submit a capture request.
+  // request contains the settings and buffers for a specific pipeline.
+  virtual status_t SubmitRequest(HwlPipelineRequest request) = 0;
 
   // Flush all pending requests.
   virtual status_t Flush() = 0;
@@ -144,7 +140,8 @@ class CameraDeviceSessionHwl : public PhysicalCameraInfoHwl {
     return true;
   }
 
-  // Return the characteristics that this camera device session is associated with.
+  // Return the characteristics that this camera device session is associated
+  // with which this camera device session is associated.
   virtual status_t GetCameraCharacteristics(
       std::unique_ptr<HalCameraMetadata>* characteristics) const = 0;
 

@@ -161,8 +161,8 @@ status_t CaptureSessionWrapperProcessBlock::GetConfiguredHalStreams(
                                                             hal_streams);
 }
 
-status_t CaptureSessionWrapperProcessBlock::ProcessRequests(
-    std::vector<ProcessBlockRequest> process_block_requests,
+status_t CaptureSessionWrapperProcessBlock::ProcessRequest(
+    ProcessBlockRequest process_block_request,
     const CaptureRequest& remaining_session_request) {
   ATRACE_CALL();
   CaptureRequest request;
@@ -182,7 +182,7 @@ status_t CaptureSessionWrapperProcessBlock::ProcessRequests(
   request.settings =
       HalCameraMetadata::Clone(remaining_session_request.settings.get());
 
-  request.output_buffers = process_block_requests[0].request.output_buffers;
+  request.output_buffers = process_block_request.request.output_buffers;
   for (auto& buffer : request.output_buffers) {
     if (buffer.buffer != nullptr) {
       buffer.buffer_id = buffer.stream_id;

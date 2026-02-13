@@ -41,8 +41,8 @@ class SnapshotResultProcessor : public ResultProcessor {
       NotifyBatchFunc notify_batch,
       NotifyOverridePendingBufferFunc override_pending_buffer) override;
 
-  status_t AddPendingRequests(
-      const std::vector<ProcessBlockRequest>& process_block_requests,
+  status_t AddPendingRequest(
+      const ProcessBlockRequest& process_block_request,
       const CaptureRequest& remaining_session_request) override;
 
   // Return yuv buffer to internal stream manager and forwards the results

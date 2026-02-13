@@ -30,14 +30,6 @@ namespace hal_utils {
 HwlPipelineRequest CreateHwlPipelineRequest(uint32_t pipeline_id,
                                             CaptureRequest request);
 
-// Create a vector of sychrounous HWL pipeline requests for pipelines
-// based on capture requests.
-// pipeline_ids and requests must have the same size.
-// One HWL request will be created for each pair of a pipeline ID and a request.
-status_t CreateHwlPipelineRequests(const std::vector<uint32_t>& pipeline_ids,
-                                   std::vector<ProcessBlockRequest> requests,
-                                   std::vector<HwlPipelineRequest>& hwl_requests);
-
 // Convert a HWL result to a capture result.
 std::unique_ptr<CaptureResult> ConvertToCaptureResult(
     std::unique_ptr<HwlPipelineResult> hwl_result);
@@ -47,9 +39,9 @@ bool ContainsOutputBuffer(const CaptureRequest& request,
                           const buffer_handle_t& buffer);
 
 // Return if all output buffers in remaining_session_request are included in
-// process_block_requests.
+// process_block_request.
 bool AreAllRemainingBuffersRequested(
-    const std::vector<ProcessBlockRequest>& process_block_requests,
+    const ProcessBlockRequest& process_block_request,
     const CaptureRequest& remaining_session_request);
 
 // Return if this is an IR camera.

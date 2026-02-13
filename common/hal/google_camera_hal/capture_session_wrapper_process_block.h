@@ -57,8 +57,8 @@ class CaptureSessionWrapperProcessBlock : public ProcessBlock {
   status_t GetConfiguredHalStreams(
       std::vector<HalStream>* hal_streams) const override;
 
-  status_t ProcessRequests(
-      std::vector<ProcessBlockRequest> process_block_requests,
+  status_t ProcessRequest(
+      ProcessBlockRequest process_block_request,
       const CaptureRequest& remaining_session_request) override;
 
   status_t Flush() override;

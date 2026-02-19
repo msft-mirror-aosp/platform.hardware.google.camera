@@ -62,7 +62,6 @@ cc_library_shared {
         "pending_requests_tracker.cc",
         "realtime_zsl_request_processor.cc",
         "realtime_zsl_result_processor.cc",
-        "realtime_zsl_result_request_processor.cc",
         "snapshot_request_processor.cc",
         "snapshot_result_processor.cc",
         "vendor_tags.cc",

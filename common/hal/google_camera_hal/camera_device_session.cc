@@ -1371,6 +1371,10 @@ status_t CameraDeviceSession::ProcessCaptureRequest(
 
   status_t res;
   *num_processed_requests = 0;
+  std::vector<CaptureRequest> batch_requests;
+  if (requests.size() > 1) {
+    batch_requests.reserve(requests.size());
+  }
 
   for (auto& request : requests) {
     if (ATRACE_ENABLED()) {
@@ -1450,7 +1454,7 @@ status_t CameraDeviceSession::ProcessCaptureRequest(
             OK) {
           ALOGE("%s: Tracking requested quota buffers failed", __FUNCTION__);
         }
-      } else {
+      } else if (requests.size() == 1) {
         std::shared_lock session_lock(capture_session_lock_);
         if (capture_session_ == nullptr) {
           ALOGE("%s: Capture session wasn't created.", __FUNCTION__);
@@ -1463,10 +1467,29 @@ status_t CameraDeviceSession::ProcessCaptureRequest(
                 __FUNCTION__, strerror(-res), res);
           return res;
         }
+      } else {
+        batch_requests.push_back(std::move(updated_request));
       }
     }
 
     (*num_processed_requests)++;
+  }
+
+  if (!batch_requests.empty()) {
+    std::shared_lock session_lock(capture_session_lock_);
+    if (capture_session_ == nullptr) {
+      ALOGE("%s: Capture session wasn't created.", __FUNCTION__);
+      (*num_processed_requests) -= batch_requests.size();
+      return NO_INIT;
+    }
+
+    res = capture_session_->ProcessBatchRequest(batch_requests);
+    if (res != OK) {
+      ALOGE("%s: Submitting batch requests to HWL session failed: %s (%d)",
+            __FUNCTION__, strerror(-res), res);
+      (*num_processed_requests) -= batch_requests.size();
+      return res;
+    }
   }
 
   return OK;

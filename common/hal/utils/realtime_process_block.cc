@@ -177,6 +177,22 @@ status_t RealtimeProcessBlock::ProcessRequest(
       pipeline_id_, std::move(process_block_request.request)));
 }
 
+status_t RealtimeProcessBlock::ProcessBatchRequest(
+    std::vector<ProcessBlockRequest> process_block_requests,
+    const std::vector<CaptureRequest>& remaining_session_requests) {
+  ATRACE_CALL();
+
+  for (size_t i = 0; i < process_block_requests.size(); ++i) {
+    status_t ret = ProcessRequest(std::move(process_block_requests[i]),
+                                  remaining_session_requests[i]);
+    if (ret != OK) {
+      return ret;
+    }
+  }
+
+  return OK;
+}
+
 status_t RealtimeProcessBlock::Flush() {
   ATRACE_CALL();
   std::shared_lock lock(configure_shared_mutex_);

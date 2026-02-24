@@ -54,6 +54,11 @@ class RealtimeZslRequestProcessor : public RequestProcessor {
   // And forwards the capture request to realtime process
   status_t ProcessRequest(const CaptureRequest& request) override;
 
+  status_t ProcessBatchRequest(
+      const std::vector<CaptureRequest>& /*requests*/) override {
+    return INVALID_OPERATION;
+  }
+
   status_t Flush() override;
 
   void RepeatingRequestEnd(int32_t frame_number,

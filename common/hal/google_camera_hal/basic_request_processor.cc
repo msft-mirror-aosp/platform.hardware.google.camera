@@ -96,6 +96,26 @@ status_t BasicRequestProcessor::ProcessRequest(const CaptureRequest& request) {
       ProcessBlockRequest{.request = request.Clone()}, request);
 }
 
+status_t BasicRequestProcessor::ProcessBatchRequest(
+    const std::vector<CaptureRequest>& requests) {
+  ATRACE_CALL();
+  std::shared_lock lock(process_block_shared_lock_);
+  if (process_block_ == nullptr) {
+    ALOGE("%s: Not configured yet.", __FUNCTION__);
+    return NO_INIT;
+  }
+
+  std::vector<ProcessBlockRequest> process_block_requests;
+  process_block_requests.reserve(requests.size());
+  for (const auto& request : requests) {
+    process_block_requests.push_back(
+        ProcessBlockRequest{.request = request.Clone()});
+  }
+
+  return process_block_->ProcessBatchRequest(std::move(process_block_requests),
+                                             requests);
+}
+
 status_t BasicRequestProcessor::Flush() {
   ATRACE_CALL();
   std::shared_lock lock(process_block_shared_lock_);

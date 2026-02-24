@@ -97,6 +97,30 @@ class ProcessBlock {
       ProcessBlockRequest process_block_request,
       const CaptureRequest& remaining_session_request) = 0;
 
+  // Process a batch of capture requests.
+  //
+  // This is the batch equivalent of ProcessRequest(), allowing multiple
+  // requests to be submitted and processed together. The process block should
+  // forward the requests to the result processor so it knows what results
+  // to expect.
+  //
+  // process_block_requests: The batch of requests for this process block.
+  // remaining_session_requests: The corresponding remaining requests that
+  // were sent to the capture session.
+  //
+  // The indices of process_block_requests and remaining_session_requests
+  // strictly match each other (i.e., process_block_requests[i] corresponds
+  // to remaining_session_requests[i]).
+  //
+  // This method is asynchronous; returning from this call doesn't mean the
+  // requests are completed.
+  //
+  // Assumes ownership of the metadata buffers inside the passed
+  // ProcessBlockRequests.
+  virtual status_t ProcessBatchRequest(
+      std::vector<ProcessBlockRequest> process_block_requests,
+      const std::vector<CaptureRequest>& remaining_session_requests) = 0;
+
   // Flush pending requests.
   virtual status_t Flush() = 0;
 

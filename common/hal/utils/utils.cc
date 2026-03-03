@@ -636,6 +636,31 @@ bool IsHdrStream(const Stream& stream) {
          ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_STANDARD;
 }
 
+const Stream* FindZslSnapshotStream(const StreamConfiguration& stream_config) {
+  const Stream* snapshot_stream = nullptr;
+  const Stream* fallback_stream = nullptr;
+  for (const auto& stream : stream_config.streams) {
+    if (utils::IsSoftwareDenoiseEligibleSnapshotStream(stream)) {
+      if (stream.format == HAL_PIXEL_FORMAT_BLOB) {
+        snapshot_stream = &stream;
+        break;  // JPEG has the highest priority.
+      }
+      // Find the first YUV stream that is eligible for software denoise.
+      // This will be used as the fallback stream if JPEG stream is not
+      // available.
+      if (fallback_stream == nullptr) {
+        fallback_stream = &stream;
+      }
+    }
+  }
+
+  if (snapshot_stream == nullptr && fallback_stream != nullptr) {
+    snapshot_stream = fallback_stream;
+  }
+
+  return snapshot_stream;
+}
+
 }  // namespace utils
 }  // namespace google_camera_hal
 }  // namespace android

@@ -277,14 +277,24 @@ void CameraDeviceSession::OverridePendingRequest(
     }
   }
 
-  std::set<int32_t>& pending_streams = pending_request_streams_.at(frame_number);
-  for (const int32_t& stream_id : stream_ids) {
-    if (grouped_stream_id_map_.contains(stream_id)) {
-      pending_streams.erase(grouped_stream_id_map_.at(stream_id));
+  {
+    std::lock_guard<std::mutex> lock(request_record_lock_);
+    auto pending_streams_it = pending_request_streams_.find(frame_number);
+    if (pending_streams_it == pending_request_streams_.end()) {
+      ALOGW("%s: frame %u is not in pending_request_streams_", __FUNCTION__,
+            frame_number);
+      return;
     }
-    auto it = pending_streams.find(stream_id);
-    if (it == pending_streams.end()) {
-      pending_streams.insert(stream_id);
+
+    std::set<int32_t>& pending_streams = pending_streams_it->second;
+    for (const int32_t& stream_id : stream_ids) {
+      if (grouped_stream_id_map_.contains(stream_id)) {
+        pending_streams.erase(grouped_stream_id_map_.at(stream_id));
+      }
+      auto it = pending_streams.find(stream_id);
+      if (it == pending_streams.end()) {
+        pending_streams.insert(stream_id);
+      }
     }
   }
 

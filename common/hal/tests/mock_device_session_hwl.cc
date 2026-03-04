@@ -198,6 +198,67 @@ status_t FakeCameraDeviceSessionHwl::SubmitRequest(HwlPipelineRequest request) {
   return OK;
 }
 
+status_t FakeCameraDeviceSessionHwl::SubmitBatchRequest(
+    std::vector<HwlPipelineRequest> requests) {
+  std::lock_guard<std::mutex> lock(hwl_pipeline_lock_);
+
+  if (requests.empty()) {
+    return OK;
+  }
+
+  uint32_t pipeline_id = requests[0].pipeline_id;
+  auto callback = hwl_pipeline_callbacks_.find(pipeline_id);
+  if (callback == hwl_pipeline_callbacks_.end()) {
+    ALOGE("%s: Could not find callback for pipeline %u", __FUNCTION__,
+          pipeline_id);
+    return BAD_VALUE;
+  }
+
+  std::vector<NotifyMessage> shutter_messages;
+  std::vector<std::unique_ptr<HwlPipelineResult>> results;
+
+  for (auto& request : requests) {
+    if (request.pipeline_id != pipeline_id) {
+      ALOGE("%s: Batch request contains different pipeline IDs", __FUNCTION__);
+      return BAD_VALUE;
+    }
+
+    shutter_messages.push_back(ShutterMessage{
+        .frame_number = request.frame_number,
+        .timestamp_ns = 0,
+        .readout_timestamp_ns = 0,
+    });
+
+    auto result = std::make_unique<HwlPipelineResult>();
+    result->camera_id = kCameraId;
+    result->pipeline_id = request.pipeline_id;
+    result->frame_number = request.frame_number;
+    result->result_metadata = HalCameraMetadata::Clone(request.settings.get());
+    result->input_buffers = request.input_buffers;
+    result->output_buffers = request.output_buffers;
+    result->partial_result = 1;
+    results.push_back(std::move(result));
+  }
+
+  if (callback->second.notify_batch) {
+    callback->second.notify_batch(shutter_messages);
+  } else {
+    for (const auto& msg : shutter_messages) {
+      callback->second.notify(pipeline_id, msg);
+    }
+  }
+
+  if (callback->second.process_pipeline_batch_result) {
+    callback->second.process_pipeline_batch_result(std::move(results));
+  } else {
+    for (auto& res : results) {
+      callback->second.process_pipeline_result(std::move(res));
+    }
+  }
+
+  return OK;
+}
+
 status_t FakeCameraDeviceSessionHwl::Flush() {
   return OK;
 }
@@ -335,6 +396,10 @@ void MockDeviceSessionHwl::DelegateCallsToFakeSession() {
   ON_CALL(*this, SubmitRequest(_))
       .WillByDefault(Invoke(&fake_session_hwl_,
                             &FakeCameraDeviceSessionHwl::SubmitRequest));
+
+  ON_CALL(*this, SubmitBatchRequest(_))
+      .WillByDefault(Invoke(&fake_session_hwl_,
+                            &FakeCameraDeviceSessionHwl::SubmitBatchRequest));
 
   ON_CALL(*this, Flush())
       .WillByDefault(

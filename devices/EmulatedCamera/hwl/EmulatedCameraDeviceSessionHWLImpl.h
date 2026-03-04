@@ -130,6 +130,8 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
 
   status_t SubmitRequest(HwlPipelineRequest request) override;
 
+  status_t SubmitBatchRequest(std::vector<HwlPipelineRequest> requests) override;
+
   status_t Flush() override;
 
   void RepeatingRequestEnd(int32_t frame_number,
@@ -194,6 +196,8 @@ class EmulatedCameraDeviceSessionHwlImpl : public CameraDeviceSessionHwl {
       const std::unordered_map<uint32_t, EmulatedStream>& streams,
       const std::unique_ptr<StreamConfigurationMap>& stream_configuration_map,
       android_pixel_format_t input_format);
+
+  status_t SubmitRequestLocked(HwlPipelineRequest request);
 
   EmulatedCameraDeviceSessionHwlImpl(
       PhysicalDeviceMapPtr physical_devices,

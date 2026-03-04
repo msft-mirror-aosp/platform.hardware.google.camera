@@ -450,11 +450,8 @@ status_t EmulatedCameraDeviceSessionHwlImpl::CheckOutputFormatsForInput(
   return OK;
 }
 
-status_t EmulatedCameraDeviceSessionHwlImpl::SubmitRequest(
+status_t EmulatedCameraDeviceSessionHwlImpl::SubmitRequestLocked(
     HwlPipelineRequest request) {
-  ATRACE_CALL();
-  std::lock_guard<std::mutex> lock(api_mutex_);
-
   // Check whether reprocess request has valid/supported outputs.
   if (!request.input_buffers.empty()) {
     for (const auto& input_buffer : request.input_buffers) {
@@ -479,6 +476,29 @@ status_t EmulatedCameraDeviceSessionHwlImpl::SubmitRequest(
 
   return request_processor_->ProcessPipelineRequest(
       request, pipelines_, dynamic_stream_id_map_, has_raw_stream_);
+}
+
+status_t EmulatedCameraDeviceSessionHwlImpl::SubmitRequest(
+    HwlPipelineRequest request) {
+  ATRACE_CALL();
+  std::lock_guard<std::mutex> lock(api_mutex_);
+
+  return SubmitRequestLocked(std::move(request));
+}
+
+status_t EmulatedCameraDeviceSessionHwlImpl::SubmitBatchRequest(
+    std::vector<HwlPipelineRequest> requests) {
+  ATRACE_CALL();
+  std::lock_guard<std::mutex> lock(api_mutex_);
+
+  for (HwlPipelineRequest& request : requests) {
+    status_t ret = SubmitRequestLocked(std::move(request));
+    if (ret != OK) {
+      return ret;
+    }
+  }
+
+  return OK;
 }
 
 status_t EmulatedCameraDeviceSessionHwlImpl::Flush() {

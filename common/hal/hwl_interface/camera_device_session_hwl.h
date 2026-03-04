@@ -124,6 +124,12 @@ class CameraDeviceSessionHwl : public PhysicalCameraInfoHwl {
   // request contains the settings and buffers for a specific pipeline.
   virtual status_t SubmitRequest(HwlPipelineRequest request) = 0;
 
+  // Submit a batch of capture requests.
+  // This is the batch equivalent of SubmitRequest(), allowing multiple
+  // requests to be submitted and processed together.
+  virtual status_t SubmitBatchRequest(
+      std::vector<HwlPipelineRequest> requests) = 0;
+
   // Flush all pending requests.
   virtual status_t Flush() = 0;
 

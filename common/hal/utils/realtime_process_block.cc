@@ -19,6 +19,7 @@
 #define ATRACE_TAG ATRACE_TAG_CAMERA
 #include "realtime_process_block.h"
 
+#include <android-base/logging.h>
 #include <log/log.h>
 #include <utils/Trace.h>
 
@@ -182,15 +183,37 @@ status_t RealtimeProcessBlock::ProcessBatchRequest(
     const std::vector<CaptureRequest>& remaining_session_requests) {
   ATRACE_CALL();
 
-  for (size_t i = 0; i < process_block_requests.size(); ++i) {
-    status_t ret = ProcessRequest(std::move(process_block_requests[i]),
-                                  remaining_session_requests[i]);
-    if (ret != OK) {
-      return ret;
+  CHECK_EQ(process_block_requests.size(), remaining_session_requests.size());
+  std::vector<HwlPipelineRequest> hwl_requests;
+  hwl_requests.reserve(process_block_requests.size());
+  {
+    std::lock_guard<std::mutex> lock(result_processor_lock_);
+    if (result_processor_ == nullptr) {
+      ALOGE("%s: result processor was not set.", __FUNCTION__);
+      return NO_INIT;
+    }
+
+    for (size_t i = 0; i < process_block_requests.size(); ++i) {
+      status_t res = result_processor_->AddPendingRequest(
+          process_block_requests[i], remaining_session_requests[i]);
+      if (res != OK) {
+        ALOGE("%s: Adding a pending request to result processor failed: %s(%d)",
+              __FUNCTION__, strerror(-res), res);
+        return res;
+      }
+
+      hwl_requests.push_back(hal_utils::CreateHwlPipelineRequest(
+          pipeline_id_, std::move(process_block_requests[i].request)));
     }
   }
 
-  return OK;
+  std::shared_lock lock(configure_shared_mutex_);
+  if (!is_configured_) {
+    ALOGE("%s: block is not configured.", __FUNCTION__);
+    return NO_INIT;
+  }
+
+  return device_session_hwl_->SubmitBatchRequest(std::move(hwl_requests));
 }
 
 status_t RealtimeProcessBlock::Flush() {

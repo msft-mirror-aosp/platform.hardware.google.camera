@@ -71,6 +71,8 @@ class FakeCameraDeviceSessionHwl : public CameraDeviceSessionHwl {
 
   status_t SubmitRequest(HwlPipelineRequest request) override;
 
+  status_t SubmitBatchRequest(std::vector<HwlPipelineRequest> requests) override;
+
   status_t Flush() override;
 
   void RepeatingRequestEnd(int32_t frame_number,
@@ -167,6 +169,9 @@ class MockDeviceSessionHwl : public CameraDeviceSessionHwl {
   MOCK_METHOD0(DestroyPipelines, void());
 
   MOCK_METHOD1(SubmitRequest, status_t(HwlPipelineRequest request));
+
+  MOCK_METHOD1(SubmitBatchRequest,
+               status_t(std::vector<HwlPipelineRequest> requests));
 
   MOCK_METHOD0(Flush, status_t());
 

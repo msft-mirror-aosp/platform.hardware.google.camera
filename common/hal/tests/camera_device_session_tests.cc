@@ -379,15 +379,137 @@ TEST_F(CameraDeviceSessionTests, ConfigurePreviewStream) {
   }
 }
 
-TEST_F(CameraDeviceSessionTests, PreviewRequests) {
+TEST_F(CameraDeviceSessionTests, SinglePreviewRequest) {
   std::unique_ptr<MockDeviceSessionHwl> session_hwl;
   CreateMockSessionHwlAndCheck(&session_hwl);
   session_hwl->DelegateCallsToFakeSession();
 
-  // Set up mocking expections.
-  static constexpr uint32_t kNumPreviewRequests = 5;
+  // Set up mocking expectations.
+  static constexpr uint32_t kNumPreviewRequests = 1;
   EXPECT_CALL(*session_hwl, ConfigurePipeline(_, _, _, _, _)).Times(1);
   EXPECT_CALL(*session_hwl, SubmitRequest(_)).Times(kNumPreviewRequests);
+
+  std::unique_ptr<CameraDeviceSession> session;
+  CreateSessionAndCheck(std::move(session_hwl), &session);
+
+  // Configure a preview stream.
+  static const uint32_t kPreviewWidth = 640;
+  static const uint32_t kPreviewHeight = 480;
+  StreamConfiguration preview_config;
+  std::vector<HalStream> hal_configured_streams;
+
+  // Set up session callback.
+  // Needs to capture the test class as the callback function references the
+  // member variables of the class
+  CameraDeviceSessionCallback session_callback = {
+      .process_capture_result =
+          [&](std::unique_ptr<CaptureResult> result) {
+            ProcessCaptureResult(std::move(result));
+          },
+      .process_batch_capture_result =
+          [&](std::vector<std::unique_ptr<CaptureResult>> results) {
+            ProcessBatchCaptureResult(std::move(results));
+          },
+      .notify = [&](const NotifyMessage& message) { Notify(message); },
+      .notify_batch =
+          [&](const std::vector<NotifyMessage>& messages) {
+            NotifyBatch(messages);
+          },
+  };
+
+  ThermalCallback thermal_callback = {
+      .register_thermal_changed_callback =
+          google_camera_hal::RegisterThermalChangedCallbackFunc(
+              [](google_camera_hal::NotifyThrottlingFunc /*notify_throttling*/,
+                 bool /*filter_type*/,
+                 google_camera_hal::TemperatureType /*type*/) {
+                return INVALID_OPERATION;
+              }),
+      .unregister_thermal_changed_callback =
+          google_camera_hal::UnregisterThermalChangedCallbackFunc([]() {}),
+  };
+
+  session->SetSessionCallback(session_callback, thermal_callback);
+
+  test_utils::GetPreviewOnlyStreamConfiguration(&preview_config, kPreviewWidth,
+                                                kPreviewHeight);
+  ConfigureStreamsReturn hal_config;
+  ASSERT_EQ(session->ConfigureStreams(preview_config, /*interfaceV3*/ false,
+                                      &hal_config),
+            OK);
+  hal_configured_streams = std::move(hal_config.hal_streams);
+  ASSERT_EQ(hal_configured_streams.size(), static_cast<uint32_t>(1));
+
+  // Allocate buffers.
+  auto allocator = GrallocBufferAllocator::Create();
+  ASSERT_NE(allocator, nullptr);
+
+  HalBufferDescriptor buffer_descriptor = {
+      .width = preview_config.streams[0].width,
+      .height = preview_config.streams[0].height,
+      .format = hal_configured_streams[0].override_format,
+      .producer_flags = hal_configured_streams[0].producer_usage |
+                        preview_config.streams[0].usage,
+      .consumer_flags = hal_configured_streams[0].consumer_usage,
+      .immediate_num_buffers =
+          std::max(hal_configured_streams[0].max_buffers, kNumPreviewRequests),
+      .max_num_buffers =
+          std::max(hal_configured_streams[0].max_buffers, kNumPreviewRequests),
+  };
+
+  std::vector<buffer_handle_t> preview_buffers;
+  ASSERT_EQ(allocator->AllocateBuffers(buffer_descriptor, &preview_buffers), OK);
+
+  std::unique_ptr<HalCameraMetadata> preview_settings;
+  ASSERT_EQ(session->ConstructDefaultRequestSettings(RequestTemplate::kPreview,
+                                                     &preview_settings),
+            OK);
+
+  // Prepare preview requests.
+  std::vector<CaptureRequest> requests;
+  for (uint32_t i = 0; i < kNumPreviewRequests; i++) {
+    StreamBuffer preview_buffer = {
+        .stream_id = preview_config.streams[0].id,
+        .buffer_id = i,
+        .buffer = preview_buffers[i],
+        .status = BufferStatus::kOk,
+        .acquire_fence = nullptr,
+        .release_fence = nullptr,
+    };
+
+    CaptureRequest request = {
+        .frame_number = i,
+        .settings = HalCameraMetadata::Clone(preview_settings.get()),
+        .output_buffers = {preview_buffer},
+    };
+
+    requests.push_back(std::move(request));
+  }
+
+  ClearResultsAndMessages();
+  uint32_t num_processed_requests = 0;
+  ASSERT_EQ(session->ProcessCaptureRequest(requests, &num_processed_requests),
+            OK);
+  ASSERT_EQ(num_processed_requests, requests.size());
+
+  // Verify shutters and results are received.
+  for (auto& request : requests) {
+    EXPECT_EQ(WaitForShutter(request.frame_number, kCaptureTimeoutMs), OK);
+    EXPECT_EQ(WaitForResult(request, kCaptureTimeoutMs), OK);
+  }
+
+  allocator->FreeBuffers(&preview_buffers);
+}
+
+TEST_F(CameraDeviceSessionTests, BatchPreviewRequests) {
+  std::unique_ptr<MockDeviceSessionHwl> session_hwl;
+  CreateMockSessionHwlAndCheck(&session_hwl);
+  session_hwl->DelegateCallsToFakeSession();
+
+  // Set up mocking expectations.
+  static constexpr uint32_t kNumPreviewRequests = 5;
+  EXPECT_CALL(*session_hwl, ConfigurePipeline(_, _, _, _, _)).Times(1);
+  EXPECT_CALL(*session_hwl, SubmitBatchRequest(_)).Times(1);
 
   std::unique_ptr<CameraDeviceSession> session;
   CreateSessionAndCheck(std::move(session_hwl), &session);

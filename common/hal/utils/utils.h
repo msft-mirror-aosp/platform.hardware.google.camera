@@ -46,6 +46,10 @@ bool IsSecuredStream(const Stream& stream);
 bool IsStreamUseCasesVideoCall(const Stream& stream);
 bool IsHdrStream(const Stream& stream);
 
+// Returns the snapshot stream for ZSL.
+// Returns nullptr if no eligible snapshot stream is found.
+const Stream* FindZslSnapshotStream(const StreamConfiguration& stream_config);
+
 bool HasCapability(const HalCameraMetadata* metadata, uint8_t capability);
 
 status_t GetSensorPhysicalSize(const HalCameraMetadata* characteristics,

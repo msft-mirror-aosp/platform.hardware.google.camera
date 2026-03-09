@@ -121,9 +121,6 @@ class ExternalProcessBlockFactory {
 #if !GCH_HWL_USE_DLOPEN
 extern "C" __attribute__((weak))
 ExternalProcessBlockFactory* GetSnapshotProcessBlockFactory();
-
-extern "C" __attribute__((weak)) ExternalProcessBlockFactory*
-GetDenoiseProcessBlockFactory();
 #endif
 
 }  // namespace google_camera_hal

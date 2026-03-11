@@ -28,7 +28,7 @@
 #include <utils/Trace.h>
 
 #include "hal_utils.h"
-#include "realtime_zsl_result_request_processor.h"
+#include "realtime_zsl_result_processor.h"
 #include "snapshot_request_processor.h"
 #include "snapshot_result_processor.h"
 #include "system/graphics-base-v1.0.h"
@@ -141,57 +141,6 @@ ZslSnapshotCaptureSession::CreateSnapshotProcessBlock() {
   }
   snapshot_process_block_factory_ = GetSnapshotProcessBlockFactory;
   return GetSnapshotProcessBlockFactory()->CreateProcessBlock(
-      camera_device_session_hwl_);
-#endif
-}
-
-std::unique_ptr<ProcessBlock>
-ZslSnapshotCaptureSession::CreateDenoiseProcessBlock() {
-  ATRACE_CALL();
-#if GCH_HWL_USE_DLOPEN
-  bool found_process_block = false;
-  for (const auto& lib_path :
-       utils::FindLibraryPaths(kExternalProcessBlockDir)) {
-    ALOGI("%s: Loading %s", __FUNCTION__, lib_path.c_str());
-    void* lib_handle = nullptr;
-    lib_handle = dlopen(lib_path.c_str(), RTLD_NOW);
-    if (lib_handle == nullptr) {
-      ALOGW("Failed loading %s.", lib_path.c_str());
-      continue;
-    }
-
-    GetProcessBlockFactoryFunc external_process_block_t =
-        reinterpret_cast<GetProcessBlockFactoryFunc>(
-            dlsym(lib_handle, "GetProcessBlockFactory"));
-    if (external_process_block_t == nullptr) {
-      ALOGE("%s: dlsym failed (%s) when loading %s.", __FUNCTION__,
-            "GetProcessBlockFactoryFunc", lib_path.c_str());
-      dlclose(lib_handle);
-      lib_handle = nullptr;
-      continue;
-    }
-
-    if (external_process_block_t()->GetBlockName() == "DenoiseProcessBlock") {
-      denoise_process_block_factory_ = external_process_block_t;
-      denoise_process_block_lib_handle_ = lib_handle;
-      found_process_block = true;
-      break;
-    }
-  }
-  if (!found_process_block) {
-    ALOGE("%s: denoise process block does not exist", __FUNCTION__);
-    return nullptr;
-  }
-
-  return denoise_process_block_factory_()->CreateProcessBlock(
-      camera_device_session_hwl_);
-#else
-  if (GetDenoiseProcessBlockFactory == nullptr) {
-    ALOGE("%s: denoise process block does not exist", __FUNCTION__);
-    return nullptr;
-  }
-  denoise_process_block_factory_ = GetDenoiseProcessBlockFactory;
-  return GetDenoiseProcessBlockFactory()->CreateProcessBlock(
       camera_device_session_hwl_);
 #endif
 }
@@ -321,7 +270,6 @@ ZslSnapshotCaptureSession::~ZslSnapshotCaptureSession() {
   // SnapshotRequestProcessor before the lib handle is released.
   release_thread.join();
   dlclose(snapshot_process_block_lib_handle_);
-  dlclose(denoise_process_block_lib_handle_);
 
   ALOGI("%s: finished", __FUNCTION__);
 }
@@ -435,25 +383,13 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
   }
 
   // Create preview result processor. Stream ID is not set at this stage.
-
-  std::unique_ptr<ResultProcessor> realtime_result_processor;
-  if (video_sw_denoise_enabled_) {
-    auto processor = RealtimeZslResultRequestProcessor::Create(
-        internal_stream_manager_.get(), additional_stream_id,
-        HAL_PIXEL_FORMAT_YCBCR_420_888, partial_result_count_);
-    realtime_zsl_result_request_processor_ = processor.get();
-    realtime_result_processor = std::move(processor);
-  } else {
-    realtime_result_processor = RealtimeZslResultProcessor::Create(
-        internal_stream_manager_.get(), additional_stream_id,
-        HAL_PIXEL_FORMAT_YCBCR_420_888, partial_result_count_);
-  }
+  std::unique_ptr<ResultProcessor> realtime_result_processor =
+      RealtimeZslResultProcessor::Create(
+          internal_stream_manager_.get(), additional_stream_id,
+          HAL_PIXEL_FORMAT_YCBCR_420_888, partial_result_count_);
 
   if (realtime_result_processor == nullptr) {
-    ALOGE(
-        "%s: Creating "
-        "RealtimeZslResultProcessor/RealtimeZslResultRequestProcessor failed.",
-        __FUNCTION__);
+    ALOGE("%s: Creating RealtimeZslResultProcessor failed.", __FUNCTION__);
     return UNKNOWN_ERROR;
   }
   realtime_result_processor->SetResultCallback(
@@ -479,59 +415,6 @@ status_t ZslSnapshotCaptureSession::ConfigureStreams(
       // Set the producer usage so that the buffer will be 64 byte aligned.
       hal_stream.producer_usage |=
           (GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_SW_READ_OFTEN);
-    }
-  }
-
-  if (video_sw_denoise_enabled_) {
-    StreamConfiguration denoise_process_block_stream_config;
-    // Configure streams for request processor
-    res = realtime_zsl_result_request_processor_->ConfigureStreams(
-        internal_stream_manager_.get(), stream_config,
-        &denoise_process_block_stream_config);
-
-    if (res != OK) {
-      ALOGE(
-          "%s: Configuring stream for process block "
-          "(RealtimeZslResultRequestProcessor) failed.",
-          __FUNCTION__);
-      return res;
-    }
-
-    std::unique_ptr<ProcessBlock> denoise_processor =
-        CreateDenoiseProcessBlock();
-    // Create preview result processor. Stream ID is not set at this stage.
-    auto basic_result_processor = BasicResultProcessor::Create();
-    if (basic_result_processor == nullptr) {
-      ALOGE("%s: Creating BasicResultProcessor failed.", __FUNCTION__);
-      return UNKNOWN_ERROR;
-    }
-    basic_result_processor_ = basic_result_processor.get();
-    basic_result_processor->SetResultCallback(
-        process_capture_result, notify,
-        /*process_batch_capture_result=*/nullptr, /*notify_batch=*/nullptr,
-        /*notify_override_pending_buffer*/ nullptr);
-
-    res =
-        denoise_processor->SetResultProcessor(std::move(basic_result_processor));
-    if (res != OK) {
-      ALOGE("%s: Setting result process in process block failed.", __FUNCTION__);
-      return res;
-    }
-
-    // Configure streams for process block.
-    res = denoise_processor->ConfigureStreams(
-        denoise_process_block_stream_config, stream_config);
-    if (res != OK) {
-      ALOGE("%s: Configuring stream for process block failed.", __FUNCTION__);
-      return res;
-    }
-
-    res = realtime_zsl_result_request_processor_->SetProcessBlock(
-        std::move(denoise_processor));
-    if (res != OK) {
-      ALOGE("%s: Setting process block for RequestProcessor failed: %s(%d)",
-            __FUNCTION__, strerror(-res), res);
-      return res;
     }
   }
 
@@ -746,15 +629,6 @@ status_t ZslSnapshotCaptureSession::Initialize(
     return BAD_VALUE;
   }
 
-  camera_metadata_ro_entry video_sw_denoise_entry;
-  res = characteristics->Get(VendorTagIds::kVideoSwDenoiseEnabled,
-                             &video_sw_denoise_entry);
-  if (res == OK && video_sw_denoise_entry.data.u8[0] == 1) {
-    ALOGI("%s: video sw denoise is enabled in HWL", __FUNCTION__);
-  } else {
-    ALOGI("%s: video sw denoise is disabled.", __FUNCTION__);
-  }
-
   for (auto stream : stream_config.streams) {
     if (utils::IsPreviewStream(stream)) {
       hal_preview_stream_id_ = stream.id;
@@ -841,16 +715,11 @@ status_t ZslSnapshotCaptureSession::Initialize(
 status_t ZslSnapshotCaptureSession::ProcessRequest(const CaptureRequest& request) {
   ATRACE_CALL();
   bool is_zsl_request = false;
-  bool is_preview_intent = false;
   camera_metadata_ro_entry entry;
   if (request.settings != nullptr) {
     if (request.settings->Get(ANDROID_CONTROL_ENABLE_ZSL, &entry) == OK &&
         *entry.data.u8 == ANDROID_CONTROL_ENABLE_ZSL_TRUE) {
       is_zsl_request = true;
-    }
-    if (request.settings->Get(ANDROID_CONTROL_CAPTURE_INTENT, &entry) == OK &&
-        *entry.data.u8 == ANDROID_CONTROL_CAPTURE_INTENT_PREVIEW) {
-      is_preview_intent = true;
     }
   }
   status_t res = result_dispatcher_->AddPendingRequest(request, is_zsl_request);
@@ -865,20 +734,9 @@ status_t ZslSnapshotCaptureSession::ProcessRequest(const CaptureRequest& request
       ALOGW(
           "%s: frame (%d) fall back to real time request for snapshot: %s (%d)",
           __FUNCTION__, request.frame_number, strerror(-res), res);
-      if (realtime_zsl_result_request_processor_ != nullptr) {
-        realtime_zsl_result_request_processor_->UpdateOutputBufferCount(
-            request.frame_number, request.output_buffers.size(),
-            is_preview_intent);
-      }
       res = realtime_request_processor_->ProcessRequest(request);
     }
   } else {
-    if (realtime_zsl_result_request_processor_ != nullptr) {
-      realtime_zsl_result_request_processor_->UpdateOutputBufferCount(
-          request.frame_number, request.output_buffers.size(),
-          is_preview_intent);
-    }
-
     res = realtime_request_processor_->ProcessRequest(request);
   }
 

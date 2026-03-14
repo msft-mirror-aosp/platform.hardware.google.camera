@@ -58,6 +58,9 @@ class CaptureSession {
   // Process a capture request.
   virtual status_t ProcessRequest(const CaptureRequest& request) = 0;
 
+  virtual status_t ProcessBatchRequest(
+      const std::vector<CaptureRequest>& requests) = 0;
+
   // Flush all pending capture requests.
   virtual status_t Flush() = 0;
 
@@ -90,8 +93,8 @@ class ExternalCaptureSessionFactory {
 };
 
 #if !GCH_HWL_USE_DLOPEN
-extern "C" __attribute__((weak)) ExternalCaptureSessionFactory*
-GetCaptureSessionFactory();
+extern "C" __attribute__((weak))
+ExternalCaptureSessionFactory* GetCaptureSessionFactory();
 #endif
 
 }  // namespace google_camera_hal

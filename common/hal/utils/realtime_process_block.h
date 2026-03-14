@@ -53,6 +53,10 @@ class RealtimeProcessBlock : public ProcessBlock {
       ProcessBlockRequest process_block_request,
       const CaptureRequest& remaining_session_request) override;
 
+  status_t ProcessBatchRequest(
+      std::vector<ProcessBlockRequest> process_block_requests,
+      const std::vector<CaptureRequest>& remaining_session_requests) override;
+
   status_t Flush() override;
   // Override functions of ProcessBlock end.
 

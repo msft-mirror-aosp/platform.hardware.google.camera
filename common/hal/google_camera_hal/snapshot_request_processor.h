@@ -50,6 +50,11 @@ class SnapshotRequestProcessor : public RequestProcessor {
   // request to its ProcessBlock.
   status_t ProcessRequest(const CaptureRequest& request) override;
 
+  status_t ProcessBatchRequest(
+      const std::vector<CaptureRequest>& /*requests*/) override {
+    return INVALID_OPERATION;
+  }
+
   status_t Flush() override;
   // Override functions of RequestProcessor end.
 

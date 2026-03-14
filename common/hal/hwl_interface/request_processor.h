@@ -66,6 +66,12 @@ class RequestProcessor {
   // for the process block based on the original request.
   virtual status_t ProcessRequest(const CaptureRequest& request) = 0;
 
+  // Process a batch of capture requests.  This is the batch equivalent of
+  // ProcessRequest(), allowing multiple requests to be submitted and processed
+  // together.
+  virtual status_t ProcessBatchRequest(
+      const std::vector<CaptureRequest>& requests) = 0;
+
   // Flush all pending requests.
   virtual status_t Flush() = 0;
 

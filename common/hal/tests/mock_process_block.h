@@ -43,6 +43,11 @@ class MockProcessBlock : public ProcessBlock {
                const CaptureRequest& remaining_session_request),
               (override));
 
+  MOCK_METHOD(status_t, ProcessBatchRequest,
+              (std::vector<ProcessBlockRequest> process_block_request,
+               const std::vector<CaptureRequest>& remaining_session_request),
+              (override));
+
   MOCK_METHOD(status_t, Flush, (), (override));
 
   MOCK_METHOD(void, RepeatingRequestEnd,

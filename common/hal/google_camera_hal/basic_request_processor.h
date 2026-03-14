@@ -48,6 +48,9 @@ class BasicRequestProcessor : public RequestProcessor {
 
   status_t ProcessRequest(const CaptureRequest& request) override;
 
+  status_t ProcessBatchRequest(
+      const std::vector<CaptureRequest>& requests) override;
+
   status_t Flush() override;
 
   void RepeatingRequestEnd(int32_t frame_number,

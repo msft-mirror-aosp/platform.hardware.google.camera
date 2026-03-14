@@ -72,6 +72,9 @@ class BasicCaptureSession : public CaptureSession {
   // Override functions in CaptureSession start.
   status_t ProcessRequest(const CaptureRequest& request) override;
 
+  status_t ProcessBatchRequest(
+      const std::vector<CaptureRequest>& requests) override;
+
   status_t Flush() override;
   // Override functions in CaptureSession end.
 

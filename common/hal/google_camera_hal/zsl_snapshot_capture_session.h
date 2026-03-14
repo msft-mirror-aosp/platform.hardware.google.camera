@@ -79,6 +79,11 @@ class ZslSnapshotCaptureSession : public CaptureSession {
   // Override functions in CaptureSession start.
   status_t ProcessRequest(const CaptureRequest& request) override;
 
+  status_t ProcessBatchRequest(
+      const std::vector<CaptureRequest>& /*requests*/) override {
+    return INVALID_OPERATION;
+  }
+
   status_t Flush() override;
   // Override functions in CaptureSession end.
 

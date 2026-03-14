@@ -311,6 +311,15 @@ status_t BasicCaptureSession::ProcessRequest(const CaptureRequest& request) {
   return request_processor_->ProcessRequest(request);
 }
 
+status_t BasicCaptureSession::ProcessBatchRequest(
+    const std::vector<CaptureRequest>& requests) {
+  ATRACE_CALL();
+  for (const CaptureRequest& request : requests) {
+    result_dispatcher_->AddPendingRequest(request);
+  }
+  return request_processor_->ProcessBatchRequest(requests);
+}
+
 status_t BasicCaptureSession::Flush() {
   ATRACE_CALL();
   return request_processor_->Flush();

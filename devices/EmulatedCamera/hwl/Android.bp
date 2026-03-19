@@ -44,8 +44,6 @@ cc_defaults {
     ],
     cflags: [
         "-Werror",
-        "-Wextra",
-        "-Wall",
     ],
     shared_libs: [
         "android.frameworks.sensorservice@1.0",
@@ -152,7 +150,5 @@ cc_library_static {
 
     cflags: [
         "-Werror",
-        "-Wextra",
-        "-Wall",
     ],
 }

@@ -37,9 +37,7 @@ cc_defaults {
     defaults: ["hidl_defaults"],
     cflags: [
         "-O3",
-        "-Wall",
         "-Werror",
-        "-Wextra"
     ],
     header_libs: [
         "//hardware/google/camera:libgooglecamerahal_headers",

@@ -11,9 +11,7 @@ cc_defaults {
     name: "apex_update_listener_cc_defaults_internal",
     host_supported: true,
     cflags: [
-        "-Wall",
         "-Werror",
-        "-Wextra",
         "-Wthread-safety",
     ],
     shared_libs: [

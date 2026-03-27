@@ -882,9 +882,7 @@
   "CENTER_ONLY"
  ],
  "android.sensor.availableTestPatternModes": [
-  "0",
-  "1",
-  "5"
+  "0"
  ],
  "android.sensor.info.activeArraySize": [
   "0",

@@ -114,11 +114,6 @@
   "1.0",
   "10.0"
  ],
- "android.edge.availableEdgeModes": [
-  "0",
-  "1",
-  "2"
- ],
  "android.flash.info.available": [
   "FALSE"
  ],
